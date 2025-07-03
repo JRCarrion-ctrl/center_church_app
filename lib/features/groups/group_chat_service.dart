@@ -60,4 +60,22 @@ class GroupChatService {
         .map((data) => data.map(GroupMessage.fromMap).toList());
   }
 
+  Future<void> addReaction(String messageId, String emoji) async {
+    final userId = Supabase.instance.client.auth.currentUser!.id;
+    await Supabase.instance.client
+      .from('message_reactions')
+      .upsert({'message_id': messageId, 'user_id': userId, 'emoji': emoji});
+  }
+
+  Future<Map<String, List<String>>> getReactions(String groupId) async {
+    final data = await Supabase.instance.client
+      .from('message_reactions')
+      .select('message_id, emoji');
+
+    final Map<String, List<String>> result = {};
+    for (final row in data) {
+      result.putIfAbsent(row['message_id'], () => []).add(row['emoji']);
+    }
+    return result;
+  }
 }

@@ -29,6 +29,7 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   youtube_player_flutter: ^9.1.1
+  emoji_picker_flutter: ^4.3.0
 
 dev_dependencies:
   flutter_test:
@@ -40,3 +41,4 @@ flutter:
   assets:
     - assets/logo_image.png
     - assets/landing_background.png
+    - assets/image_placeholder.png
