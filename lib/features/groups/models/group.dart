@@ -5,10 +5,10 @@ class Group {
   final String name;
   final String? description;
   final String? photoUrl;
-  final String visibility; // public, request, invite_only
+  final String visibility;
   final DateTime createdAt;
 
-  Group({
+  const Group({
     required this.id,
     required this.name,
     this.description,
@@ -19,23 +19,23 @@ class Group {
 
   factory Group.fromMap(Map<String, dynamic> map) {
     return Group(
-      id: map['id'] as String,
-      name: map['name'] as String,
+      id: map['id'] as String? ?? '',
+      name: map['name'] as String? ?? '',
       description: map['description'] as String?,
       photoUrl: map['photo_url'] as String?,
-      visibility: map['visibility'] as String,
-      createdAt: DateTime.parse(map['created_at']),
+      visibility: map['visibility'] as String? ?? 'public',
+      createdAt: _parseDate(map['created_at']),
     );
   }
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'photo_url': photoUrl,
-      'visibility': visibility,
-      'created_at': createdAt.toIso8601String(),
-    };
+  static DateTime _parseDate(dynamic value) {
+    try {
+      if (value is String) {
+        return DateTime.parse(value);
+      }
+      return DateTime.now(); // fallback
+    } catch (_) {
+      return DateTime.now();
+    }
   }
 }

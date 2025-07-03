@@ -1,4 +1,4 @@
-// File: lib/services/youtube_services.dart
+// File: lib/features/media/services/youtube_services.dart
 import 'dart:convert';
 import 'dart:developer';
 import 'package:http/http.dart' as http;
@@ -35,8 +35,8 @@ class YouTubeService {
           final thumbnail = video['snippet']['thumbnails']['high']['url'];
 
           return {
-            'videoId': videoId,
-            'thumbnailUrl': thumbnail,
+            'url': 'https://www.youtube.com/watch?v=$videoId',
+            'thumbnail': thumbnail,
           };
         } else {
           log('No videos found in response.');

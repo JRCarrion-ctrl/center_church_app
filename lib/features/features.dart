@@ -1,8 +1,8 @@
 export 'auth/auth.dart';
 export 'landing/landing_page.dart';
 export 'prayer/prayer.dart';
-export 'home/home.dart';
-export 'groups/groups.dart';
+export 'home/home_page.dart';
+export 'groups/groups_page.dart';
 export 'calendar/pages/calendar_page.dart';
 export 'calendar/pages/event_page.dart';
 export 'calendar/event_service.dart';
