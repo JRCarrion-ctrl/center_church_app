@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 
 import '../group_service.dart';
@@ -138,12 +139,20 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           onTap: widget.isAdmin ? () => _changeGroupPhoto(context) : null,
           child: CircleAvatar(
             radius: 40,
-            backgroundImage: group?.photoUrl != null && group!.photoUrl!.isNotEmpty
-                ? NetworkImage(group!.photoUrl!)
-                : null,
             child: (group?.photoUrl == null || group!.photoUrl!.isEmpty)
-                ? const Icon(Icons.group, size: 40)
-                : null,
+              ? const Icon(Icons.group, size: 40)
+              : ClipOval(
+                child: CachedNetworkImage(
+                  imageUrl: group!.photoUrl!,
+                  width: 80,
+                  height: 80,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => Center(
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                  errorWidget: (context, url, error) => const Icon(Icons.error, size: 40)
+                ),
+              ),
           ),
         ),
         const SizedBox(height: 12),
@@ -276,7 +285,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
-                      onPressed: () => context.push('/groups/${widget.groupId}/events'),
+                      onPressed: () => context.push('/group-event/${widget.groupId}/events'),
                       child: const Text('View All Events'),
                     ),
                   ],

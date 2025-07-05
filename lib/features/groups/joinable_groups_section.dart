@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
 
@@ -54,9 +55,7 @@ class _JoinableGroupsSectionState extends State<JoinableGroupsSection> {
                         ? Text(group.description!)
                         : null,
                     trailing: const Icon(Icons.arrow_forward),
-                    onTap: () {
-                      // Navigate to join/request screen
-                    },
+                    onTap: () => context.push('/groups/${group.id}/join'),
                   ),
                 );
               }).toList(),

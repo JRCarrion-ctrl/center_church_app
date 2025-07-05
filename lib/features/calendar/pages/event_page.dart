@@ -102,7 +102,7 @@ class _EventPageState extends State<EventPage> {
               final navigator = Navigator.of(context);
               final messenger = ScaffoldMessenger.of(context);
 
-              await EventService().rsvp(eventId: eventId, count: count);
+              await EventService().rsvpAppEvent(appEventId: eventId, count: count);
               if (mounted) {
                 navigator.pop();
                 messenger.showSnackBar(

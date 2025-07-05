@@ -134,18 +134,18 @@ class _GroupPageState extends State<GroupPage> {
                           GroupInfoButton(
                             title: 'Events',
                             icon: Icons.calendar_today_outlined,
-                            onTap: () => context.push('/group/${widget.groupId}/events'),
+                            onTap: () => context.push('/groups/${widget.groupId}/events'),
                           ),
                           GroupInfoButton(
                             title: 'Media',
                             icon: Icons.perm_media_outlined,
-                            onTap: () => context.push('/group/${widget.groupId}/media'),
+                            onTap: () => context.push('/groups/${widget.groupId}/media'),
                           ),
                           if (_isAdmin)
                             GroupInfoButton(
                               title: 'Admin Tools',
                               icon: Icons.admin_panel_settings_outlined,
-                              onTap: () => context.push('/group/${widget.groupId}/admin'),
+                              onTap: () => context.push('/groups/${widget.groupId}/admin'),
                             ),
                         ],
                       ),

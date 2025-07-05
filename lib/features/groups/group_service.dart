@@ -198,20 +198,48 @@ class GroupService {
 
   Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
     final data = await supabase
-        .from('group_memberships')
-        .select('user_id, role, profiles(display_name)')
+        .from('group_memberships_summary')
+        .select('user_id, role, display_name')
         .eq('group_id', groupId)
-        .eq('status', 'approved')
-        .order('profiles.display_name', ascending: true);
+        .order('display_name', ascending: true);
 
-    debugPrint('Fetching members for groupId: $groupId');    
-    debugPrint('Fetched group members: $data');
+    return List<Map<String, dynamic>>.from(data);
+  }
 
-    // The returned data will have profiles nested, so flatten:
-    return List<Map<String, dynamic>>.from(data.map((e) => {
-      'user_id': e['user_id'],
-      'role': e['role'],
-      'display_name': e['profiles']?['display_name'] ?? 'Unnamed User',
-    }));
+  Future<void> joinGroup(String groupId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) throw Exception('User not logged in');
+
+    // For public groups, directly add approved membership
+    // For request groups, add membership with status 'pending'
+
+    final group = await getGroupById(groupId);
+    if (group == null) throw Exception('Group not found');
+
+    final status = group.visibility == 'public' ? 'approved' : 'pending';
+
+    // Check if membership already exists
+    final existing = await supabase
+        .from('group_memberships')
+        .select()
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+    if (existing != null) {
+      throw Exception('You have already joined or requested this group.');
+    }
+
+    try{
+      await supabase.from('group_memberships').insert({
+        'group_id': groupId,
+        'user_id': userId,
+        'role': 'member',
+        'status': status,
+        'joined_at': DateTime.now().toUtc().toIso8601String(),
+      });
+    } catch (e) {
+      throw Exception('Failed to create membership: $e');
+    }
   }
 }

@@ -14,7 +14,7 @@ class MediaCacheService {
   /// Otherwise downloads it, caches it, and returns the file.
   Future<File> getMediaFile(String mediaUrl) async {
     final uri = Uri.parse(mediaUrl);
-    final s3Key = uri.path; // includes leading slash
+    final s3Key = uri.path.startsWith('/') ? uri.path.substring(1) : uri.path;
     final dir = await getApplicationDocumentsDirectory();
     final mediaPath = p.join(dir.path, 'group_media', s3Key);
 
@@ -29,7 +29,6 @@ class MediaCacheService {
       return file;
     }
 
-    // Download and cache the file
     final response = await http.get(Uri.parse(mediaUrl));
     if (response.statusCode == 200) {
       await file.writeAsBytes(response.bodyBytes);

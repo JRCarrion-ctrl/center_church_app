@@ -1,8 +1,11 @@
 // lib/routes/misc_routes.dart
+import 'package:ccf_app/features/more/pages/public_profile.dart';
 import 'package:go_router/go_router.dart';
 import '../transitions/transitions.dart';
 import '../features/features.dart';
 import '../features/giving/give_page.dart';
+import 'package:ccf_app/features/calendar/pages/app_event_details_page.dart';
+import '../features/calendar/models/app_event.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -41,4 +44,19 @@ final List<GoRoute> miscRoutes = [
     path: '/event/:id',
     builder: (context, state) => EventPage(eventId: state.pathParameters['id']!),
   ),
+  GoRoute(
+    path: '/app-event/:id',
+    pageBuilder: (context, state) {
+      final event = state.extra as AppEvent;
+      return buildSlidePage(
+        AppEventDetailsPage(event: event),
+        direction: SlideDirection.right,
+      );
+    },
+  ),
+  GoRoute(
+    path: '/profile/:id',
+    builder: (context, state) => PublicProfile(userId: state.pathParameters['id']!),
+  ),
+
 ];

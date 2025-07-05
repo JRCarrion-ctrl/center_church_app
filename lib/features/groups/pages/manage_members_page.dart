@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import '../group_service.dart';
+import 'package:go_router/go_router.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
@@ -11,21 +12,12 @@ class ManageMembersPage extends StatefulWidget {
 }
 
 class _ManageMembersPageState extends State<ManageMembersPage> {
-  final supabase = Supabase.instance.client;
+  late Future<List<Map<String, dynamic>>> _futureMembers;
 
-  Future<List<Map<String, dynamic>>> _fetchGroupMembers() async {
-    final data = await supabase
-        .from('group_memberships')
-        .select('user_id, role, profiles(display_name)')
-        .eq('group_id', widget.groupId)
-        .eq('status', 'approved')
-        .order('profiles.display_name', ascending: true);
-
-    return List<Map<String, dynamic>>.from(data.map((e) => {
-          'user_id': e['user_id'],
-          'role': e['role'],
-          'display_name': e['profiles']?['display_name'] ?? 'Unnamed User',
-        }));
+  @override
+  void initState() {
+    super.initState();
+    _futureMembers = GroupService().getGroupMembers(widget.groupId);
   }
 
   @override
@@ -35,7 +27,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         title: const Text('Group Members'),
       ),
       body: FutureBuilder<List<Map<String, dynamic>>>(
-        future: _fetchGroupMembers(),
+        future: _futureMembers,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -63,9 +55,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 title: Text(member['display_name']),
                 subtitle: Text(member['role']),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Tapped ${member['display_name']}')),
-                  );
+                  context.push('/profile/${member['user_id']}');
                 },
               );
             },

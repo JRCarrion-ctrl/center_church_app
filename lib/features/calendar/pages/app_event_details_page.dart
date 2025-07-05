@@ -2,19 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import '../../calendar/event_service.dart';
-import '../../calendar/models/group_event.dart';
+import '../event_service.dart';
+import '../models/app_event.dart';
 
-class GroupEventDetailsPage extends StatefulWidget {
-  final GroupEvent event;
+class AppEventDetailsPage extends StatefulWidget {
+  final AppEvent event;
 
-  const GroupEventDetailsPage({super.key, required this.event});
+  const AppEventDetailsPage({super.key, required this.event});
 
   @override
-  State<GroupEventDetailsPage> createState() => _GroupEventDetailsPageState();
+  State<AppEventDetailsPage> createState() => _AppEventDetailsPageState();
 }
 
-class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
+class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
   final _eventService = EventService();
   int _attendingCount = 1;
   bool _saving = false;
@@ -45,7 +45,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
 
   Future<void> _loadRSVPs() async {
     try {
-      final data = await _eventService.fetchRSVPS(widget.event.id);
+      final data = await _eventService.fetchAppEventRSVPs(widget.event.id);
       if (mounted) setState(() => _rsvps = data);
     } catch (_) {}
   }
@@ -53,12 +53,10 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
   Future<void> _submitRSVP() async {
     setState(() => _saving = true);
     try {
-      await Supabase.instance.client.from('event_attendance').upsert({
-        'event_id': widget.event.id,
-        'user_id': Supabase.instance.client.auth.currentUser!.id,
-        'attending_count': _attendingCount,
-      }, onConflict: 'event_id, user_id');
-
+      await _eventService.rsvpAppEvent(
+        appEventId: widget.event.id,
+        count: _attendingCount,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('RSVP saved')),
@@ -90,12 +88,15 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
               child: Image.network(e.imageUrl!, height: 200, fit: BoxFit.cover),
             ),
           const SizedBox(height: 16),
-          Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            e.title,
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 8),
           Text(DateFormat('EEEE, MMM d, yyyy • h:mm a').format(e.eventDate)),
           const SizedBox(height: 16),
-          if (e.description != null && e.description?.isNotEmpty == true)
-            Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
+          if (e.description?.isNotEmpty ?? false)
+            Text(e.description ?? '', style: Theme.of(context).textTheme.bodyLarge),
           const Divider(height: 32),
           Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),
           Row(
@@ -112,10 +113,8 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
               const Spacer(),
               ElevatedButton(
                 onPressed: _saving ? null : _submitRSVP,
-                child: _saving
-                    ? const CircularProgressIndicator()
-                    : const Text('Submit RSVP'),
-              ),
+                child: _saving ? const CircularProgressIndicator() : const Text('Submit RSVP'),
+              )
             ],
           ),
           const Divider(height: 32),
@@ -131,7 +130,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
                 trailing: Text('x${rsvp['attending_count']}'),
               );
             }),
-          ],
+          ]
         ],
       ),
     );
