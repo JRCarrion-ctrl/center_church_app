@@ -25,7 +25,6 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Calendar')),
       body: FutureBuilder<List<GroupEvent>>(
         future: _eventsFuture,
         builder: (context, snapshot) {

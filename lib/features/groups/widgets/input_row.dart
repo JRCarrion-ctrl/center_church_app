@@ -2,7 +2,21 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
+
+Future<File> _compressImage(File file) async {
+  final targetPath = file.path.replaceFirst(RegExp(r'\.(jpg|jpeg|png|heic|webp)$'), '_compressed.jpg');
+  final compressedBytes = await FlutterImageCompress.compressWithFile(
+    file.absolute.path,
+    minWidth: 600, // adjust as needed
+    minHeight: 600,
+    quality: 80,    // adjust as needed (lower = smaller file)
+    format: CompressFormat.jpeg,
+  );
+  return File(targetPath)..writeAsBytesSync(compressedBytes!);
+}
 
 class InputRow extends StatefulWidget {
   final TextEditingController controller;
@@ -41,18 +55,62 @@ class _InputRowState extends State<InputRow> {
     super.dispose();
   }
 
-  Future<void> _pickFile() async {
-    final result = await FilePicker.platform.pickFiles(withData: false);
-    if (result != null && result.files.isNotEmpty) {
-      final path = result.files.first.path;
-      if (path != null) {
-        setState(() {
-          _selectedFile = File(path);
-        });
-        await widget.onFilePicked(File(path));
-      }
-    }
+  Future<void> _showAttachmentOptions() async {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) {
+        return SafeArea(
+          child: Wrap(
+            children: [
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: const Text('Take Photo'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
+                  if (picked != null) {
+                    File file = File(picked.path);
+                    file = await _compressImage(file);
+                    await widget.onFilePicked(file);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.photo_library),
+                title: const Text('Photo Library'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+                  if (picked != null) {
+                    File file = File(picked.path);
+                    file = await _compressImage(file);
+                    await widget.onFilePicked(file);
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.insert_drive_file),
+                title: const Text('Browse Files'),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final result = await FilePicker.platform.pickFiles();
+                  if (result != null && result.files.isNotEmpty && result.files.first.path != null) {
+                    File file = File(result.files.first.path!);
+                    final ext = file.path.toLowerCase();
+                    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
+                      file = await _compressImage(file);
+                    }
+                    await widget.onFilePicked(file);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
+
 
   void _insertEmoji(String emoji) {
     final text = widget.controller.text;
@@ -90,7 +148,7 @@ class _InputRowState extends State<InputRow> {
             children: [
               IconButton(
                 icon: const Icon(Icons.attach_file),
-                onPressed: _pickFile,
+                onPressed: _showAttachmentOptions,
               ),
               IconButton(
                 icon: const Icon(Icons.emoji_emotions_outlined),

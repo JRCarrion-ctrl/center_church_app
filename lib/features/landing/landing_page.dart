@@ -27,6 +27,9 @@ class _LandingPageState extends State<LandingPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final screenHeight = MediaQuery.of(context).size.height;
     final fontSize = screenHeight * 0.022;
     final padding = screenHeight * 0.018;
@@ -47,13 +50,20 @@ class _LandingPageState extends State<LandingPage> {
     return Scaffold(
       body: Stack(
         children: [
+          // Background image
           SizedBox.expand(
             child: Image.asset(
               'assets/landing_background.png',
               fit: BoxFit.cover,
             ),
           ),
-          Container(color: const Color(0x99000000)),
+          // Theme-adaptive overlay
+          Container(
+            color: isDark
+                ? Colors.black.withAlpha(64)
+                : Colors.black.withAlpha(32), 
+          ),
+          // Main content
           Center(
             child: SingleChildScrollView(
               physics: const NeverScrollableScrollPhysics(),
@@ -69,6 +79,7 @@ class _LandingPageState extends State<LandingPage> {
               ),
             ),
           ),
+          // Auth status prompt
           Positioned(
             bottom: 30,
             left: 0,
@@ -76,14 +87,19 @@ class _LandingPageState extends State<LandingPage> {
             child: Center(
               child: GestureDetector(
                 onTap: profile == null ? () => context.push('/auth') : null,
-                child: Text(
-                  statusText,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 14,
-                    decoration: profile == null
-                        ? TextDecoration.underline
-                        : TextDecoration.none,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withAlpha(80),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    statusText,
+                    style: const TextStyle(
+                    color: Colors.white,
+                      fontSize: 14,
+                      decoration: TextDecoration.none,
+                    ),
                   ),
                 ),
               ),
@@ -97,7 +113,7 @@ class _LandingPageState extends State<LandingPage> {
   Widget _buildLogo(double screenHeight) {
     return Center(
       child: Image.asset(
-        'assets/logo_image.png',
+        'assets/logo_light.png',
         width: screenHeight * 0.12,
         height: screenHeight * 0.12,
         fit: BoxFit.contain,
@@ -110,9 +126,16 @@ class _LandingPageState extends State<LandingPage> {
     return Text(
       churchName,
       style: TextStyle(
-        color: Colors.white70,
+        color: Colors.white,
         fontSize: fontSize,
         fontWeight: FontWeight.w400,
+        shadows: const [
+          Shadow(
+            blurRadius: 3,
+            color: Colors.black54,
+            offset: Offset(0, 1),
+          ),
+        ],
       ),
     );
   }
@@ -121,13 +144,18 @@ class _LandingPageState extends State<LandingPage> {
     return Column(
       children: [
         SecondaryButton(
-            title: "How to Use", onTap: () {}, fontSize: fontSize, padding: padding),
+          title: "How to Use",
+          onTap: () {},
+          fontSize: fontSize,
+          padding: padding,
+        ),
         SizedBox(height: padding * 1.4),
         SecondaryButton(
-            title: "Church Information",
-            onTap: () {},
-            fontSize: fontSize,
-            padding: padding),
+          title: "Church Information",
+          onTap: () {},
+          fontSize: fontSize,
+          padding: padding,
+        ),
         SizedBox(height: padding * 1.4),
         LanguageButtons(
           selectedLanguage: selectedLanguage,

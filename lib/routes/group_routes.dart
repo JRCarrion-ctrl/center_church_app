@@ -6,6 +6,8 @@ import '../features/groups/pages/edit_group_info_page.dart';
 import '../features/groups/pages/manage_members_page.dart';
 import '../features/groups/pages/manage_events_page.dart';
 import '../features/groups/pages/manage_announcements_page.dart';
+import '../features/groups/pages/group_media_page.dart';
+import '../features/groups/pages/group_admin_tools_page.dart';
 
 final List<GoRoute> groupRoutes = [
   GoRoute(
@@ -42,6 +44,20 @@ final List<GoRoute> groupRoutes = [
     builder: (context, state) {
       final groupId = state.pathParameters['id']!;
       return ManageAnnouncementsPage(groupId: groupId);
+    },
+  ),
+  GoRoute(
+    path: '/groups/:id/media',
+    builder: (context, state) {
+      final groupId = state.pathParameters['id']!;
+      return GroupMediaPage(groupId: groupId);
+    },
+  ),
+  GoRoute(
+    path: '/groups/:id/admin',
+    builder: (context, state) {
+      final groupId = state.pathParameters['id']!;
+      return GroupAdminToolsPage(groupId: groupId);
     },
   ),
 ];

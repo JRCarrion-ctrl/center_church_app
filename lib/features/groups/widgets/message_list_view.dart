@@ -12,6 +12,7 @@ class MessageListView extends StatelessWidget {
   final Map<String, List<String>> reactionMap;
   final void Function(GroupMessage) onLongPress;
   final String Function(DateTime) formatTimestamp;
+  final String? highlightMessageId;
 
   const MessageListView({
     super.key,
@@ -21,6 +22,7 @@ class MessageListView extends StatelessWidget {
     required this.reactionMap,
     required this.onLongPress,
     required this.formatTimestamp,
+    this.highlightMessageId,
   });
 
   Map<String, List<GroupMessage>> _groupMessagesByDay(List<GroupMessage> messages) {
@@ -82,14 +84,24 @@ class MessageListView extends StatelessWidget {
             if (msg.deleted) return const SizedBox.shrink();
 
             final isMe = msg.senderId == userId;
+            final isHighlighted = msg.id == highlightMessageId;
 
-            return GroupMessageBubble(
-              message: msg,
-              isMe: isMe,
-              onLongPress: () => onLongPress(msg),
-              contentBuilder: () => MessageContentView(message: msg),
-              timestamp: formatTimestamp(msg.createdAt),
-              reactions: reactionMap[msg.id] ?? [],
+            return Container(
+              decoration: isHighlighted
+                  ? BoxDecoration(
+                      border: Border.all(color: Colors.amber, width: 2),
+                      borderRadius: BorderRadius.circular(8),
+                    )
+                  : null,
+              margin: isHighlighted ? const EdgeInsets.symmetric(vertical: 4) : null,
+              child: GroupMessageBubble(
+                message: msg,
+                isMe: isMe,
+                onLongPress: () => onLongPress(msg),
+                contentBuilder: () => MessageContentView(message: msg),
+                timestamp: formatTimestamp(msg.createdAt),
+                reactions: reactionMap[msg.id] ?? [],
+              ),
             );
           }));
         }

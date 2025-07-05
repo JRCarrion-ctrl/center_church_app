@@ -26,10 +26,12 @@ dependencies:
   intl: ^0.20.0
   uuid: ^4.5.1
   file_picker: ^10.2.0
+  image_picker: ^1.1.2
   path: ^1.9.1
   path_provider: ^2.1.5
   youtube_player_flutter: ^9.1.1
   emoji_picker_flutter: ^4.3.0
+  flutter_image_compress: ^2.4.0
 
 dev_dependencies:
   flutter_test:
@@ -39,6 +41,8 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/logo_dark.png
+    - assets/logo_light.png
     - assets/logo_image.png
     - assets/landing_background.png
     - assets/image_placeholder.png

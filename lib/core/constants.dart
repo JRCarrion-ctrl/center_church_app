@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 // lib/core/constants.dart
 /// Base URL for website links
 const String kChurchWebsite = 'https://www.centrocristianofrederick.com/';
@@ -8,3 +9,8 @@ const String kFacebook = 'https://www.facebook.com/profile.php?id=10008986318647
 /// Padding & layout
 const double kDefaultPadding = 16.0;
 const double kCornerRadius = 12.0;
+
+const kBrandPrimary = Color(0xFF5C4033); // deep warm brown
+const kBrandAccent = Color(0xFFCC7722); // accent orange
+const kSurfaceLight = Color(0xFFEDE7DD); // light background
+const kSurfaceDark = Color(0xFF1E1E1E);  // dark surface

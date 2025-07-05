@@ -2,8 +2,16 @@
 import 'package:go_router/go_router.dart';
 import '../transitions/transitions.dart';
 import '../features/features.dart';
+import '../features/giving/give_page.dart';
 
 final List<GoRoute> miscRoutes = [
+  GoRoute(
+    path: '/give',
+    pageBuilder: (_, _) => buildSlidePage(
+      const GivePage(),
+      direction: SlideDirection.right,
+    ),
+  ),
   GoRoute(
     path: '/landing',
     builder: (_, _) => const LandingPage(),

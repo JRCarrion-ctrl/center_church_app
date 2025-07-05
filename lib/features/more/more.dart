@@ -19,9 +19,6 @@ class MorePage extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('More'),
-      ),
       body: ListView.builder(
         itemCount: moreItems.length,
         itemBuilder: (context, index) {

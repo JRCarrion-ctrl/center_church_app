@@ -21,9 +21,6 @@ class PrayerPage extends StatelessWidget {
     ];
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Prayer Requests'),
-      ),
       body: ListView.builder(
         itemCount: dummyPrayerRequests.length,
         itemBuilder: (context, index) {

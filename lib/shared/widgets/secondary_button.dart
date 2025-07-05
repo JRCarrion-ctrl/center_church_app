@@ -19,11 +19,12 @@ class SecondaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton(
       style: OutlinedButton.styleFrom(
-        padding: EdgeInsets.symmetric(vertical: padding / 2, horizontal: padding),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        side: const BorderSide(color: Colors.white, width: 1.5),
-        foregroundColor: Colors.white,
+        backgroundColor: Color(0xFFFAF4EF),
+        side: const BorderSide(color: Color(0xFF5C4033), width: 1.5),
+        foregroundColor: Color(0xFF3B2C25),
+        padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
         textStyle: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w500),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
       ),
       onPressed: onTap,
       child: Text(title),

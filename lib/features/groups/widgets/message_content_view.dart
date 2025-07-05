@@ -41,7 +41,7 @@ class MessageContentView extends StatelessWidget {
     if (message.fileUrl != null) {
       final fileUrl = message.fileUrl!;
       final extension = fileUrl.split('.').last;
-      final isImage = ['png', 'jpg', 'jpeg'].contains(extension.toLowerCase());
+      final isImage = ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic'].contains(extension.toLowerCase());
 
       final mediaFuture = MediaCacheService().getMediaFile(fileUrl);
 
@@ -56,9 +56,24 @@ class MessageContentView extends StatelessWidget {
                   return Image.asset('assets/image_placeholder.png', height: 200, fit: BoxFit.cover);
                 }
                 if (snapshot.hasError || snapshot.data == null) {
-                  return const Icon(Icons.broken_image);
+                  return Column(
+                    children: const [
+                      Icon(Icons.broken_image, size: 48, color: Colors.grey),
+                      Text('Failed to load image', style: TextStyle(fontSize: 12)),
+                    ],
+                  );
                 }
-                return Image.file(snapshot.data!, height: 200, fit: BoxFit.cover);
+                return GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => Dialog(
+                        child: Image.file(snapshot.data!),
+                      ),
+                    );
+                  },
+                  child: Image.file(snapshot.data!, height: 200, fit: BoxFit.cover),
+                );
               },
             )
           else

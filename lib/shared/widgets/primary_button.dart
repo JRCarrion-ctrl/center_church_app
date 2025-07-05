@@ -17,14 +17,25 @@ class PrimaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return ElevatedButton(
       style: ElevatedButton.styleFrom(
-        padding: EdgeInsets.symmetric(vertical: padding / 1.5, horizontal: padding * 1.5),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
+        padding: EdgeInsets.symmetric(
+          vertical: padding / 1.5,
+          horizontal: padding * 1.5,
+       ),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(4),
+       ),
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         elevation: 4,
-        textStyle: TextStyle(fontSize: fontSize, fontWeight: FontWeight.bold),
+        textStyle: TextStyle(
+          fontSize: fontSize,
+          fontWeight: FontWeight.bold,
+        ),
       ),
       onPressed: onTap,
       child: Text(title),

@@ -17,19 +17,24 @@ class LanguageButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    Color getFill(String lang) {
+  return selectedLanguage == lang
+      ? Color(0xFFFAF4EF) // soft beige background
+      : Color(0xFFFAF4EF).withAlpha(128); // coppery glow  
+  }
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         OutlinedButton(
           onPressed: () => onLanguageChange('en'),
           style: OutlinedButton.styleFrom(
-            backgroundColor:
-                selectedLanguage == 'en' ? const Color(0x33FFFFFF) : Colors.transparent,
-            side: const BorderSide(color: Colors.white),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            backgroundColor: getFill('en'),
+            side: const BorderSide(color: Colors.black87),
+            foregroundColor: Colors.black87,
             padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
             textStyle: TextStyle(fontSize: fontSize),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
           child: const Text('English'),
         ),
@@ -37,13 +42,12 @@ class LanguageButtons extends StatelessWidget {
         OutlinedButton(
           onPressed: () => onLanguageChange('es'),
           style: OutlinedButton.styleFrom(
-            backgroundColor:
-                selectedLanguage == 'es' ? const Color(0x33FFFFFF) : Colors.transparent,
-            side: const BorderSide(color: Colors.white),
-            foregroundColor: Colors.white,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+            backgroundColor: getFill('es'),
+            side: const BorderSide(color: Colors.black87),
+            foregroundColor: Colors.black87,
             padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
             textStyle: TextStyle(fontSize: fontSize),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
           ),
           child: const Text('Español'),
         ),

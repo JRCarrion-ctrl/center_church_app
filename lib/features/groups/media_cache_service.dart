@@ -13,16 +13,17 @@ class MediaCacheService {
   /// If cached locally, returns the local file.
   /// Otherwise downloads it, caches it, and returns the file.
   Future<File> getMediaFile(String mediaUrl) async {
-    final fileName = p.basename(mediaUrl);
+    final uri = Uri.parse(mediaUrl);
+    final s3Key = uri.path; // includes leading slash
     final dir = await getApplicationDocumentsDirectory();
-    final mediaDir = Directory(p.join(dir.path, 'group_media'));
+    final mediaPath = p.join(dir.path, 'group_media', s3Key);
 
+    final mediaDir = Directory(p.dirname(mediaPath));
     if (!await mediaDir.exists()) {
       await mediaDir.create(recursive: true);
     }
 
-    final filePath = p.join(mediaDir.path, fileName);
-    final file = File(filePath);
+    final file = File(mediaPath);
 
     if (await file.exists()) {
       return file;

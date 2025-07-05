@@ -55,7 +55,7 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Time Until Next Service: $days Days, $hours Hours',
+          'Next Service In: $days Days, $hours Hours',
           style: Theme.of(context).textTheme.titleMedium,
         ),
       ],

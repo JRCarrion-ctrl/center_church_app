@@ -30,7 +30,7 @@ class HomePage extends StatelessWidget {
                     SizedBox(height: 24),
                     ChurchInfoCard(),
                     SizedBox(height: 24),
-                    QuickLinksFooter(),
+                    QuickLinksFooter()
                   ],
                 ),
               ),
