@@ -24,7 +24,7 @@ class ChurchInfoCard extends StatelessWidget {
         ClipRRect(
           borderRadius: BorderRadius.circular(12),
           child: Image.asset(
-            'assets/landing_backgound.png', // <- Make sure this file exists and is in pubspec.yaml
+            'assets/landing_background.png', // <- Make sure this file exists and is in pubspec.yaml
             height: 180,
             width: double.infinity,
             fit: BoxFit.cover,

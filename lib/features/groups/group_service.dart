@@ -4,6 +4,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart';
 import 'models/group.dart';
 import 'models/group_model.dart';
+import 'package:logger/logger.dart';
+
+final log = Logger();
 
 class GroupService {
   final supabase = Supabase.instance.client;
@@ -241,5 +244,98 @@ class GroupService {
     } catch (e) {
       throw Exception('Failed to create membership: $e');
     }
+  }
+
+  Future<void> leaveGroup(String groupId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not logged in');
+
+    await Supabase.instance.client
+      .from('group_memberships')
+      .delete()
+      .eq('user_id', userId)
+      .eq('group_id', groupId);
+  }
+
+  Future<String> getMyGroupRole(String groupId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return 'none';
+    final res = await Supabase.instance.client
+        .from('group_memberships')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('group_id', groupId)
+        .maybeSingle();
+    return res?['role'] ?? 'none';
+  }
+
+  Future<void> removeMember(String groupId, String userId) async {
+    await supabase.rpc('remove_group_member', params: {
+      'p_group_id': groupId,
+      'p_user_id': userId,
+    });
+  }
+
+
+  Future<void> setMemberRole(String groupId, String userId, String newRole) async {
+    final client = Supabase.instance.client;
+    final actingUserId = client.auth.currentUser?.id;
+    if (actingUserId == null) {
+      log.e('Role update failed: not authenticated');
+      throw Exception('Not authenticated');
+    }
+
+    try {
+      await client.rpc(
+        'promote_user_to_role',
+        params: {
+          'p_group_id': groupId,
+          'p_user_id': userId,
+          'p_new_role': newRole,
+        },
+      );
+
+      log.i('Role updated to "$newRole" for $userId in $groupId by $actingUserId');
+    } on PostgrestException catch (e) {
+      log.e('RPC failed: ${e.message}');
+      throw Exception('Failed to update role: ${e.message}');
+    } catch (e) {
+      log.e('Unexpected error: $e');
+      throw Exception('Unexpected error updating role: $e');
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getPendingMembers(String groupId) async {
+    final res = await Supabase.instance.client
+      .from('group_memberships')
+      .select('user_id, role, status, profiles(display_name, email)')
+      .eq('group_id', groupId)
+      .eq('status', 'pending')
+      .order('joined_at');
+
+    return (res as List)
+        .map((e) => {
+          'user_id': e['user_id'],
+          'role': e['role'],
+          'status': e['status'],
+          'display_name': e['profiles']['display_name'],
+          'email': e['profiles']['email'],
+        })
+        .toList();
+  }
+
+  Future<void> approveMemberRequest(String groupId, String userId) async {
+    await supabase.rpc('approve_group_member_request', params: {
+      'p_group_id': groupId,
+      'p_user_id': userId,
+    });
+  }
+
+
+  Future<void> denyMemberRequest(String groupId, String userId) async {
+    await supabase.rpc('deny_group_member_request', params: {
+      'p_group_id': groupId,
+      'p_user_id': userId,
+    });
   }
 }

@@ -58,6 +58,37 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     });
   }
 
+  Future<void> _leaveGroup() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Leave Group'),
+        content: const Text('Are you sure you want to leave this group?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Leave')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    try {
+      await GroupService().leaveGroup(widget.groupId);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You left the group')),
+      );
+      context.go('/groups'); // Or wherever you want to redirect
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to leave group: $e')),
+        );
+      }
+    }
+  }
+
+
   Future<void> _saveGroupEdits() async {
     setState(() => isLoading = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -127,6 +158,18 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           const SizedBox(height: 24),
           _buildSectionHeader('Members'),
           _buildGroupMembers(context),
+          if (!widget.isAdmin)
+            Padding(
+              padding: const EdgeInsets.only(top: 24),
+              child: TextButton.icon(
+                onPressed: _leaveGroup,
+                icon: const Icon(Icons.exit_to_app),
+                label: const Text('Leave Group'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+              ),
+            ),
         ],
       ),
     );
