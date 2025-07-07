@@ -55,7 +55,10 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
             .update(announcement)
             .eq('id', widget.existing!.id);
       } else {
-        await supabase.from('group_announcements').insert(announcement);
+        await supabase.from('group_announcements').insert({
+          ...announcement,
+          'created_by': supabase.auth.currentUser?.id,
+        });
       }
 
       navigator.pop(); // triggers refresh on parent page

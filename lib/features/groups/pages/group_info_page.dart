@@ -290,10 +290,16 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         }
         final events = snapshot.data ?? [];
         if (events.isEmpty) {
-          return const Card(
+          return Card(
             child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('No upcoming events.'),
+              padding: const EdgeInsets.all(12),
+              child: Column (
+              children: [const Text('No upcoming events.'),
+                if (widget.isAdmin)
+                  TextButton.icon(
+                    label: const Text('Create An Event'),
+                    onPressed: () => context.push('/groups/${widget.groupId}/events'),
+                  ),])
             ),
           );
         }
@@ -328,7 +334,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
-                      onPressed: () => context.push('/group-event/${widget.groupId}/events'),
+                      onPressed: () => context.push('/groups/${widget.groupId}/events'),
                       child: const Text('View All Events'),
                     ),
                   ],
@@ -363,10 +369,16 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         }
         final announcements = snapshot.data ?? [];
         if (announcements.isEmpty) {
-          return const Card(
+          return Card(
             child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Text('No announcements yet.'),
+              padding: const EdgeInsets.all(12),
+              child: Column (
+              children: [const Text('No Announcements Yet.'),
+                if (widget.isAdmin)
+                  TextButton.icon(
+                    label: const Text('Create An Announcement'),
+                    onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
+                  ),])
             ),
           );
         }

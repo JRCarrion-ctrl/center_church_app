@@ -91,7 +91,7 @@ class _EventFormModalState extends State<EventFormModal> {
       description: _descController.text.trim(),
       location: _locationController.text.trim(),
       imageUrl: widget.existing?.imageUrl,
-      eventDate: dt,
+      eventDate: dt.toUtc(),
     );
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);

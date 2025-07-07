@@ -84,7 +84,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       id: widget.existing?.id ?? '',
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
-      eventDate: dt,
+      eventDate: dt.toUtc(),
       imageUrl: widget.existing?.imageUrl,
     );
 

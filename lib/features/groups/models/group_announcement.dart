@@ -4,6 +4,7 @@ class GroupAnnouncement {
   final String groupId;
   final String title;
   final String? body;
+  final String? createdByName;
   final String? imageUrl;
   final DateTime? publishedAt;
   final DateTime? createdAt;
@@ -16,6 +17,7 @@ class GroupAnnouncement {
     this.imageUrl,
     this.publishedAt,
     this.createdAt,
+    this.createdByName
   });
 
   factory GroupAnnouncement.fromMap(Map<String, dynamic> map) {
@@ -31,6 +33,7 @@ class GroupAnnouncement {
       createdAt: map['created_at'] != null
           ? DateTime.parse(map['created_at'])
           : null,
+      createdByName: map['profiles']?['display_name'],
     );
   }
 

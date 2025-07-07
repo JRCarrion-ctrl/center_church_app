@@ -12,13 +12,25 @@ class LivestreamPreview extends StatefulWidget {
 }
 
 class _LivestreamPreviewState extends State<LivestreamPreview> {
-  late Future<Map<String, String>> _latestLivestreamFuture;
+  late Future<String?> _videoIdFuture;
   YoutubePlayerController? _ytController;
 
   @override
   void initState() {
     super.initState();
-    _latestLivestreamFuture = MediaService().getLatestLivestream();
+    _videoIdFuture = _loadVideoId();
+  }
+
+  Future<String?> _loadVideoId() async {
+    try {
+      final data = await MediaService().getLatestLivestream();
+      final url = data['url'];
+      if (url == null || url.isEmpty) return null;
+      return YoutubePlayer.convertUrlToId(url);
+    } catch (e) {
+      debugPrint('Error loading livestream: $e');
+      return null;
+    }
   }
 
   @override
@@ -29,8 +41,8 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
-      future: _latestLivestreamFuture,
+    return FutureBuilder<String?>(
+      future: _videoIdFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(
@@ -39,23 +51,15 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
           );
         }
 
-        if (snapshot.hasError || snapshot.data == null || snapshot.data!['url']!.isEmpty) {
-          return const Text('Could not load livestream.');
-        }
+        final videoId = snapshot.data;
 
-        final videoUrl = snapshot.data!['url']!;
-        final videoId = YoutubePlayer.convertUrlToId(videoUrl);
-
-        if (videoId == null) {
-          return const Text('Invalid video URL.');
+        if (videoId == null || videoId.isEmpty) {
+          return const Text('No livestream available.');
         }
 
         _ytController ??= YoutubePlayerController(
           initialVideoId: videoId,
-          flags: const YoutubePlayerFlags(
-            autoPlay: false,
-            mute: false,
-          ),
+          flags: const YoutubePlayerFlags(autoPlay: false),
         );
 
         return Column(
@@ -76,8 +80,8 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () async {
-                  const churchYouTubeUrl = 'https://www.youtube.com/@centerchurch8898/streams';
-                  final uri = Uri.parse(churchYouTubeUrl);
+                  const url = 'https://www.youtube.com/@centerchurch8898/streams';
+                  final uri = Uri.parse(url);
                   if (await canLaunchUrl(uri)) {
                     await launchUrl(uri, mode: LaunchMode.externalApplication);
                   }

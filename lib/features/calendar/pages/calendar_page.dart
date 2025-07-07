@@ -138,7 +138,7 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget _buildGroupEventCard(GroupEvent e) => Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
-          onTap: () => context.push('/event/${e.id}'),
+          onTap: () => context.push('/group-event/${e.id}', extra: e),
           leading: e.imageUrl != null
               ? Image.network(e.imageUrl!, width: 60, fit: BoxFit.cover)
               : const Icon(Icons.event, size: 40),

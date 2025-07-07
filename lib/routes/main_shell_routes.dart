@@ -2,6 +2,7 @@
 import 'package:go_router/go_router.dart';
 import '../features/navigation/main_app.dart';
 import '../features/features.dart';
+import '../features/home/manage_app_announcements_page.dart';
 
 final ShellRoute mainShellRoute = ShellRoute(
   builder: (context, state, child) => MainApp(child: child),
@@ -35,6 +36,10 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/notifications',
       name: 'notifications',
       builder: (_, _) => const NotificationsPage(),
+    ),
+    GoRoute(
+      path: '/manage-app-announcements',
+      builder: (context, state) => const ManageAppAnnouncementsPage(),
     ),
   ],
 );

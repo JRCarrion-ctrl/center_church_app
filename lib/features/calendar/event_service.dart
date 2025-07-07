@@ -10,10 +10,13 @@ class EventService {
   /// Fetch upcoming app-wide events added by supervisors.
   Future<List<AppEvent>> fetchAppEvents() async {
     try {
+      final today = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(today.year, today.month, today.day);
+
       final data = await _supabase
           .from('app_events')
           .select()
-          .gte('event_date', DateTime.now().toUtc().toIso8601String())
+          .gte('event_date', startOfDay.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
@@ -21,7 +24,6 @@ class EventService {
           .map((json) => AppEvent.fromMap(json))
           .toList();
     } on PostgrestException catch (error) {
-      // Table might not exist yet
       if (error.message.contains('relation "public.app_events" does not exist')) {
         debugPrint('app_events table missing; returning empty list');
         return [];
@@ -48,10 +50,7 @@ class EventService {
           'image_url': event.imageUrl,
           'event_date': event.eventDate.toIso8601String(),
         };
-        await _supabase
-            .from('app_events')
-            .update(updateData)
-            .eq('id', event.id);
+        await _supabase.from('app_events').update(updateData).eq('id', event.id);
       }
     } on PostgrestException catch (error) {
       throw Exception('Error saving app event: ${error.message}');
@@ -88,11 +87,14 @@ class EventService {
     if (groupIds.isEmpty) return [];
 
     try {
+      final today = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(today.year, today.month, today.day);
+
       final data = await _supabase
           .from('group_events')
           .select()
           .inFilter('group_id', groupIds)
-          .gte('event_date', DateTime.now().toUtc().toIso8601String())
+          .gte('event_date', startOfDay.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
@@ -107,11 +109,14 @@ class EventService {
   /// Fetch upcoming events for a single group.
   Future<List<GroupEvent>> fetchGroupEvents(String groupId) async {
     try {
+      final today = DateTime.now().toUtc();
+      final startOfDay = DateTime.utc(today.year, today.month, today.day);
+
       final data = await _supabase
           .from('group_events')
           .select()
           .eq('group_id', groupId)
-          .gte('event_date', DateTime.now().toUtc().toIso8601String())
+          .gte('event_date', startOfDay.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
@@ -160,7 +165,6 @@ class EventService {
   Future<void> saveEvent(GroupEvent event) async {
     final data = event.toMap();
     try {
-      // New events have an empty id; skip lookup and directly insert
       if (event.id.isEmpty) {
         data
           ..remove('id')
@@ -169,12 +173,8 @@ class EventService {
         return;
       }
 
-      // Otherwise, update existing row
       final updateData = event.toMap()..remove('id');
-      await _supabase
-          .from('group_events')
-          .update(updateData)
-          .eq('id', event.id);
+      await _supabase.from('group_events').update(updateData).eq('id', event.id);
     } on PostgrestException catch (error) {
       throw Exception('Error saving event: ${error.message}');
     }
@@ -228,9 +228,9 @@ class EventService {
   /// Fetch RSVPs for an app-wide event
   Future<List<Map<String, dynamic>>> fetchAppEventRSVPs(String appEventId) async {
     final data = await _supabase
-      .from('app_event_attendance')
-      .select('attending_count, profiles(display_name, email)')
-      .eq('app_event_id', appEventId);
-    return (data as List).cast<Map<String,dynamic>>();
+        .from('app_event_attendance')
+        .select('attending_count, profiles(display_name, email)')
+        .eq('app_event_id', appEventId);
+    return (data as List).cast<Map<String, dynamic>>();
   }
 }
