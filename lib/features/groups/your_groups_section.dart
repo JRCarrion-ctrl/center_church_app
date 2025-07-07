@@ -9,10 +9,10 @@ class YourGroupsSection extends StatefulWidget {
   const YourGroupsSection({super.key});
 
   @override
-  State<YourGroupsSection> createState() => _YourGroupsSectionState();
+  State<YourGroupsSection> createState() => YourGroupsSectionState();
 }
 
-class _YourGroupsSectionState extends State<YourGroupsSection> {
+class YourGroupsSectionState extends State<YourGroupsSection> {
   late Future<List<GroupModel>> _futureGroups;
 
   @override
@@ -20,6 +20,18 @@ class _YourGroupsSectionState extends State<YourGroupsSection> {
     super.initState();
     final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
     _futureGroups = GroupService().getUserGroups(userId);
+  }
+
+  void _loadGroups() {
+    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
+    _futureGroups = GroupService().getUserGroups(userId);
+  }
+
+  /// Public method to allow refresh from parent
+  Future<void> refresh() async {
+    setState(() {
+      _loadGroups();
+    });
   }
 
   @override

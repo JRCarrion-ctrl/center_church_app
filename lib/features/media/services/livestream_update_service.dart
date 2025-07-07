@@ -26,8 +26,6 @@ class LivestreamUpdateService {
             .from('livestream_cache_meta')
             .update({'last_run_at': now.toIso8601String()})
             .eq('id', 'singleton');
-      } else {
-        print('Update function failed: ${result.statusCode}');
       }
     }
   }

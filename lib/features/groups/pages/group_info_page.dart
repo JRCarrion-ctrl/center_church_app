@@ -13,6 +13,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 
 import '../group_service.dart';
 import '../models/group.dart';
+import '../widgets/invite_user_modal.dart';
 
 Future<File> _compressImage(File file) async {
   final targetPath = file.path.replaceFirst(RegExp(r'\.(jpg|jpeg|png|heic|webp)$'), '_compressed.jpg');
@@ -47,6 +48,14 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   void initState() {
     super.initState();
     _loadGroup();
+  }
+
+  void _openInviteModal() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => InviteUserModal(groupId: widget.groupId),
+    );
   }
 
   Future<void> _loadGroup() async {
@@ -545,6 +554,15 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     ],
                   ),
                 )),
+                if (widget.isAdmin)
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(
+                      onPressed: _openInviteModal,
+                      icon: const Icon(Icons.person_add),
+                      label: const Text('Invite Member'),
+                    ),
+                  ),
                 const SizedBox(height: 8),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,

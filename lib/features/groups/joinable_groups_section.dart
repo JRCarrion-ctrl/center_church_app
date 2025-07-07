@@ -1,22 +1,50 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
+
 
 class JoinableGroupsSection extends StatefulWidget {
   const JoinableGroupsSection({super.key});
 
   @override
-  State<JoinableGroupsSection> createState() => _JoinableGroupsSectionState();
+  State<JoinableGroupsSection> createState() => JoinableGroupsSectionState();
 }
 
-class _JoinableGroupsSectionState extends State<JoinableGroupsSection> {
+class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
   late Future<List<GroupModel>> _futureGroups;
 
   @override
   void initState() {
     super.initState();
-    _futureGroups = GroupService().getJoinableGroups();
+    _futureGroups = _loadFilteredGroups();
+  }
+
+  void refresh() {
+    setState(() {
+      _futureGroups = _loadFilteredGroups();
+    });
+  }
+
+  Future<List<GroupModel>> _loadFilteredGroups() async {
+    final client = Supabase.instance.client;
+    final userId = client.auth.currentUser?.id;
+    if (userId == null) return [];
+
+    final allJoinable = await GroupService().getJoinableGroups();
+
+    final memberships = await client
+        .from('group_memberships')
+        .select('group_id')
+        .eq('user_id', userId)
+        .eq('status', 'approved');
+
+    final joinedGroupIds = (memberships as List)
+        .map((m) => m['group_id'] as String)
+        .toSet();
+
+    return allJoinable.where((g) => !joinedGroupIds.contains(g.id)).toList();
   }
 
   @override

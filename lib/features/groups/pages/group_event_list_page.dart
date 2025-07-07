@@ -48,25 +48,29 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
           ? const Center(child: CircularProgressIndicator())
           : _events.isEmpty
               ? const Center(child: Text('No upcoming events.'))
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _events.length,
-                  itemBuilder: (_, i) {
-                    final e = _events[i];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        onTap: () => context.push('/group-event/${e.id}', extra: e),
-                        leading: e.imageUrl != null
-                            ? Image.network(e.imageUrl!, width: 60, fit: BoxFit.cover)
-                            : const Icon(Icons.event, size: 40),
-                        title: Text(e.title),
-                        subtitle: Text(
-                          DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate),
+              : RefreshIndicator(
+                  onRefresh: _loadEvents,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(16),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: _events.length,
+                    itemBuilder: (_, i) {
+                      final e = _events[i];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          onTap: () => context.push('/group-event/${e.id}', extra: e),
+                          leading: e.imageUrl != null
+                              ? Image.network(e.imageUrl!, width: 60, fit: BoxFit.cover)
+                              : const Icon(Icons.event, size: 40),
+                          title: Text(e.title),
+                          subtitle: Text(
+                            DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate),
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
     );
   }

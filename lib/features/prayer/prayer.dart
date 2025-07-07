@@ -137,31 +137,32 @@ class _PrayerPageState extends State<PrayerPage> {
           ? const Center(child: CircularProgressIndicator())
           : _prayerRequests.isEmpty
               ? const Center(child: Text('No prayer requests yet.'))
-              : ListView.builder(
-                  itemCount: _prayerRequests.length,
-                  itemBuilder: (context, index) {
-                    final item = _prayerRequests[index];
-                    final isAnonymous = item['include_name'] == false;
-                    final name = isAnonymous
-                        ? 'Anonymous'
-                        : (item['profiles']?['display_name'] ?? 'Someone');
+              : RefreshIndicator(
+                  onRefresh: _loadPrayerRequests,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    itemCount: _prayerRequests.length,
+                    itemBuilder: (context, index) {
+                      final item = _prayerRequests[index];
+                      final isAnonymous = item['include_name'] == false;
+                      final name = isAnonymous
+                          ? 'Anonymous'
+                          : (item['profiles']?['display_name'] ?? 'Someone');
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      child: ListTile(
-                        title: Text(item['request'] ?? ''),
-                        subtitle: Text('From: $name'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close),
-                          tooltip: 'Mark as closed',
-                          onPressed: () {
-                            _confirmAndClosePrayer(item['id']);
-                          },
+                      return Card(
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        child: ListTile(
+                          title: Text(item['request'] ?? ''),
+                          subtitle: Text('From: $name'),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.close),
+                            tooltip: 'Mark as closed',
+                            onPressed: () => _confirmAndClosePrayer(item['id']),
+                          ),
                         ),
-                      ),
-                    );
-
-                  },
+                      );
+                    },
+                  ),
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showPrayerRequestForm,

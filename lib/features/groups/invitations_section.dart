@@ -7,17 +7,54 @@ class InvitationsSection extends StatefulWidget {
   const InvitationsSection({super.key});
 
   @override
-  State<InvitationsSection> createState() => _InvitationsSectionState();
+  State<InvitationsSection> createState() => InvitationsSectionState();
 }
 
-class _InvitationsSectionState extends State<InvitationsSection> {
+class InvitationsSectionState extends State<InvitationsSection> {
+  final supabase = Supabase.instance.client;
   late Future<List<GroupModel>> _futureInvites;
 
   @override
   void initState() {
     super.initState();
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    _futureInvites = GroupService().getGroupInvitations(userId);
+    _futureInvites = _loadInvitations();
+  }
+
+  Future<List<GroupModel>> _loadInvitations() async {
+    final userId = supabase.auth.currentUser?.id ?? '';
+    return GroupService().getGroupInvitations(userId);
+  }
+
+  void refresh() {
+    setState(() {
+      _futureInvites = _loadInvitations();
+    });
+  }
+
+  Future<void> _acceptInvite(String groupId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase
+        .from('group_memberships')
+        .update({'status': 'approved'})
+        .eq('user_id', userId)
+        .eq('group_id', groupId);
+
+    refresh();
+  }
+
+  Future<void> _declineInvite(String groupId) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    await supabase
+        .from('group_memberships')
+        .delete()
+        .eq('user_id', userId)
+        .eq('group_id', groupId);
+
+    refresh();
   }
 
   @override
@@ -30,7 +67,7 @@ class _InvitationsSectionState extends State<InvitationsSection> {
         }
 
         if (snapshot.hasError) {
-          return Text('Error loading invitations');
+          return const Text('Error loading invitations');
         }
 
         final invites = snapshot.data ?? [];
@@ -53,15 +90,11 @@ class _InvitationsSectionState extends State<InvitationsSection> {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.check, color: Colors.green),
-                          onPressed: () {
-                            // Accept logic
-                          },
+                          onPressed: () => _acceptInvite(group.id),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () {
-                            // Decline logic
-                          },
+                          onPressed: () => _declineInvite(group.id),
                         ),
                       ],
                     ),

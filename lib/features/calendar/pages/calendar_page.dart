@@ -88,7 +88,17 @@ class _CalendarPageState extends State<CalendarPage> {
             items.addAll(groupEvents.map(_buildGroupEventCard));
           }
 
-          return ListView(padding: const EdgeInsets.all(16), children: items);
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() => _calendarFuture = _loadAllEvents());
+              await _calendarFuture;
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: items,
+            ),
+          );
         },
       ),
       floatingActionButton: _canManageApp
