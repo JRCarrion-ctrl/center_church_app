@@ -19,6 +19,24 @@ class GroupChatService {
         .toList();
   }
 
+  /// Get paginated messages
+  Future<List<GroupMessage>> getMessagesPaginated(
+    String groupId, {
+    required int limit,
+    required int offset,
+  }) async {
+    final data = await _client
+        .from(_table)
+        .select()
+        .eq('group_id', groupId)
+        .order('created_at', ascending: true)
+        .range(offset, offset + limit - 1);
+
+    return (data as List)
+        .map((msg) => GroupMessage.fromMap(msg as Map<String, dynamic>))
+        .toList();
+  }
+
   /// Send a message
   Future<void> sendMessage(String groupId, String content, {String? fileUrl}) async {
     final userId = _client.auth.currentUser?.id;
@@ -50,14 +68,17 @@ class GroupChatService {
     });
   }
 
-  /// Real-time message stream
-  Stream<List<GroupMessage>> streamMessages(String groupId) {
+  /// Real-time message stream (used only for inserts after timestamp)
+  Stream<List<GroupMessage>> streamInsertedMessages(String groupId, DateTime since) {
     return _client
         .from(_table)
         .stream(primaryKey: ['id'])
         .eq('group_id', groupId)
         .order('created_at')
-        .map((data) => data.map(GroupMessage.fromMap).toList());
+        .map((data) => data
+            .map(GroupMessage.fromMap)
+            .where((m) => m.createdAt.isAfter(since))
+            .toList());
   }
 
   Future<void> addReaction(String messageId, String emoji) async {
@@ -78,4 +99,16 @@ class GroupChatService {
     }
     return result;
   }
+
+  /// Listen for new messages (realtime insert-only)
+  Stream<GroupMessage> streamNewMessages(String groupId) {
+    return _client
+        .from(_table)
+        .stream(primaryKey: ['id'])
+        .eq('group_id', groupId)
+        .order('created_at', ascending: true)
+        .map((list) => list.map((row) => GroupMessage.fromMap(row)).toList())
+        .expand((messages) => messages); // emits one message at a time
+  }
+
 }

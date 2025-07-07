@@ -1,5 +1,6 @@
 // File: lib/features/groups/widgets/message_content_view.dart
 import 'dart:io';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../media_cache_service.dart';
@@ -7,8 +8,10 @@ import '../models/group_message.dart';
 
 class MessageContentView extends StatelessWidget {
   final GroupMessage message;
+  final bool isMe;
 
-  const MessageContentView({super.key, required this.message});
+  const MessageContentView({super.key, required this.message, required this.isMe,});
+  
 
   IconData _getFileIcon(String extension) {
     switch (extension.toLowerCase()) {
@@ -53,7 +56,10 @@ class MessageContentView extends StatelessWidget {
               future: mediaFuture,
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
-                  return Image.asset('assets/image_placeholder.png', height: 200, fit: BoxFit.cover);
+                  return ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.asset('assets/image_placeholder.png', height: 200, fit: BoxFit.cover),
+                  );
                 }
                 if (snapshot.hasError || snapshot.data == null) {
                   return Column(
@@ -68,11 +74,18 @@ class MessageContentView extends StatelessWidget {
                     showDialog(
                       context: context,
                       builder: (_) => Dialog(
-                        child: Image.file(snapshot.data!),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(16),
+                          child: Image.file(snapshot.data!),
+                        ),
                       ),
                     );
                   },
-                  child: Image.file(snapshot.data!, height: 200, fit: BoxFit.cover),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(snapshot.data!, height: 200, fit: BoxFit.cover),
+                  ),
                 );
               },
             )
@@ -92,39 +105,60 @@ class MessageContentView extends StatelessWidget {
                       );
                     }
                   },
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.grey.shade300),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(_getFileIcon(extension), size: 28),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            fileUrl.split('/').last,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
-                          ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                        decoration: BoxDecoration(
+                          color: const Color.fromARGB(64, 255, 255, 255),
+                          border: Border.all(color: Colors.white24),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                      ],
+                        child: Row(
+                          children: [
+                            Icon(_getFileIcon(extension), size: 28),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                fileUrl.split('/').last,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 );
               },
             ),
-          if (message.content.trim().isNotEmpty)
+          if (message.content.trim().isNotEmpty && message.content.trim() != "[Image]")
+
             Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(message.content, style: const TextStyle(fontSize: 15)),
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                message.content,
+                style: TextStyle(
+                  fontSize: 15, 
+                  fontWeight: FontWeight.w400, 
+                  color: isMe ? Colors.white : Colors.black87,
+                  ),
+              ),
             ),
         ],
       );
     }
 
-    return Text(message.content);
+    return Text(
+      message.content,
+      style: TextStyle(
+        fontSize: 15, 
+        fontWeight: FontWeight.w400,
+        color: isMe ? Colors.white : Colors.black87,
+      ),
+    );
   }
 }

@@ -1,4 +1,5 @@
 // File: lib/features/groups/widgets/group_message_bubble.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import '../models/group_message.dart';
 
@@ -34,37 +35,92 @@ class GroupMessageBubble extends StatelessWidget {
       onLongPress: onLongPress,
       child: Align(
         alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
-          margin: const EdgeInsets.symmetric(vertical: 4),
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: isMe ? Colors.blue[100] : Colors.grey[200],
-            borderRadius: BorderRadius.circular(10),
-          ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              contentBuilder(),
-              const SizedBox(height: 4),
-              if (reactions.isNotEmpty)
-                Wrap(
-                  spacing: 6,
-                  children: _groupedReactions(reactions).entries.map((entry) =>
-                    Chip(
-                      label: Text('${entry.key} x${entry.value}'),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-                      backgroundColor: Colors.grey[300],
-                    )
-                  ).toList(),
-                ),
-              const SizedBox(height: 4),
-              Semantics(
-                label: 'Sent at $timestamp',
-                child: Text(
-                  timestamp,
-                  style: const TextStyle(fontSize: 11, color: Colors.black54),
-                ),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(20),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? const Color.fromARGB(255, 0, 122, 255) // blue
+                              : const Color.fromARGB(255, 230, 230, 235), // gray
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isMe
+                                ? const Color.fromARGB(255, 0, 112, 230) // Blue border
+                                : const Color.fromARGB(255, 210, 210, 215), // Gray border
+                          ),
+                        ),
+                        padding: const EdgeInsets.all(10),
+                        constraints: BoxConstraints(
+                          maxWidth:
+                              MediaQuery.of(context).size.width * 0.75,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            contentBuilder(),
+                            const SizedBox(height: 4),
+                            Semantics(
+                              label: 'Sent at $timestamp',
+                              child: Text(
+                                timestamp,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: isMe
+                                      ? const Color.fromARGB(255, 255, 255, 255)
+                                      : const Color.fromARGB(255, 0, 0, 0),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
+              if (reactions.isNotEmpty)
+                Transform.translate(
+                  offset: const Offset(12, -4),
+                  child: Wrap(
+                    spacing: 6,
+                    children:
+                        _groupedReactions(reactions).entries.map((entry) {
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? const Color.fromARGB(255, 0, 122, 255)
+                              : const Color.fromARGB(255, 230, 230, 235),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: isMe
+                                ? const Color.fromARGB(255, 0, 112, 230)
+                                : const Color.fromARGB(255, 210, 210, 215),
+                          ),
+                        ),
+                        child: Text(
+                          '${entry.key} ${entry.value}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: isMe ? Colors.white : Colors.black87,
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                ),
             ],
           ),
         ),

@@ -43,6 +43,35 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
     }
   }
 
+  Future<void> _removeRSVP() async {
+    setState(() => _saving = true);
+    try {
+      await Supabase.instance.client
+          .from('event_attendance')
+          .delete()
+          .match({
+            'event_id': widget.event.id,
+            'user_id': Supabase.instance.client.auth.currentUser!.id,
+          });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('RSVP removed')),
+        );
+        _loadRSVPs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+
   Future<void> _loadRSVPs() async {
     try {
       final data = await _eventService.fetchRSVPS(widget.event.id);
@@ -78,6 +107,8 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
 
   @override
   Widget build(BuildContext context) {
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
     final e = widget.event;
     return Scaffold(
       appBar: AppBar(title: Text(e.title)),
@@ -116,6 +147,14 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
                     ? const CircularProgressIndicator()
                     : const Text('Submit RSVP'),
               ),
+              if (hasRSVP)
+                TextButton(
+                  onPressed: _saving ? null : _removeRSVP,
+                  child: const Text(
+                    'Remove RSVP',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
             ],
           ),
           const Divider(height: 32),

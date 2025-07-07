@@ -17,6 +17,7 @@ class GroupEventListPage extends StatefulWidget {
 class _GroupEventListPageState extends State<GroupEventListPage> {
   final EventService _service = EventService();
   List<GroupEvent> _events = [];
+  Map<String, int> _attendanceCounts = {}; // Event ID -> total attending count
   bool _loading = true;
 
   @override
@@ -29,7 +30,24 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
     setState(() => _loading = true);
     try {
       final events = await _service.fetchGroupEvents(widget.groupId);
-      if (mounted) setState(() => _events = events);
+      final counts = <String, int>{};
+
+      for (final event in events) {
+        final rsvps = await _service.fetchRSVPS(event.id);
+        final total = rsvps.fold<int>(
+          0,
+          (sum, r) => sum + ((r['attending_count'] ?? 0) as int),
+        );
+
+        counts[event.id] = total;
+      }
+
+      if (mounted) {
+        setState(() {
+          _events = events;
+          _attendanceCounts = counts;
+        });
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -56,6 +74,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                     itemCount: _events.length,
                     itemBuilder: (_, i) {
                       final e = _events[i];
+                      final count = _attendanceCounts[e.id] ?? 0;
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(
@@ -65,7 +84,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                               : const Icon(Icons.event, size: 40),
                           title: Text(e.title),
                           subtitle: Text(
-                            DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate),
+                            '${DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)}\n$count attending',
                           ),
                         ),
                       );

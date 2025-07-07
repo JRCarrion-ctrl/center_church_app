@@ -97,7 +97,47 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     }
   }
 
+  Future<void> _requestGroupDeletion() async {
+    final reason = await showDialog<String>(
+      context: context,
+      builder: (ctx) {
+        final controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('Request Group Deletion'),
+          content: TextField(
+            controller: controller,
+            maxLines: 3,
+            decoration: const InputDecoration(
+              hintText: 'Reason for deletion (optional)',
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+              child: const Text('Submit'),
+            ),
+          ],
+        );
+      },
+    );
 
+    if (reason == null) return;
+
+    try {
+      await GroupService().submitGroupDeletionRequest(widget.groupId, reason);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Deletion request submitted')),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to submit request: $e')),
+        );
+      }
+    }
+  }
   Future<void> _saveGroupEdits() async {
     setState(() => isLoading = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -174,6 +214,18 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                 onPressed: _leaveGroup,
                 icon: const Icon(Icons.exit_to_app),
                 label: const Text('Leave Group'),
+                style: TextButton.styleFrom(
+                  foregroundColor: Colors.red,
+                ),
+              ),
+            ),
+          if (widget.isAdmin)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: TextButton.icon(
+                onPressed: _requestGroupDeletion,
+                icon: const Icon(Icons.delete),
+                label: const Text('Request Group Deletion'),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),

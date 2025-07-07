@@ -257,6 +257,35 @@ class GroupService {
       .eq('group_id', groupId);
   }
 
+  Future<void> deleteGroup(String groupId) async {
+    final res = await supabase.from('groups').delete().eq('id', groupId);
+    if (res.error != null) throw res.error!.message;
+  }
+
+  Future<void> submitGroupDeletionRequest(String groupId, String reason) async {
+    final userId = supabase.auth.currentUser?.id;
+    if (userId == null) throw 'Not signed in';
+
+    final existing = await supabase
+        .from('group_deletion_requests')
+        .select()
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .eq('status', 'pending')
+        .maybeSingle();
+
+    if (existing != null) throw 'You already submitted a request';
+
+    final res = await supabase.from('group_deletion_requests').insert({
+      'group_id': groupId,
+      'user_id': userId,
+      'reason': reason,
+    });
+
+    if (res.error != null) throw res.error!.message;
+  }
+
+
   Future<String> getMyGroupRole(String groupId) async {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) return 'none';

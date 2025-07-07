@@ -39,6 +39,7 @@ class _GroupChatTabState extends State<GroupChatTab> {
 
 
   bool _showJumpToLatest = false;
+  bool _initialScrollDone = false;
   String? _highlightMessageId;
 
   @override
@@ -76,6 +77,7 @@ class _GroupChatTabState extends State<GroupChatTab> {
         setState(() => _showJumpToLatest = shouldShow);
       }
     });
+
   }
 
   Future<void> _loadPinnedMessage() async {
@@ -139,17 +141,23 @@ class _GroupChatTabState extends State<GroupChatTab> {
     _scrollToBottom();
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool instant = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        _scrollController.animateTo(
-          _scrollController.position.maxScrollExtent,
-          duration: const Duration(milliseconds: 250),
-          curve: Curves.easeOut,
-        );
+        final position = _scrollController.position.maxScrollExtent;
+        if (instant) {
+          _scrollController.jumpTo(position);
+        } else {
+          _scrollController.animateTo(
+            position,
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOut,
+          );
+        }
       }
     });
   }
+
 
   void _showMessageOptions(GroupMessage message) {
     final isSender = message.senderId == _userId;
@@ -257,6 +265,12 @@ class _GroupChatTabState extends State<GroupChatTab> {
                 onLongPress: _showMessageOptions,
                 formatTimestamp: _formatSmartTimestamp,
                 highlightMessageId: _highlightMessageId,
+                onMessagesRendered: () {
+                  if (!_initialScrollDone) {
+                    _scrollToBottom(instant: true);
+                    _initialScrollDone = true;
+                  }
+                },
               ),
             ),
             InputRow(

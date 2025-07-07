@@ -194,7 +194,7 @@ class EventService {
     try {
       final data = await _supabase
           .from('event_attendance')
-          .select('attending_count, profiles(display_name, email)')
+          .select('user_id, attending_count, profiles(display_name, email)')
           .eq('event_id', eventId);
       return (data as List).cast<Map<String, dynamic>>();
     } on PostgrestException catch (error) {

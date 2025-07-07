@@ -6,6 +6,7 @@ import '../features/features.dart';
 import '../features/giving/give_page.dart';
 import 'package:ccf_app/features/calendar/pages/app_event_details_page.dart';
 import '../features/calendar/models/app_event.dart';
+import '../features/more/pages/group_deletion_requests_page.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -58,5 +59,8 @@ final List<GoRoute> miscRoutes = [
     path: '/profile/:id',
     builder: (context, state) => PublicProfile(userId: state.pathParameters['id']!),
   ),
-
+  GoRoute(
+    path: '/admin/group-deletion-requests',
+    builder: (context, state) => const GroupDeletionRequestsPage(),
+  ),
 ];
