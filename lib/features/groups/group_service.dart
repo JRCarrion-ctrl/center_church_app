@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'models/group.dart';
 import 'models/group_model.dart';
 import 'package:logger/logger.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 
 final log = Logger();
 
@@ -37,6 +39,19 @@ class GroupService {
 
     final role = result?['role'] as String?;
     return role == 'admin' || role == 'leader' || role == 'supervisor' || role == 'owner';
+  }
+
+  Future<bool> isUserGroupOwner(String groupId, String userId) async {
+    final result = await supabase
+        .from('group_memberships')
+        .select('role')
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .eq('status', 'approved')
+        .maybeSingle();
+
+    final role = result?['role'] as String?;
+    return role == 'owner';
   }
 
   Future<List<GroupModel>> getUserGroups(String userId) async {
@@ -258,31 +273,26 @@ class GroupService {
   }
 
   Future<void> deleteGroup(String groupId) async {
-    final res = await supabase.from('groups').delete().eq('id', groupId);
-    if (res.error != null) throw res.error!.message;
-  }
+    final url = Uri.parse(
+      'https://vhzcbqgehlpemdkvmzvy.functions.supabase.co/clever-responder',
+    );
 
-  Future<void> submitGroupDeletionRequest(String groupId, String reason) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) throw 'Not signed in';
+    final session = Supabase.instance.client.auth.currentSession;
+    final accessToken = session?.accessToken;
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+    };
 
-    final existing = await supabase
-        .from('group_deletion_requests')
-        .select()
-        .eq('group_id', groupId)
-        .eq('user_id', userId)
-        .eq('status', 'pending')
-        .maybeSingle();
+    final response = await http.post(
+      url,
+      headers: headers,
+      body: jsonEncode({'groupId': groupId}),
+    );
 
-    if (existing != null) throw 'You already submitted a request';
-
-    final res = await supabase.from('group_deletion_requests').insert({
-      'group_id': groupId,
-      'user_id': userId,
-      'reason': reason,
-    });
-
-    if (res.error != null) throw res.error!.message;
+    if (response.statusCode != 200) {
+      throw Exception('Group deletion failed: ${response.body}');
+    }
   }
 
 

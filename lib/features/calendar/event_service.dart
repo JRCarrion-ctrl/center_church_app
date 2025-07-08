@@ -41,14 +41,16 @@ class EventService {
           'description': event.description,
           'image_url': event.imageUrl,
           'event_date': event.eventDate.toIso8601String(),
+          'location': event.location,
         };
         await _supabase.from('app_events').insert(insertData);
       } else {
         final updateData = {
           'title': event.title,
-          'body': event.description,
+          'description': event.description,
           'image_url': event.imageUrl,
           'event_date': event.eventDate.toIso8601String(),
+          'location': event.location,
         };
         await _supabase.from('app_events').update(updateData).eq('id', event.id);
       }

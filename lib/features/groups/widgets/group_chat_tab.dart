@@ -251,59 +251,72 @@ class _GroupChatTabState extends State<GroupChatTab> {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        Column(
-          children: [
-            const SizedBox.shrink(),
-            Expanded(
-              child: MessageListView(
-                groupId: widget.groupId,
-                userId: _userId ?? '',
-                scrollController: _scrollController,
-                reactionMap: _reactionMap,
-                onLongPress: _showMessageOptions,
-                formatTimestamp: _formatSmartTimestamp,
-                highlightMessageId: _highlightMessageId,
-                onMessagesRendered: () {
-                  if (!_initialScrollDone) {
-                    _scrollToBottom(instant: true);
-                    _initialScrollDone = true;
-                  }
-                },
+    return NotificationListener<ScrollNotification>(
+      onNotification: (notification) {
+        if (notification is ScrollUpdateNotification) {
+          if (notification.metrics.pixels <= 0 && notification.scrollDelta != null && notification.scrollDelta! > 10) {
+            // User is at top and pulled down
+            FocusManager.instance.primaryFocus?.unfocus();
+          }
+        }
+        return false;
+      },
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: Stack(
+            children: [
+              Column(
+                children: [
+                  const SizedBox.shrink(),
+                  Expanded(
+                    child: MessageListView(
+                      groupId: widget.groupId,
+                      userId: _userId ?? '',
+                      scrollController: _scrollController,
+                      reactionMap: _reactionMap,
+                      onLongPress: _showMessageOptions,
+                      formatTimestamp: _formatSmartTimestamp,
+                      highlightMessageId: _highlightMessageId,
+                      onMessagesRendered: () {
+                        if (!_initialScrollDone) {
+                          _scrollToBottom(instant: true);
+                          _initialScrollDone = true;
+                        }
+                      },
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: InputRow(
+                      controller: _messageController,
+                      onSend: _sendMessage,
+                      onFilePicked: (file) async {
+                        final url = await _storageService.uploadFile(file, widget.groupId);
+                        final isImage = url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg');
+                        await _chatService.sendMessage(
+                          widget.groupId,
+                          isImage ? '[Image]' : '[File]',
+                          fileUrl: url,
+                        );
+                        _scrollToBottom();
+                      },
+                    ),
+                  ),
+                ],
               ),
-            ),
-            InputRow(
-              controller: _messageController,
-              onSend: _sendMessage,
-              onFilePicked: (file) async {
-                final url =
-                    await _storageService.uploadFile(file, widget.groupId);
-                final isImage = url.endsWith('.png') ||
-                    url.endsWith('.jpg') ||
-                    url.endsWith('.jpeg');
-
-                await _chatService.sendMessage(
-                  widget.groupId,
-                  isImage ? '[Image]' : '[File]',
-                  fileUrl: url,
-                );
-
-                _scrollToBottom();
-              },
-            ),
-          ],
-        ),
-        if (_showJumpToLatest)
-          Positioned(
-            bottom: 80,
-            right: 16,
-            child: FloatingActionButton.small(
-              onPressed: _scrollToBottom,
-              child: const Icon(Icons.arrow_downward),
-            ),
+              if (_showJumpToLatest)
+                Positioned(
+                  bottom: 80,
+                  right: 16,
+                  child: FloatingActionButton.small(
+                    onPressed: _scrollToBottom,
+                    child: const Icon(Icons.arrow_downward),
+                  ),
+                ),
+            ],
           ),
-      ],
+      ),
     );
   }
 }

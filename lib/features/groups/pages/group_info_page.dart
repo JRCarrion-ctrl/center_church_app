@@ -30,8 +30,9 @@ Future<File> _compressImage(File file) async {
 class GroupInfoPage extends StatefulWidget {
   final String groupId;
   final bool isAdmin;
+  final bool isOwner;
 
-  const GroupInfoPage({super.key, required this.groupId, required this.isAdmin});
+  const GroupInfoPage({super.key, required this.groupId, required this.isAdmin, required this.isOwner});
 
   @override
   State<GroupInfoPage> createState() => _GroupInfoPageState();
@@ -97,47 +98,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     }
   }
 
-  Future<void> _requestGroupDeletion() async {
-    final reason = await showDialog<String>(
-      context: context,
-      builder: (ctx) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: const Text('Request Group Deletion'),
-          content: TextField(
-            controller: controller,
-            maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Reason for deletion (optional)',
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-            TextButton(
-              onPressed: () => Navigator.pop(ctx, controller.text.trim()),
-              child: const Text('Submit'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (reason == null) return;
-
-    try {
-      await GroupService().submitGroupDeletionRequest(widget.groupId, reason);
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Deletion request submitted')),
-      );
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to submit request: $e')),
-        );
-      }
-    }
-  }
+  
   Future<void> _saveGroupEdits() async {
     setState(() => isLoading = true);
     final messenger = ScaffoldMessenger.of(context);
@@ -219,13 +180,42 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                 ),
               ),
             ),
-          if (widget.isAdmin)
+          if (widget.isOwner)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: TextButton.icon(
-                onPressed: _requestGroupDeletion,
+                onPressed: () async {
+                  final messenger = ScaffoldMessenger.of(context);
+                  final goes = context.go('/groups');
+                  final confirmed = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: const Text('Delete Group'),
+                      content: const Text('Are you sure you want to delete this group? This action cannot be undone.'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                      ],
+                    ),
+                  );
+                  if (confirmed != true) return;
+                  
+                  try {
+                    await GroupService().deleteGroup(widget.groupId);
+                    if (mounted) {
+                      messenger.showSnackBar(
+                        const SnackBar(content: Text('Group deleted successfully')),
+                      );
+                      goes;
+                    }
+                  } catch (e) {
+                    messenger.showSnackBar(
+                      SnackBar(content: Text('Failed to delete group: $e')),
+                    );
+                  }
+                },
                 icon: const Icon(Icons.delete),
-                label: const Text('Request Group Deletion'),
+                label: const Text('Delete Group'),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),
@@ -243,20 +233,20 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           onTap: widget.isAdmin ? () => _changeGroupPhoto(context) : null,
           child: CircleAvatar(
             radius: 40,
-            child: (group?.photoUrl == null || group!.photoUrl!.isEmpty)
-              ? const Icon(Icons.group, size: 40)
-              : ClipOval(
-                child: CachedNetworkImage(
-                  imageUrl: group!.photoUrl!,
-                  width: 80,
-                  height: 80,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Center(
-                    child: CircularProgressIndicator(strokeWidth: 2),
+            child: (group?.photoUrl?.isNotEmpty ?? false)
+                ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: group!.photoUrl!,
+                    width: 80,
+                    height: 80,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                    errorWidget: (context, url, error) => const Icon(Icons.error, size: 40)
                   ),
-                  errorWidget: (context, url, error) => const Icon(Icons.error, size: 40)
-                ),
-              ),
+                )
+                : const Icon(Icons.group, size: 40)
           ),
         ),
         const SizedBox(height: 12),

@@ -3,16 +3,18 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:emoji_picker_flutter/emoji_picker_flutter.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 Future<File> _compressImage(File file) async {
-  final targetPath = file.path.replaceFirst(RegExp(r'\.(jpg|jpeg|png|heic|webp)$'), '_compressed.jpg');
+  final targetPath = file.path.replaceFirst(
+    RegExp(r'\.(jpg|jpeg|png|heic|webp)\$').pattern,
+    '_compressed.jpg'
+  );
   final compressedBytes = await FlutterImageCompress.compressWithFile(
     file.absolute.path,
-    minWidth: 600, // adjust as needed
-    minHeight: 600,
-    quality: 80,    // adjust as needed (lower = smaller file)
+    minWidth: 1024,
+    minHeight: 1024,
+    quality: 85, // Higher quality for better appearance
     format: CompressFormat.jpeg,
   );
   return File(targetPath)..writeAsBytesSync(compressedBytes!);
@@ -36,22 +38,27 @@ class InputRow extends StatefulWidget {
 
 class _InputRowState extends State<InputRow> {
   File? _selectedFile;
-  bool _showEmojiPicker = false;
   final FocusNode _focusNode = FocusNode();
+  bool _canSend = false;
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(() {
-      if (_focusNode.hasFocus && _showEmojiPicker) {
-        setState(() => _showEmojiPicker = false);
-      }
-    });
+    widget.controller.addListener(_handleInputChange);
+  }
+
+  void _handleInputChange() {
+    final trimmed = widget.controller.text.trim();
+    final valid = trimmed.isNotEmpty;
+    if (valid != _canSend) {
+      setState(() => _canSend = valid);
+    }
   }
 
   @override
   void dispose() {
     _focusNode.dispose();
+    widget.controller.removeListener(_handleInputChange);
     super.dispose();
   }
 
@@ -111,75 +118,98 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
-
-  void _insertEmoji(String emoji) {
-    final text = widget.controller.text;
-    final cursor = widget.controller.selection.baseOffset;
-    final newText = text.replaceRange(cursor, cursor, emoji);
-    widget.controller.value = widget.controller.value.copyWith(
-      text: newText,
-      selection: TextSelection.collapsed(offset: cursor + emoji.length),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (_selectedFile != null)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.insert_drive_file),
-                const SizedBox(width: 8),
-                Expanded(child: Text(_selectedFile!.path.split('/').last)),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => setState(() => _selectedFile = null),
-                ),
-              ],
-            ),
-          ),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 200),
+          child: _selectedFile != null
+              ? Padding(
+                  key: ValueKey(_selectedFile!.path),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  child: Dismissible(
+                    key: ValueKey(_selectedFile!.path),
+                    direction: DismissDirection.horizontal,
+                    onDismissed: (_) => setState(() => _selectedFile = null),
+                    child: Card(
+                      margin: EdgeInsets.zero,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      child: ListTile(
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        leading: _selectedFile!.path.endsWith('.png') ||
+                                _selectedFile!.path.endsWith('.jpg') ||
+                                _selectedFile!.path.endsWith('.jpeg') ||
+                                _selectedFile!.path.endsWith('.webp') ||
+                                _selectedFile!.path.endsWith('.heic')
+                            ? ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(_selectedFile!, width: 48, height: 48, fit: BoxFit.cover),
+                              )
+                            : const Icon(Icons.insert_drive_file),
+                        title: Text(_selectedFile!.path.split('/').last),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => setState(() => _selectedFile = null),
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+              : const SizedBox.shrink(),
+        ),
         Padding(
-          padding: const EdgeInsets.all(8.0),
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconButton(
+              IconButton.filledTonal(
                 icon: const Icon(Icons.attach_file),
+                tooltip: 'Attach file',
                 onPressed: _showAttachmentOptions,
               ),
-              IconButton(
-                icon: const Icon(Icons.emoji_emotions_outlined),
-                onPressed: () => setState(() => _showEmojiPicker = !_showEmojiPicker),
-              ),
+              const SizedBox(width: 6),
               Expanded(
-                child: TextField(
-                  focusNode: _focusNode,
-                  controller: widget.controller,
-                  decoration: const InputDecoration(
-                    hintText: 'Type a message...',
-                    border: OutlineInputBorder(),
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(24),
+                    ),
+                    child: TextField(
+                      focusNode: _focusNode,
+                      controller: widget.controller,
+                      minLines: 1,
+                      maxLines: 5,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        hintText: 'Type a message...',
+                        border: InputBorder.none,
+                      ),
+                      onSubmitted: (_) => widget.onSend(),
+                    ),
                   ),
-                  onSubmitted: (_) => widget.onSend(),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: widget.onSend,
+              const SizedBox(width: 6),
+              IconButton.filled(
+                icon: const Icon(Icons.send_rounded),
+                tooltip: 'Send',
+                onPressed: _canSend
+                    ? () {
+                        widget.onSend();
+                        widget.controller.clear();
+                        setState(() => _canSend = false);
+                      }
+                    : null,
               ),
             ],
           ),
         ),
-        if (_showEmojiPicker)
-          SizedBox(
-            height: 250,
-            child: EmojiPicker(
-              onEmojiSelected: (category, emoji) => _insertEmoji(emoji.emoji),
-            ),
-          ),
       ],
     );
   }

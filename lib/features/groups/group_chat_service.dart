@@ -4,13 +4,13 @@ import 'models/group_message.dart';
 
 class GroupChatService {
   final _client = Supabase.instance.client;
-  final _table = 'group_messages';
+  final _table = 'group_messages_with_senders';
 
   /// Get latest messages
   Future<List<GroupMessage>> getMessages(String groupId) async {
     final data = await _client
         .from(_table)
-        .select()
+        .select('*, profiles:sender_id(display_name)')
         .eq('group_id', groupId)
         .order('created_at', ascending: true);
 
@@ -27,7 +27,7 @@ class GroupChatService {
   }) async {
     final data = await _client
         .from(_table)
-        .select()
+        .select('*, profiles:sender_id(display_name)')
         .eq('group_id', groupId)
         .order('created_at', ascending: true)
         .range(offset, offset + limit - 1);
@@ -76,22 +76,22 @@ class GroupChatService {
         .eq('group_id', groupId)
         .order('created_at')
         .map((data) => data
-            .map(GroupMessage.fromMap)
+            .map((row) => GroupMessage.fromMap(row))
             .where((m) => m.createdAt.isAfter(since))
             .toList());
   }
 
   Future<void> addReaction(String messageId, String emoji) async {
-    final userId = Supabase.instance.client.auth.currentUser!.id;
-    await Supabase.instance.client
-      .from('message_reactions')
-      .upsert({'message_id': messageId, 'user_id': userId, 'emoji': emoji});
+    final userId = _client.auth.currentUser!.id;
+    await _client
+        .from('message_reactions')
+        .upsert({'message_id': messageId, 'user_id': userId, 'emoji': emoji});
   }
 
   Future<Map<String, List<String>>> getReactions(String groupId) async {
-    final data = await Supabase.instance.client
-      .from('message_reactions')
-      .select('message_id, emoji');
+    final data = await _client
+        .from('message_reactions')
+        .select('message_id, emoji');
 
     final Map<String, List<String>> result = {};
     for (final row in data) {
@@ -110,5 +110,4 @@ class GroupChatService {
         .map((list) => list.map((row) => GroupMessage.fromMap(row)).toList())
         .expand((messages) => messages); // emits one message at a time
   }
-
 }

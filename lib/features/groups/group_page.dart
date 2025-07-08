@@ -1,7 +1,6 @@
 // File: lib/features/groups/group_page.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:go_router/go_router.dart';
 import 'models/group.dart';
 import 'group_service.dart';
 import 'widgets/group_chat_tab.dart';
@@ -20,6 +19,7 @@ class _GroupPageState extends State<GroupPage> {
   late Future<void> _initFuture;
   Group? _group;
   bool _isAdmin = false;
+  bool _isOwner = false;
 
   @override
   void initState() {
@@ -31,10 +31,12 @@ class _GroupPageState extends State<GroupPage> {
     final group = await GroupService().getGroupById(widget.groupId);
     final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
     final isAdmin = await GroupService().isUserGroupAdmin(widget.groupId, userId);
+    final isOwner = await GroupService().isUserGroupOwner(widget.groupId, userId);
 
     setState(() {
       _group = group;
       _isAdmin = isAdmin;
+      _isOwner = isOwner;
     });
   }
 
@@ -62,97 +64,83 @@ class _GroupPageState extends State<GroupPage> {
         return Scaffold(
           body: Column(
             children: [
-              Material(
+              // Top bar with SafeArea and consistent background
+              Container(
                 color: theme.colorScheme.surface,
-                elevation: 1,
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 32, 8, 0),
-                      child: Row(
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                          GestureDetector(
-                            onTap: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => GroupInfoPage(
-                                  groupId: widget.groupId,
-                                  isAdmin: _isAdmin,
-                                ),
+                child: SafeArea(
+                  top: true,
+                  bottom: false,
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: IconButton(
+                                icon: const Icon(Icons.arrow_back),
+                                onPressed: () => Navigator.of(context).pop(),
                               ),
                             ),
-                            child: Row(
-                              children: [
-                                CircleAvatar(
-                                  radius: 16,
-                                  backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                                      ? NetworkImage(group.photoUrl!)
-                                      : null,
-                                  child: (group.photoUrl?.isEmpty ?? true)
-                                      ? const Icon(Icons.group)
-                                      : null,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  group.name,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.info_outline),
-                            onPressed: () => Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => GroupInfoPage(
-                                  groupId: widget.groupId,
-                                  isAdmin: _isAdmin,
+                            InkWell(
+                              borderRadius: BorderRadius.circular(8),
+                              onTap: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => GroupInfoPage(
+                                    groupId: widget.groupId,
+                                    isAdmin: _isAdmin,
+                                    isOwner: _isOwner,
+                                  ),
                                 ),
                               ),
+                              child: Column(
+                                children: [
+                                  const SizedBox(height: 4),
+                                  CircleAvatar(
+                                    radius: 28,
+                                    backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
+                                        ? NetworkImage(group.photoUrl!)
+                                        : null,
+                                    child: (group.photoUrl?.isEmpty ?? true)
+                                        ? const Icon(Icons.group, size: 28)
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                    group.name,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 64,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        children: [
-                          GroupInfoButton(
-                            title: 'Pinned Messages',
-                            icon: Icons.push_pin_outlined,
-                            onTap: () => GroupChatTab.scrollToPinnedMessage(context),
-                          ),
-                          GroupInfoButton(
-                            title: 'Events',
-                            icon: Icons.calendar_today_outlined,
-                            onTap: () => context.push('/groups/${widget.groupId}/events'),
-                          ),
-                          GroupInfoButton(
-                            title: 'Media',
-                            icon: Icons.perm_media_outlined,
-                            onTap: () => context.push('/groups/${widget.groupId}/media'),
-                          ),
-                          if (_isAdmin)
-                            GroupInfoButton(
-                              title: 'Admin Tools',
-                              icon: Icons.admin_panel_settings_outlined,
-                              onTap: () => context.push('/groups/${widget.groupId}/admin'),
+                      // Divider or shadow below the top bar
+                      Container(
+                        height: 4,
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black12,
+                              blurRadius: 4,
+                              offset: Offset(0, 2),
                             ),
-                        ],
-                      ),
-                    ),
-                  ],
+                          ],
+                        ),
+                      )
+
+                    ],
+                  ),
                 ),
               ),
+              // Chat body
               Expanded(
                 child: GroupChatTab(groupId: widget.groupId, isAdmin: _isAdmin),
               ),
@@ -160,35 +148,6 @@ class _GroupPageState extends State<GroupPage> {
           ),
         );
       },
-    );
-  }
-}
-
-class GroupInfoButton extends StatelessWidget {
-  final String title;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  const GroupInfoButton({
-    super.key,
-    required this.title,
-    required this.icon,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 4.0),
-      child: ElevatedButton.icon(
-        onPressed: onTap,
-        icon: Icon(icon, size: 18),
-        label: Text(title),
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          textStyle: const TextStyle(fontSize: 14),
-        ),
-      ),
     );
   }
 }

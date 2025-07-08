@@ -21,6 +21,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
 
   late TextEditingController _titleController;
   late TextEditingController _descController;
+  late TextEditingController _locationController;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   bool _saving = false;
@@ -31,6 +32,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     final ev = widget.existing;
     _titleController = TextEditingController(text: ev?.title ?? '');
     _descController = TextEditingController(text: ev?.description ?? '');
+    _locationController = TextEditingController(text: ev?.location ?? '');
     if (ev != null) {
       _selectedDate = ev.eventDate;
       _selectedTime = TimeOfDay.fromDateTime(ev.eventDate);
@@ -84,8 +86,9 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       id: widget.existing?.id ?? '',
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
-      eventDate: dt.toUtc(),
+      eventDate: dt,
       imageUrl: widget.existing?.imageUrl,
+      location: _locationController.text.trim(),
     );
 
     try {
@@ -126,6 +129,10 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                   controller: _descController,
                   decoration: const InputDecoration(labelText: 'Description'),
                   maxLines: 2,
+                ),
+                TextFormField(
+                  controller: _locationController,
+                  decoration: const InputDecoration(labelText: 'Location'),
                 ),
                 const SizedBox(height: 12),
                 Row(

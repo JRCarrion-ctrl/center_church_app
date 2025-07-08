@@ -30,6 +30,8 @@
 	<string>We need access to save images to your gallery.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photos to upload media to the group.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app requires calendar access to add events</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

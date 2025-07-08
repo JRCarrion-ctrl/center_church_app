@@ -14,19 +14,20 @@ class LivestreamUpdateService {
     final lastRun = DateTime.tryParse(res?['last_run_at'] ?? '');
     final now = DateTime.now().toUtc();
 
-    if (lastRun == null || now.difference(lastRun) > const Duration(hours: 1)) {
-      final url = Uri.parse(
-        'https://vhzcbqgehlpemdkvmzvy.functions.supabase.co/update-livestream-cache',
-      );
+    final needsUpdate = lastRun == null || now.difference(lastRun) > const Duration(hours: 1);
+    if (!needsUpdate) return;
 
-      final result = await http.post(url);
+    final updateUrl = Uri.parse(
+      'https://vhzcbqgehlpemdkvmzvy.functions.supabase.co/update-livestream-cache',
+    );
 
-      if (result.statusCode == 200) {
+      final response = await http.post(updateUrl); // 🔓 No headers
+
+      if (response.statusCode == 200) {
         await _supabase
             .from('livestream_cache_meta')
             .update({'last_run_at': now.toIso8601String()})
             .eq('id', 'singleton');
       }
-    }
   }
 }

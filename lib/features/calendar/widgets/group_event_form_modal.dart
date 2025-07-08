@@ -1,29 +1,29 @@
-// File: lib/features/groups/widgets/event_form_modal.dart
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../calendar/models/group_event.dart';
-import '../../calendar/event_service.dart';
 
-/// Modal bottom sheet for creating or editing a GroupEvent
-class EventFormModal extends StatefulWidget {
-  final String groupId;
+import '../models/group_event.dart';
+import '../event_service.dart';
+
+class GroupEventFormModal extends StatefulWidget {
   final GroupEvent? existing;
+  final String? groupId;
 
-  const EventFormModal({super.key, required this.groupId, this.existing});
+  const GroupEventFormModal({super.key, this.existing, this.groupId});
+
   @override
-  State<EventFormModal> createState() => _EventFormModalState();
+  State<GroupEventFormModal> createState() => _GroupEventFormModalState();
 }
 
-class _EventFormModalState extends State<EventFormModal> {
+class _GroupEventFormModalState extends State<GroupEventFormModal> {
   final _formKey = GlobalKey<FormState>();
   final _service = EventService();
 
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
-
   bool _saving = false;
 
   @override
@@ -33,6 +33,7 @@ class _EventFormModalState extends State<EventFormModal> {
     _titleController = TextEditingController(text: ev?.title ?? '');
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
+
     if (ev != null) {
       _selectedDate = ev.eventDate;
       _selectedTime = TimeOfDay.fromDateTime(ev.eventDate);
@@ -55,7 +56,7 @@ class _EventFormModalState extends State<EventFormModal> {
       firstDate: now.subtract(const Duration(days: 1)),
       lastDate: now.add(const Duration(days: 365)),
     );
-    if (date != null) setState(() => _selectedDate = date);
+    if (date != null && mounted) setState(() => _selectedDate = date);
   }
 
   Future<void> _pickTime() async {
@@ -63,19 +64,22 @@ class _EventFormModalState extends State<EventFormModal> {
       context: context,
       initialTime: _selectedTime ?? TimeOfDay.now(),
     );
-    if (time != null) setState(() => _selectedTime = time);
+    if (time != null && mounted) setState(() => _selectedTime = time);
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Please pick date and time')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pick date & time')),
+        );
+      }
       return;
     }
 
     setState(() => _saving = true);
-    // Combine date and time
+
     final dt = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
@@ -84,24 +88,28 @@ class _EventFormModalState extends State<EventFormModal> {
       _selectedTime!.minute,
     );
 
-    final event = GroupEvent(
+    final groupId = widget.existing?.groupId ?? widget.groupId ?? '';
+
+    final groupEvent = GroupEvent(
       id: widget.existing?.id ?? '',
-      groupId: widget.groupId,
+      groupId: groupId,
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
-      location: _locationController.text.trim(),
-      imageUrl: widget.existing?.imageUrl,
       eventDate: dt,
+      location: _locationController.text.trim(),
+      imageUrl: widget.existing?.imageUrl, // retain existing for now
     );
-    final navigator = Navigator.of(context);
-    final messenger = ScaffoldMessenger.of(context);
 
     try {
-      await _service.saveEvent(event);
-      navigator.pop();
+      await _service.saveEvent(groupEvent);
+      if (!mounted) return;
+      Navigator.of(context).pop();
     } catch (e) {
-      messenger
-          .showSnackBar(SnackBar(content: Text('Error saving event: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error saving group event: $e')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -120,7 +128,7 @@ class _EventFormModalState extends State<EventFormModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.existing == null ? 'Add Event' : 'Edit Event',
+                  widget.existing == null ? 'Add Group Event' : 'Edit Group Event',
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 16),

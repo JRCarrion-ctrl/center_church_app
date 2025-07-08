@@ -29,8 +29,18 @@ class GroupMessageBubble extends StatelessWidget {
     return grouped;
   }
 
+  bool _isEmojiOnly(String? text) {
+    if (text == null) return false;
+    final stripped = text.replaceAll(RegExp(r'\s'), '');
+    final emojiRegex = RegExp(r'^(?:[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]){1,3}\$', unicode: true);
+    return emojiRegex.hasMatch(stripped);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final messageText = message.content;
+    final showLargeEmoji = _isEmojiOnly(messageText);
+
     return GestureDetector(
       onLongPress: onLongPress,
       child: Align(
@@ -51,13 +61,13 @@ class GroupMessageBubble extends StatelessWidget {
                       child: Container(
                         decoration: BoxDecoration(
                           color: isMe
-                              ? const Color.fromARGB(255, 0, 122, 255) // blue
-                              : const Color.fromARGB(255, 230, 230, 235), // gray
+                              ? const Color.fromARGB(255, 0, 122, 255)
+                              : const Color.fromARGB(255, 230, 230, 235),
                           borderRadius: BorderRadius.circular(20),
                           border: Border.all(
                             color: isMe
-                                ? const Color.fromARGB(255, 0, 112, 230) // Blue border
-                                : const Color.fromARGB(255, 210, 210, 215), // Gray border
+                                ? const Color.fromARGB(255, 0, 112, 230)
+                                : const Color.fromARGB(255, 210, 210, 215),
                           ),
                         ),
                         padding: const EdgeInsets.all(10),
@@ -68,7 +78,14 @@ class GroupMessageBubble extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            contentBuilder(),
+                            DefaultTextStyle(
+                              style: TextStyle(
+                                fontSize: showLargeEmoji ? 32 : 16,
+                                height: 1.4,
+                                color: isMe ? Colors.white : Colors.black,
+                              ),
+                              child: contentBuilder(),
+                            ),
                             const SizedBox(height: 4),
                             Semantics(
                               label: 'Sent at $timestamp',

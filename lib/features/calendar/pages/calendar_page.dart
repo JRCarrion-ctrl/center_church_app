@@ -20,6 +20,7 @@ class CalendarPage extends StatefulWidget {
 class _CalendarPageState extends State<CalendarPage> {
   late Future<_CalendarData> _calendarFuture;
   bool _canManageApp = false;
+  String _refreshKey = UniqueKey().toString();
 
   @override
   void initState() {
@@ -61,6 +62,7 @@ class _CalendarPageState extends State<CalendarPage> {
     return Scaffold(
       body: FutureBuilder<_CalendarData>(
         future: _calendarFuture,
+        key: Key(_refreshKey),
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
             return const Center(child: CircularProgressIndicator());
@@ -73,7 +75,22 @@ class _CalendarPageState extends State<CalendarPage> {
           final groupEvents = snap.data!.groupEvents;
 
           if (appEvents.isEmpty && groupEvents.isEmpty) {
-            return const Center(child: Text('No upcoming events.'));
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(() {
+                  _calendarFuture = _loadAllEvents();
+                  _refreshKey = UniqueKey().toString();
+                });
+                await _calendarFuture;
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: const [
+                  SizedBox(height: 200),
+                  Center(child: Text('No upcoming events.')),
+                ],
+              ),
+            );
           }
 
           final List<Widget> items = [];
@@ -90,7 +107,10 @@ class _CalendarPageState extends State<CalendarPage> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              setState(() => _calendarFuture = _loadAllEvents());
+              setState(() {
+                _calendarFuture = _loadAllEvents();
+                _refreshKey = UniqueKey().toString();
+                });
               await _calendarFuture;
             },
             child: ListView(
@@ -138,7 +158,11 @@ class _CalendarPageState extends State<CalendarPage> {
                 )
               : null,
           leading: e.imageUrl != null
-              ? Image.network(e.imageUrl!, width: 60, fit: BoxFit.cover)
+              ? Image.network(
+                  e.imageUrl!,
+                  gaplessPlayback: true, // prevents flicker
+                  fit: BoxFit.cover,
+                )
               : const Icon(Icons.announcement, size: 40),
           title: Text(e.title),
           subtitle: Text(DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)),
@@ -150,7 +174,11 @@ class _CalendarPageState extends State<CalendarPage> {
         child: ListTile(
           onTap: () => context.push('/group-event/${e.id}', extra: e),
           leading: e.imageUrl != null
-              ? Image.network(e.imageUrl!, width: 60, fit: BoxFit.cover)
+              ? Image.network(
+                  e.imageUrl!,
+                  gaplessPlayback: true, // prevents flicker
+                  fit: BoxFit.cover,
+                )
               : const Icon(Icons.event, size: 40),
           title: Text(e.title),
           subtitle: Text(DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:add_2_calendar/add_2_calendar.dart';
 
 import '../event_service.dart';
 import '../models/app_event.dart';
@@ -74,6 +75,18 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     }
   }
 
+  void addEventToCalendar(AppEvent event) {
+    final Event calendarEvent = Event(
+      title: event.title,
+      description: event.description,
+      startDate: event.eventDate,
+      endDate: event.eventDate.add(Duration(hours: 1)), // Adjust duration if needed
+      location: event.location ?? 'Center Church',
+    );
+
+    Add2Calendar.addEvent2Cal(calendarEvent);
+  }
+
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
@@ -85,18 +98,34 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
           if (e.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(e.imageUrl!, height: 200, fit: BoxFit.cover),
+              child: Image.network(
+                  e.imageUrl!,
+                  gaplessPlayback: true, // prevents flicker
+                  fit: BoxFit.cover,
+                )
             ),
           const SizedBox(height: 16),
           Text(
             e.title,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
-          const SizedBox(height: 8),
-          Text(DateFormat('EEEE, MMM d, yyyy • h:mm a').format(e.eventDate)),
-          const SizedBox(height: 16),
-          if (e.description?.isNotEmpty ?? false)
-            Text(e.description ?? '', style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 6),
+          Text(DateFormat('EEEE, MMM d, yyyy • h:mm a').format(e.eventDate.toLocal())),
+          const SizedBox(height: 6),
+          if (e.description != null && e.description?.isNotEmpty == true)
+            Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
+          const SizedBox(height: 6),
+          if (e.location != null && e.location!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          const SizedBox(height: 6),
+          ElevatedButton.icon(
+            onPressed: () => addEventToCalendar(e),
+            icon: Icon(Icons.event),
+            label: Text('Add to Calendar'),
+          ),
           const Divider(height: 32),
           Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),
           Row(

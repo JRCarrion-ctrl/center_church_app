@@ -6,6 +6,7 @@ class AppEvent {
   final String? description;
   final DateTime eventDate;
   final String? imageUrl;
+  final String? location;
 
   AppEvent({
     required this.id,
@@ -13,6 +14,7 @@ class AppEvent {
     this.description,
     required this.eventDate,
     this.imageUrl,
+    this.location,
   });
 
   factory AppEvent.fromJson(Map<String, dynamic> json) => AppEvent(
@@ -27,7 +29,10 @@ class AppEvent {
     return AppEvent(
       id: map['id'] as String,
       title: map['title'] as String,
+      description: map['description'] as String?,
       eventDate: DateTime.parse(map['event_date'] as String),
+      imageUrl: map['image_url'] as String?,
+      location: map['location'],
     );
   }
 }
