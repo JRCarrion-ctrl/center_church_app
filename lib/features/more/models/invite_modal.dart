@@ -57,7 +57,6 @@ class _InviteExistingUserModalState extends State<InviteExistingUserModal> {
 
   Future<void> _sendInvite(Map<String, dynamic> profile) async {
     final userId = profile['id'];
-    final displayName = profile['display_name'] ?? 'Unnamed';
 
     try {
       await supabase.from('family_members').insert({
@@ -120,7 +119,6 @@ class _InviteExistingUserModalState extends State<InviteExistingUserModal> {
               if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
               if (suggestions.isNotEmpty)
                 ...suggestions.map((profile) {
-                  final userId = profile['id'];
                   final displayName = profile['display_name'] ?? 'Unnamed';
                   final contact = profile['email'] ?? profile['phone'] ?? '';
                   final photoUrl = profile['photo_url'];

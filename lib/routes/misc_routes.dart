@@ -4,7 +4,6 @@ import 'package:ccf_app/features/more/pages/edit_child_profile.dart';
 import 'package:ccf_app/features/more/pages/view_child_profile.dart';
 import 'package:ccf_app/features/more/pages/public_profile.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../transitions/transitions.dart';
 import '../features/features.dart';
 import '../features/giving/give_page.dart';
@@ -66,13 +65,12 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/family',
     pageBuilder: (context, state) {
-      final familyId = state.extra as String?;
-      final user = Supabase.instance.client.auth.currentUser;
-      if (familyId == null || user == null) {
-        throw Exception('Missing required family ID or user not logged in');
-      }
+      final extra = state.extra as Map<String, dynamic>?;
       return buildSlidePage(
-        FamilyPage(familyId: familyId, currentUserId: user.id),
+        FamilyPage(
+          familyId: extra?['familyId'],
+          currentUserId: extra?['currentUserId'],
+        ),
         direction: SlideDirection.right,
       );
     },

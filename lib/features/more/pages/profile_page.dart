@@ -24,15 +24,15 @@ class _ProfilePageState extends State<ProfilePage> {
   final supabase = Supabase.instance.client;
   final Logger _logger = Logger();
 
-
   String? displayName, bio, photoUrl, phone;
+  String? familyId;
+  bool? visible;
+  bool isLoading = true;
   String formatUSPhone(String input) {
     final digits = input.replaceAll(RegExp(r'\D'), '');
     if (digits.length != 10) return input;
     return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
   }
-  bool? visible;
-  bool isLoading = true;
 
   List<Map<String, dynamic>> groups = [];
   List<Map<String, dynamic>> family = [];
@@ -61,13 +61,24 @@ class _ProfilePageState extends State<ProfilePage> {
           .from('group_memberships')
           .select('role, groups(id, name)')
           .eq('user_id', userId);
-      
-      _logger.i('groupsData: $groupsData');
 
-      final familyData = await supabase
+      final familiesData = await supabase
           .from('family_members')
-          .select('id, display_name, relationship, is_child, qr_code')
-          .eq('user_id', userId);
+          .select('family_id')
+          .eq('user_id', userId)
+          .eq('status', 'accepted')
+          .maybeSingle();
+
+      final String? fetchedFamilyId = familiesData?['family_id'];
+      familyId = fetchedFamilyId;
+
+      final List<Map<String, dynamic>> familyData = fetchedFamilyId == null
+          ? []
+          : List<Map<String, dynamic>>.from(await supabase
+              .from('family_members')
+              .select('id, relationship, status, is_child, child_profiles(display_name, qr_code_url), user_profiles(display_name, photo_url)')
+              .eq('family_id', fetchedFamilyId)
+              .eq('status', 'accepted'));
 
       final prayersData = await supabase
           .from('prayer_requests')
@@ -76,17 +87,17 @@ class _ProfilePageState extends State<ProfilePage> {
           .order('created_at', ascending: false);
 
       final groupRSVPs = await supabase
-        .from('event_attendance')
-        .select('attending_count, created_at, group_events(title, event_date)')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
+          .from('event_attendance')
+          .select('attending_count, created_at, group_events(title, event_date)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
 
       final appRSVPs = await supabase
-        .from('app_event_attendance')
-        .select('attending_count, created_at, app_events(title, event_date)')
-        .eq('user_id', userId)
-        .order('created_at', ascending: false);
-      
+          .from('app_event_attendance')
+          .select('attending_count, created_at, app_events(title, event_date)')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false);
+
       final combinedRsvps = [
         ...groupRSVPs.map((r) => {...r, 'source': 'group'}),
         ...appRSVPs.map((r) => {...r, 'source': 'app'}),
@@ -99,8 +110,7 @@ class _ProfilePageState extends State<ProfilePage> {
         phone = profile?['phone'];
         visible = profile?['visible_in_directory'] ?? true;
         groups = List<Map<String, dynamic>>.from(groupsData);
-        _logger.i('groups in build: ${groups.length}');
-        family = List<Map<String, dynamic>>.from(familyData);
+        family = familyData;
         prayerRequests = List<Map<String, dynamic>>.from(prayersData);
         eventRsvps = List<Map<String, dynamic>>.from(combinedRsvps);
         isLoading = false;
@@ -429,18 +439,25 @@ class _ProfilePageState extends State<ProfilePage> {
                       title: 'My Family',
                       emptyText: 'No family members.',
                       children: family.map((member) {
+                        final isChild = member['is_child'] == true;
+                        final childProfile = member['child_profiles'];
+                        final userProfile = member['user_profiles'];
+                        final name = childProfile?['display_name'] ?? userProfile?['display_name'] ?? 'Unnamed';
+                        final qrCode = childProfile?['qr_code_url'];
+                        final relationship = member['relationship'] ?? '';
+
                         return ListTile(
-                          leading: Icon(member['is_child'] == true ? Icons.child_care : Icons.person),
-                          title: Text(member['display_name'] ?? ''),
-                          subtitle: Text(member['relationship'] ?? ''),
-                          trailing: member['is_child'] == true && member['qr_code'] != null
+                          leading: Icon(isChild ? Icons.child_care : Icons.person),
+                          title: Text(name),
+                          subtitle: Text(relationship),
+                          trailing: isChild && qrCode != null
                               ? IconButton(
                                   icon: const Icon(Icons.qr_code),
                                   onPressed: () {
                                     showDialog(
                                       context: context,
                                       builder: (_) => AlertDialog(
-                                        content: Image.network(member['qr_code']),
+                                        content: Image.network(qrCode),
                                       ),
                                     );
                                   },

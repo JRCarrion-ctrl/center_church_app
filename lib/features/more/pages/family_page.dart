@@ -1,4 +1,5 @@
 // file: lib/features/more/pages/family_page.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -6,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../more/models/invite_modal.dart';
 
 class FamilyPage extends StatefulWidget {
-  final String familyId;
+  final String? familyId;
   final String currentUserId;
 
   const FamilyPage({super.key, required this.familyId, required this.currentUserId});
@@ -24,7 +25,11 @@ class _FamilyPageState extends State<FamilyPage> {
   @override
   void initState() {
     super.initState();
-    _loadFamily();
+    if (widget.familyId != null) {
+      _loadFamily();
+    } else {
+      setState(() => isLoading = false);
+    }
   }
 
   Future<void> _loadFamily() async {
@@ -32,11 +37,22 @@ class _FamilyPageState extends State<FamilyPage> {
       isLoading = true;
       error = null;
     });
+
+    final familyId = widget.familyId;
+    if (familyId == null) {
+      setState(() {
+        isLoading = false;
+        error = 'No family ID provided';
+      });
+      return;
+    }
+
     try {
       final result = await supabase
           .from('family_members')
           .select('*, user:profiles(*), child:child_profiles(*)')
-          .eq('family_id', widget.familyId);
+          .eq('family_id', familyId);
+
       setState(() => members = List<Map<String, dynamic>>.from(result));
     } catch (e) {
       setState(() => error = 'Failed to load family members');
@@ -45,10 +61,56 @@ class _FamilyPageState extends State<FamilyPage> {
     }
   }
 
+  Future<void> _createFamily() async {
+    final response = await supabase.from('families').insert({}).select('id').single();
+    final newFamilyId = response['id'];
+
+    await supabase.from('family_members').insert({
+      'user_id': widget.currentUserId,
+      'family_id': newFamilyId,
+      'relationship': 'Self',
+      'is_child': false,
+      'status': 'accepted',
+    });
+
+    if (mounted) {
+      context.go('/more/family', extra: {
+        'familyId': newFamilyId,
+        'currentUserId': widget.currentUserId,
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    if (widget.familyId == null) {
+      return Scaffold(
+        appBar: AppBar(
+          leading: BackButton(onPressed: () => context.go('/more')),
+          title: const Text("Your Family"),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text("You are not in a family yet."),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: _createFamily,
+                child: const Text("Create Family"),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                onPressed: _loadInvites,
+                child: const Text("View Family Invites"),
+              ),
+            ],
+          ),
+        ),
+      );
     }
     if (error != null) {
       return Scaffold(body: Center(child: Text(error!)));
@@ -61,6 +123,7 @@ class _FamilyPageState extends State<FamilyPage> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: BackButton(onPressed: () => context.go('/more')),
         title: const Text("Your Family"),
         actions: [
           IconButton(
@@ -126,17 +189,100 @@ class _FamilyPageState extends State<FamilyPage> {
   }
 
   void _inviteUser() {
+    if (widget.familyId == null) return;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       builder: (_) => InviteExistingUserModal(
-        familyId: widget.familyId,
+        familyId: widget.familyId!,
         invitedBy: widget.currentUserId,
       ),
     );
   }
 
   void _addChild() {
-    context.pushNamed('add_child_profile', extra: widget.familyId);
+    if (widget.familyId != null) {
+      context.pushNamed('add_child_profile', extra: widget.familyId);
+    }
+  }
+
+  Future<void> _loadInvites() async {
+    final result = await supabase
+        .from('family_members')
+        .select('*, user:profiles(*)')
+        .eq('linked_user_id', widget.currentUserId)
+        .eq('status', 'pending');
+
+    if (mounted) {
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Family Invites'),
+          content: result.isEmpty
+              ? const Text('You have no pending invitations.')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: result.map<Widget>((invite) {
+                    final inviter = invite['user'];
+                    final name = inviter?['display_name'] ?? 'Someone';
+                    return ListTile(
+                      title: Text('Invited by $name'),
+                      subtitle: Text(invite['relationship'] ?? 'No relationship'),
+                      trailing: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.check, color: Colors.green),
+                            onPressed: () => _respondToInvite(invite['id'], true),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: () => _respondToInvite(invite['id'], false),
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _respondToInvite(String id, bool accept) async {
+    if (accept) {
+      await supabase.from('family_members').update({'status': 'accepted'}).eq('id', id);
+
+      final updated = await supabase
+          .from('family_members')
+          .select('family_id')
+          .eq('id', id)
+          .maybeSingle();
+
+      final newFamilyId = updated?['family_id'];
+      if (mounted && newFamilyId != null) {
+        context.go('/more/family', extra: {
+          'familyId': newFamilyId,
+          'currentUserId': widget.currentUserId,
+        });
+        return;
+      }
+    } else {
+      await supabase.from('family_members').delete().eq('id', id);
+    }
+    if (mounted) {
+      Navigator.pop(context);
+      _showSnackbar(accept ? 'Joined family!' : 'Invite declined');
+    }
+  }
+
+  void _showSnackbar(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 }
