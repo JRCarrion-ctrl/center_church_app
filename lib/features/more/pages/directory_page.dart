@@ -16,9 +16,8 @@ class _DirectoryPageState extends State<DirectoryPage> {
 
   Future<List<Map<String, dynamic>>> _fetchDirectoryUsers() async {
     final data = await supabase
-        .from('profiles')
+        .from('public_profiles')
         .select('id, display_name, photo_url') // <-- Add photo_url here
-        .eq('visible_in_directory', true)
         .order('display_name', ascending: true);
 
     return List<Map<String, dynamic>>.from(data);
@@ -60,23 +59,11 @@ class _DirectoryPageState extends State<DirectoryPage> {
 
               return ListTile(
                 leading: photoUrl != null && photoUrl.toString().isNotEmpty
-                    ? CircleAvatar(
-                        radius: 22,
-                        backgroundColor: Colors.grey[200],
-                        backgroundImage: null,
-                        child: ClipOval(
-                          child: CachedNetworkImage(
-                            imageUrl: photoUrl,
-                            width: 44,
-                            height: 44,
-                            fit: BoxFit.cover,
-                            placeholder: (context, url) =>
-                                const CircularProgressIndicator(strokeWidth: 2),
-                            errorWidget: (context, url, error) =>
-                                const Icon(Icons.error),
-                          ),
-                        ),
-                      )
+                  ? CircleAvatar(
+                      radius: 22,
+                      backgroundImage: CachedNetworkImageProvider(photoUrl),
+                      backgroundColor: Colors.transparent,
+                    )
                     : const CircleAvatar(child: Icon(Icons.person)),
                 title: Text(user['display_name'] ?? 'Unnamed User'),
                 onTap: () {

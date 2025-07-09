@@ -217,7 +217,7 @@ class GroupService {
   Future<List<Map<String, dynamic>>> getGroupMembers(String groupId) async {
     final data = await supabase
         .from('group_memberships_summary')
-        .select('user_id, role, display_name')
+        .select('user_id, role, display_name, photo_url')
         .eq('group_id', groupId)
         .order('display_name', ascending: true);
 
@@ -228,36 +228,37 @@ class GroupService {
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId == null) throw Exception('User not logged in');
 
-    // For public groups, directly add approved membership
-    // For request groups, add membership with status 'pending'
-
     final group = await getGroupById(groupId);
     if (group == null) throw Exception('Group not found');
 
-    final status = group.visibility == 'public' ? 'approved' : 'pending';
-
-    // Check if membership already exists
-    final existing = await supabase
-        .from('group_memberships')
-        .select()
-        .eq('group_id', groupId)
-        .eq('user_id', userId)
-        .maybeSingle();
-
-    if (existing != null) {
-      throw Exception('You have already joined or requested this group.');
-    }
-
-    try{
+    if (group.visibility == 'public') {
+      // For public groups, auto-approve into group_memberships
       await supabase.from('group_memberships').insert({
         'group_id': groupId,
         'user_id': userId,
         'role': 'member',
-        'status': status,
+        'status': 'approved',
         'joined_at': DateTime.now().toUtc().toIso8601String(),
       });
-    } catch (e) {
-      throw Exception('Failed to create membership: $e');
+    } else if (group.visibility == 'request') {
+      // For request groups, log request in group_requests table
+      final existing = await supabase
+          .from('group_requests')
+          .select('id')
+          .eq('group_id', groupId)
+          .eq('user_id', userId)
+          .maybeSingle();
+
+      if (existing != null) {
+        throw Exception('You already requested to join this group.');
+      }
+
+      await supabase.from('group_requests').insert({
+        'group_id': groupId,
+        'user_id': userId,
+      });
+    } else {
+      throw Exception('This group is invite only.');
     }
   }
 
@@ -274,7 +275,7 @@ class GroupService {
 
   Future<void> deleteGroup(String groupId) async {
     final url = Uri.parse(
-      'https://vhzcbqgehlpemdkvmzvy.functions.supabase.co/clever-responder',
+      'https://vhzcbqgehlpemdkvmzvy.supabase.co/functions/v1/clever-responder',
     );
 
     final session = Supabase.instance.client.auth.currentSession;
@@ -362,6 +363,23 @@ class GroupService {
         })
         .toList();
   }
+
+  Future<List<Map<String, dynamic>>> getGroupJoinRequests(String groupId) async {
+    final res = await Supabase.instance.client
+      .from('group_requests')
+      .select('user_id, created_at, profiles(display_name, email, photo_url)')
+      .eq('group_id', groupId)
+      .order('created_at');
+
+    return (res as List).map((e) => {
+      'user_id': e['user_id'],
+      'display_name': e['profiles']['display_name'],
+      'photo_url': e['profiles']['photo_url'],
+      'email': e['profiles']['email'],
+      'created_at': e['created_at'],
+    }).toList();
+  }
+
 
   Future<void> approveMemberRequest(String groupId, String userId) async {
     await supabase.rpc('approve_group_member_request', params: {

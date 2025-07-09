@@ -1,4 +1,4 @@
-// File: lib/features/groups/widgets/group_chat_tab.dart
+// Refactored: lib/features/groups/widgets/group_chat_tab.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
@@ -6,51 +6,50 @@ import 'package:intl/intl.dart';
 import '../models/group_message.dart';
 import '../group_chat_service.dart';
 import '../chat_storage_service.dart';
+import '../group_pin_service.dart';
 import 'message_list_view.dart';
 import 'input_row.dart';
-import '../group_pin_service.dart';
 
 class GroupChatTab extends StatefulWidget {
   final String groupId;
   final bool isAdmin;
+
   static void scrollToPinnedMessage(BuildContext context) {
     final state = context.findAncestorStateOfType<_GroupChatTabState>();
     state?._scrollToPinnedMessage();
   }
 
-  const GroupChatTab({
-    super.key,
-    required this.groupId,
-    required this.isAdmin,
-  });
+  const GroupChatTab({super.key, required this.groupId, required this.isAdmin});
 
   @override
   State<GroupChatTab> createState() => _GroupChatTabState();
 }
 
 class _GroupChatTabState extends State<GroupChatTab> {
-  late final RealtimeChannel _reactionChannel;
-  final Map<String, List<String>> _reactionMap = {};
+  final _reactionMap = <String, List<String>>{};
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+
   final _chatService = GroupChatService();
   final _storageService = ChatStorageService();
   final _pinService = GroupPinService();
 
-
+  late final RealtimeChannel _reactionChannel;
   bool _showJumpToLatest = false;
   bool _initialScrollDone = false;
   String? _highlightMessageId;
 
+  String? get _userId => Supabase.instance.client.auth.currentUser?.id;
+
   @override
   void initState() {
     super.initState();
+    _initializeChat();
+  }
 
-    _chatService.getReactions(widget.groupId).then((map) {
-      setState(() => _reactionMap.addAll(map));
-    });
-
-    _loadPinnedMessage();
+  Future<void> _initializeChat() async {
+    _reactionMap.addAll(await _chatService.getReactions(widget.groupId));
+    await _loadPinnedMessage();
 
     _reactionChannel = Supabase.instance.client
         .channel('public:message_reactions')
@@ -69,15 +68,14 @@ class _GroupChatTabState extends State<GroupChatTab> {
         )
         .subscribe();
 
-    _scrollController.addListener(() {
-      final shouldShow =
-          (_scrollController.position.maxScrollExtent - _scrollController.offset) > 300;
+    _scrollController.addListener(_handleScroll);
+  }
 
-      if (_showJumpToLatest != shouldShow) {
-        setState(() => _showJumpToLatest = shouldShow);
-      }
-    });
-
+  void _handleScroll() {
+    final shouldShow = (_scrollController.position.maxScrollExtent - _scrollController.offset) > 300;
+    if (_showJumpToLatest != shouldShow) {
+      setState(() => _showJumpToLatest = shouldShow);
+    }
   }
 
   Future<void> _loadPinnedMessage() async {
@@ -86,15 +84,11 @@ class _GroupChatTabState extends State<GroupChatTab> {
         .select('pinned_message_id')
         .eq('id', widget.groupId)
         .maybeSingle();
-
-    setState(() {
-      _highlightMessageId = response?['pinned_message_id'];
-    });
+    setState(() => _highlightMessageId = response?['pinned_message_id']);
   }
 
   void _scrollToPinnedMessage() {
     if (_highlightMessageId != null && _scrollController.hasClients) {
-      // Delay to wait for messages to render
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollController.animateTo(
           0,
@@ -103,42 +97,6 @@ class _GroupChatTabState extends State<GroupChatTab> {
         );
       });
     }
-  }
-
-  String? get _userId => Supabase.instance.client.auth.currentUser?.id;
-
-  String _formatSmartTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final local = timestamp.toLocal();
-    final today = DateTime(now.year, now.month, now.day);
-    final messageDay = DateTime(local.year, local.month, local.day);
-
-    final timePart = DateFormat.jm().format(local);
-
-    if (messageDay == today) {
-      return 'Today, $timePart';
-    } else if (messageDay == today.subtract(const Duration(days: 1))) {
-      return 'Yesterday, $timePart';
-    } else {
-      return DateFormat('MMMM d, y – h:mm a').format(local);
-    }
-  }
-
-  @override
-  void dispose() {
-    _reactionChannel.unsubscribe();
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _sendMessage() async {
-    final content = _messageController.text.trim();
-    if (content.isEmpty) return;
-
-    await _chatService.sendMessage(widget.groupId, content);
-    _messageController.clear();
-    _scrollToBottom();
   }
 
   void _scrollToBottom({bool instant = false}) {
@@ -158,117 +116,135 @@ class _GroupChatTabState extends State<GroupChatTab> {
     });
   }
 
+  Future<void> _sendMessage() async {
+    final content = _messageController.text.trim();
+    if (content.isEmpty) return;
+    await _chatService.sendMessage(widget.groupId, content);
+    _messageController.clear();
+    _scrollToBottom();
+  }
 
   void _showMessageOptions(GroupMessage message) {
     final isSender = message.senderId == _userId;
-
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        return Wrap(
-          children: [
-            if (widget.isAdmin || isSender)
-              ListTile(
-                leading: const Icon(Icons.delete),
-                title: const Text('Delete Message'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _chatService.deleteMessage(message.id);
-                },
-              ),
-            if (widget.isAdmin && message.id != _highlightMessageId)
-              ListTile(
-                leading: const Icon(Icons.push_pin_outlined),
-                title: const Text('Pin Message'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _pinService.pinMessage(widget.groupId, message.id);
-                  await _loadPinnedMessage();
-                },
-              ),
-            if (!isSender)
-              ListTile(
-                leading: const Icon(Icons.report),
-                title: const Text('Report Message'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _chatService.reportMessage(message.id);
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.emoji_emotions),
-                title: const Text('React to Message'),
-                onTap: () {
-                  Navigator.pop(context);
-                  _showReactionPicker(context, message);
-                },
-              ),
-            if (widget.isAdmin && message.id == _highlightMessageId)
-              ListTile(
-                leading: const Icon(Icons.remove_circle_outline),
-                title: const Text('Unpin Message'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  await _pinService.unpinMessage(widget.groupId);
-                  await _loadPinnedMessage();
-                },
-              ),
-          ],
-        );
-      },
+      builder: (_) => Wrap(children: [
+        if (widget.isAdmin || isSender)
+          ListTile(
+            leading: const Icon(Icons.delete),
+            title: const Text('Delete Message'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _chatService.deleteMessage(message.id);
+            },
+          ),
+        if (widget.isAdmin && message.id != _highlightMessageId)
+          ListTile(
+            leading: const Icon(Icons.push_pin_outlined),
+            title: const Text('Pin Message'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _pinService.pinMessage(widget.groupId, message.id);
+              await _loadPinnedMessage();
+            },
+          ),
+        if (!isSender)
+          ListTile(
+            leading: const Icon(Icons.report),
+            title: const Text('Report Message'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _chatService.reportMessage(message.id);
+            },
+          ),
+        ListTile(
+          leading: const Icon(Icons.emoji_emotions),
+          title: const Text('React to Message'),
+          onTap: () {
+            Navigator.pop(context);
+            _showReactionPicker(context, message);
+          },
+        ),
+        if (widget.isAdmin && message.id == _highlightMessageId)
+          ListTile(
+            leading: const Icon(Icons.remove_circle_outline),
+            title: const Text('Unpin Message'),
+            onTap: () async {
+              Navigator.pop(context);
+              await _pinService.unpinMessage(widget.groupId);
+              await _loadPinnedMessage();
+            },
+          ),
+      ]),
     );
   }
 
   void _showReactionPicker(BuildContext context, GroupMessage message) {
+    final emojis = ['❤️', '🔥', '🙏', '😂', '👍', '👀'];
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        final emojis = ['❤️', '🔥', '🙏', '😂', '👍', '👀'];
-        return Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Wrap(
-            spacing: 10,
-            children: emojis
-                .map((e) => GestureDetector(
-                      onTap: () async {
-                        Navigator.pop(context);
-                        final userId = Supabase.instance.client.auth.currentUser!.id;
-                        await Supabase.instance.client
-                            .from('message_reactions')
-                            .delete()
-                            .match({'message_id': message.id, 'user_id': userId});
-                        await _chatService.addReaction(message.id, e);
-                        setState(() {});
-                      },
-                      child: Text(e, style: const TextStyle(fontSize: 28)),
-                    ))
-                .toList(),
-          ),
-        );
-      },
+      builder: (_) => Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Wrap(
+          spacing: 10,
+          children: emojis.map((e) => GestureDetector(
+            onTap: () async {
+              Navigator.pop(context);
+              final userId = Supabase.instance.client.auth.currentUser!.id;
+              await Supabase.instance.client
+                  .from('message_reactions')
+                  .delete()
+                  .match({'message_id': message.id, 'user_id': userId});
+              await _chatService.addReaction(message.id, e);
+              setState(() {});
+            },
+            child: Text(e, style: const TextStyle(fontSize: 28)),
+          )).toList(),
+        ),
+      ),
     );
+  }
+
+  String _formatSmartTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final local = timestamp.toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    final messageDay = DateTime(local.year, local.month, local.day);
+    final timePart = DateFormat.jm().format(local);
+    if (messageDay == today) return 'Today, $timePart';
+    if (messageDay == today.subtract(const Duration(days: 1))) return 'Yesterday, $timePart';
+    return DateFormat('MMMM d, y – h:mm a').format(local);
+  }
+
+  @override
+  void dispose() {
+    _reactionChannel.unsubscribe();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
-        if (notification is ScrollUpdateNotification) {
-          if (notification.metrics.pixels <= 0 && notification.scrollDelta != null && notification.scrollDelta! > 10) {
-            // User is at top and pulled down
-            FocusManager.instance.primaryFocus?.unfocus();
-          }
+        if (notification is ScrollUpdateNotification &&
+            notification.metrics.pixels <= 0 &&
+            (notification.scrollDelta ?? 0) > 10) {
+          FocusManager.instance.primaryFocus?.unfocus();
         }
         return false;
       },
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
-          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-          child: Stack(
-            children: [
-              Column(
+        onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+        child: Stack(
+          children: [
+            Container(
+              color: Theme.of(context).colorScheme.surface,
+              child: Column(
                 children: [
-                  const SizedBox.shrink(),
                   Expanded(
                     child: MessageListView(
                       groupId: widget.groupId,
@@ -305,17 +281,22 @@ class _GroupChatTabState extends State<GroupChatTab> {
                   ),
                 ],
               ),
-              if (_showJumpToLatest)
-                Positioned(
-                  bottom: 80,
-                  right: 16,
-                  child: FloatingActionButton.small(
-                    onPressed: _scrollToBottom,
-                    child: const Icon(Icons.arrow_downward),
-                  ),
+            ),
+            if (_showJumpToLatest)
+              Positioned(
+                bottom: 80,
+                right: 16,
+                child: FloatingActionButton.small(
+                  onPressed: _scrollToBottom,
+                  backgroundColor: isDark
+                      ? const Color.fromARGB(255, 60, 60, 65)
+                      : const Color.fromARGB(255, 230, 230, 240),
+                  foregroundColor: isDark ? Colors.white : Colors.black,
+                  child: const Icon(Icons.arrow_downward),
                 ),
-            ],
-          ),
+              ),
+          ],
+        ),
       ),
     );
   }

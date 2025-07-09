@@ -39,6 +39,8 @@ dependencies:
   mime: ^2.0.0
   file_saver: ^0.3.0
   add_2_calendar: ^3.0.1
+  flutter_linkify: ^6.0.0
+  flutter_link_previewer: ^3.2.2
 
 dev_dependencies:
   flutter_test:

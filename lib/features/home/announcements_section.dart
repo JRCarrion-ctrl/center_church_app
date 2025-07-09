@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:ccf_app/features/media/services/livestream_update_service.dart';
 
 class AnnouncementsSection extends StatefulWidget {
   const AnnouncementsSection({super.key});
@@ -21,7 +20,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
   @override
   void initState() {
     super.initState();
-    _checkLivestreamUpdate();
     _loadData();
   }
 
@@ -29,8 +27,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
     final userId = supabase.auth.currentUser?.id;
     final now = DateTime.now().toUtc().toIso8601String();
     if (userId == null) return;
-    setState(() => loading = true);
 
+    setState(() => loading = true);
     try {
       final profile = await supabase
           .from('profiles')
@@ -78,48 +76,54 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
     }
   }
 
-  Future<void> _checkLivestreamUpdate() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    final profile = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .maybeSingle();
-
-    if (profile?['role'] == 'supervisor' || profile?['role'] == 'owner') {
-      await LivestreamUpdateService.maybeTriggerUpdate();
-    }
-  }
-
-
   @override
   Widget build(BuildContext context) {
-    if (loading) return const CircularProgressIndicator();
-    final hasMain = mainAnnouncements.isNotEmpty;
-    final hasGroup = groupAnnouncements.isNotEmpty;
-    if (!hasMain && !hasGroup) {
-      return const Center(child: Text('No announcements available.'));
+    if (loading) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(),
+        ),
+      );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildHeader(context),
-        const SizedBox(height: 12),
-        if (mainAnnouncements.isEmpty)
-          const Text('No announcements')
-        else
-          ...mainAnnouncements.map(_buildAnnouncementCard),
-        const SizedBox(height: 20),
-        const Text(
-          'Group Announcements',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+    final hasMain = mainAnnouncements.isNotEmpty;
+    final hasGroup = groupAnnouncements.isNotEmpty;
+
+    if (!hasMain && !hasGroup) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 40),
+          child: Text('No announcements available.'),
         ),
-        const SizedBox(height: 8),
-        _buildGroupList(),
-      ],
+      );
+    }
+
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildHeader(context),
+            const SizedBox(height: 12),
+            if (!hasMain)
+              const Text('No announcements')
+            else
+              ...mainAnnouncements.map((a) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _buildAnnouncementCard(a),
+                  )),
+            const SizedBox(height: 20),
+            const Text(
+              'Group Announcements',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 8),
+            _buildGroupList(),
+          ],
+        ),
+      ),
     );
   }
 
@@ -133,12 +137,26 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
         ),
         if (isAdmin)
           TextButton(
-            onPressed: () {
-              GoRouter.of(context).push('/manage-app-announcements');
-            },
+            onPressed: () => GoRouter.of(context).push('/manage-app-announcements'),
             child: const Text('Manage'),
           ),
       ],
+    );
+  }
+
+  Widget _buildAnnouncementCard(Map<String, dynamic> a) {
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      child: ExpansionTile(
+        title: Text(
+          a['title'] ?? '',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        childrenPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        children: [
+          if (a['body'] != null) Text(a['body']),
+        ],
+      ),
     );
   }
 
@@ -147,51 +165,64 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
       return const Center(child: Text('No group announcements'));
     }
 
-    return SizedBox(
-      height: 100,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: groupAnnouncements.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 12),
-        itemBuilder: (context, index) =>
-            _buildGroupCard(groupAnnouncements[index]),
-      ),
-    );
-  }
+    return Center(
+      child: SizedBox(
+        height: 100,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          itemCount: groupAnnouncements.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 12),
+          itemBuilder: (context, index) {
+            final a = groupAnnouncements[index];
+            final isDark = Theme.of(context).brightness == Brightness.dark;
+            final backgroundColor =
+                isDark ? Colors.blueGrey[900] : Colors.blue[50];
 
-  Widget _buildAnnouncementCard(Map<String, dynamic> a) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(a['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            if (a['body'] != null) Text(a['body']),
-          ],
+            return Material(
+              color: backgroundColor,
+              borderRadius: BorderRadius.circular(8),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () {
+                  if (!mounted) return;
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    showDialog(
+                      context: context,
+                      useRootNavigator: false,
+                      builder: (dialogContext) => AlertDialog(
+                        title: Text(a['title'] ?? ''),
+                        content: Text(a['body'] ?? ''),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.of(dialogContext).pop(),
+                            child: const Text('Close'),
+                          ),
+                        ],
+                      ),
+                    );
+                  });
+                },
+                child: Container(
+                  width: 180,
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        a['title'] ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      const SizedBox(height: 6),
+                      if (a['body'] != null)
+                        Text(a['body'],
+                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
-      ),
-    );
-  }
-
-  Widget _buildGroupCard(Map<String, dynamic> a) {
-    return Container(
-      width: 180,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(8),
-        color: Colors.blue[50],
-      ),
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(a['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          if (a['body'] != null)
-            Text(a['body'], maxLines: 2, overflow: TextOverflow.ellipsis),
-        ],
       ),
     );
   }

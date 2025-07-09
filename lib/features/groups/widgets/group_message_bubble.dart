@@ -32,14 +32,34 @@ class GroupMessageBubble extends StatelessWidget {
   bool _isEmojiOnly(String? text) {
     if (text == null) return false;
     final stripped = text.replaceAll(RegExp(r'\s'), '');
-    final emojiRegex = RegExp(r'^(?:[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]){1,3}\$', unicode: true);
+    final emojiRegex = RegExp(
+      r'^(?:[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]){1,3}$',
+      unicode: true,
+    );
     return emojiRegex.hasMatch(stripped);
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final messageText = message.content;
     final showLargeEmoji = _isEmojiOnly(messageText);
+
+    final backgroundColor = isMe
+        ? Color.fromARGB(255, 0, 122, 255)
+        : (isDark
+            ? Color.fromARGB(255, 44, 44, 48)
+            : Color.fromARGB(255, 230, 230, 235));
+
+    final borderColor = isMe
+        ? Color.fromARGB(255, 0, 112, 230)
+        : (isDark
+            ? Color.fromARGB(255, 70, 70, 75)
+            : Color.fromARGB(255, 210, 210, 215));
+
+    final textColor = isMe
+        ? Colors.white
+        : (isDark ? Colors.white : Colors.black);
 
     return GestureDetector(
       onLongPress: onLongPress,
@@ -60,20 +80,13 @@ class GroupMessageBubble extends StatelessWidget {
                       filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? const Color.fromARGB(255, 0, 122, 255)
-                              : const Color.fromARGB(255, 230, 230, 235),
+                          color: backgroundColor,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isMe
-                                ? const Color.fromARGB(255, 0, 112, 230)
-                                : const Color.fromARGB(255, 210, 210, 215),
-                          ),
+                          border: Border.all(color: borderColor),
                         ),
                         padding: const EdgeInsets.all(10),
                         constraints: BoxConstraints(
-                          maxWidth:
-                              MediaQuery.of(context).size.width * 0.75,
+                          maxWidth: MediaQuery.of(context).size.width * 0.75,
                         ),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,7 +95,7 @@ class GroupMessageBubble extends StatelessWidget {
                               style: TextStyle(
                                 fontSize: showLargeEmoji ? 32 : 16,
                                 height: 1.4,
-                                color: isMe ? Colors.white : Colors.black,
+                                color: textColor,
                               ),
                               child: contentBuilder(),
                             ),
@@ -94,8 +107,10 @@ class GroupMessageBubble extends StatelessWidget {
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: isMe
-                                      ? const Color.fromARGB(255, 255, 255, 255)
-                                      : const Color.fromARGB(255, 0, 0, 0),
+                                    ? const Color.fromARGB(160, 255, 255, 255)
+                                    : isDark
+                                      ? const Color.fromARGB(160, 255, 255, 255)
+                                      : const Color.fromARGB(160, 0, 0, 0),
                                 ),
                               ),
                             ),
@@ -111,27 +126,19 @@ class GroupMessageBubble extends StatelessWidget {
                   offset: const Offset(12, -4),
                   child: Wrap(
                     spacing: 6,
-                    children:
-                        _groupedReactions(reactions).entries.map((entry) {
+                    children: _groupedReactions(reactions).entries.map((entry) {
                       return Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: isMe
-                              ? const Color.fromARGB(255, 0, 122, 255)
-                              : const Color.fromARGB(255, 230, 230, 235),
+                          color: backgroundColor,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                            color: isMe
-                                ? const Color.fromARGB(255, 0, 112, 230)
-                                : const Color.fromARGB(255, 210, 210, 215),
-                          ),
+                          border: Border.all(color: borderColor),
                         ),
                         child: Text(
                           '${entry.key} ${entry.value}',
                           style: TextStyle(
                             fontSize: 14,
-                            color: isMe ? Colors.white : Colors.black87,
+                            color: textColor,
                           ),
                         ),
                       );

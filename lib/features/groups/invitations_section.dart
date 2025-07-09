@@ -31,30 +31,50 @@ class InvitationsSectionState extends State<InvitationsSection> {
     });
   }
 
-  Future<void> _acceptInvite(String groupId) async {
+  Future<void> _acceptInvite(GroupModel group) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
 
-    await supabase
-        .from('group_memberships')
-        .update({'status': 'approved'})
-        .eq('user_id', userId)
-        .eq('group_id', groupId);
+    await supabase.from('group_memberships').insert({
+      'group_id': group.id,
+      'user_id': userId,
+      'role': 'member',
+      'status': 'approved',
+      'joined_at': DateTime.now().toUtc().toIso8601String(),
+    });
 
-    refresh();
+    await supabase
+        .from('group_invitations')
+        .delete()
+        .eq('group_id', group.id)
+        .eq('user_id', userId);
+
+    if (context.mounted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Joined ${group.name}')),
+      );
+      refresh();
+    }
   }
 
-  Future<void> _declineInvite(String groupId) async {
+  Future<void> _declineInvite(GroupModel group) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
 
     await supabase
-        .from('group_memberships')
+        .from('group_invitations')
         .delete()
-        .eq('user_id', userId)
-        .eq('group_id', groupId);
+        .eq('group_id', group.id)
+        .eq('user_id', userId);
 
-    refresh();
+    if (context.mounted) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Declined invitation to ${group.name}')),
+      );
+      refresh();
+    }
   }
 
   @override
@@ -83,19 +103,48 @@ class InvitationsSectionState extends State<InvitationsSection> {
             ),
             const SizedBox(height: 12),
             ...invites.map((group) => Card(
-                  child: ListTile(
-                    title: Text(group.name),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 2,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.check, color: Colors.green),
-                          onPressed: () => _acceptInvite(group.id),
+                        Text(
+                          group.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.red),
-                          onPressed: () => _declineInvite(group.id),
-                        ),
+                        if (group.description != null && group.description!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(
+                              group.description!,
+                              style: const TextStyle(color: Colors.black54),
+                            ),
+                          ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              icon: const Icon(Icons.check, color: Colors.green),
+                              label: const Text('Accept'),
+                              onPressed: () => _acceptInvite(group),
+                            ),
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              icon: const Icon(Icons.close, color: Colors.red),
+                              label: const Text('Decline'),
+                              onPressed: () => _declineInvite(group),
+                            ),
+                          ],
+                        )
                       ],
                     ),
                   ),

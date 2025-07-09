@@ -66,80 +66,71 @@ class _GroupPageState extends State<GroupPage> {
             children: [
               // Top bar with SafeArea and consistent background
               Container(
-                color: theme.colorScheme.surface,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surface.withAlpha(220),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(220),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    )
+                  ],
+                ),
                 child: SafeArea(
                   top: true,
                   bottom: false,
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                        child: Stack(
-                          alignment: Alignment.center,
-                          children: [
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: IconButton(
-                                icon: const Icon(Icons.arrow_back),
-                                onPressed: () => Navigator.of(context).pop(),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: IconButton(
+                            icon: const Icon(Icons.arrow_back),
+                            onPressed: () => Navigator.of(context).pop(),
+                          ),
+                        ),
+                        InkWell(
+                          borderRadius: BorderRadius.circular(8),
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => GroupInfoPage(
+                                groupId: widget.groupId,
+                                isAdmin: _isAdmin,
+                                isOwner: _isOwner,
                               ),
                             ),
-                            InkWell(
-                              borderRadius: BorderRadius.circular(8),
-                              onTap: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => GroupInfoPage(
-                                    groupId: widget.groupId,
-                                    isAdmin: _isAdmin,
-                                    isOwner: _isOwner,
-                                  ),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              CircleAvatar(
+                                radius: 22,
+                                backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
+                                    ? NetworkImage(group.photoUrl!)
+                                    : null,
+                                child: (group.photoUrl?.isEmpty ?? true)
+                                    ? const Icon(Icons.group, size: 22)
+                                    : null,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                group.name,
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              child: Column(
-                                children: [
-                                  const SizedBox(height: 4),
-                                  CircleAvatar(
-                                    radius: 28,
-                                    backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                                        ? NetworkImage(group.photoUrl!)
-                                        : null,
-                                    child: (group.photoUrl?.isEmpty ?? true)
-                                        ? const Icon(Icons.group, size: 28)
-                                        : null,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  Text(
-                                    group.name,
-                                    style: const TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      // Divider or shadow below the top bar
-                      Container(
-                        height: 4,
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black12,
-                              blurRadius: 4,
-                              offset: Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                      )
-
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ),
+
               // Chat body
               Expanded(
                 child: GroupChatTab(groupId: widget.groupId, isAdmin: _isAdmin),

@@ -10,7 +10,6 @@ import '../features/groups/pages/manage_events_page.dart';
 import '../features/groups/pages/manage_announcements_page.dart';
 import '../features/groups/pages/group_media_page.dart';
 import '../features/groups/pages/group_admin_tools_page.dart';
-import '../features/groups/pages/group_join_page.dart';
 import 'package:ccf_app/features/groups/pages/group_event_list_page.dart';
 
 final List<GoRoute> groupRoutes = [
@@ -75,13 +74,6 @@ final List<GoRoute> groupRoutes = [
     builder: (context, state) {
       final groupId = state.pathParameters['id']!;
       return GroupAdminToolsPage(groupId: groupId);
-    },
-  ),
-  GoRoute(
-    path: '/groups/:groupId/join',
-    builder: (context, state) {
-      final groupId = state.pathParameters['groupId']!;
-      return GroupJoinPage(groupId: groupId);
     },
   ),
 ];

@@ -1,20 +1,29 @@
 // File: lib/features/groups/pages/group_join_page.dart
-
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import '../group_service.dart';
 import '../models/group.dart';
 
-class GroupJoinPage extends StatefulWidget {
-  final String groupId;
-
-  const GroupJoinPage({super.key, required this.groupId});
-
-  @override
-  State<GroupJoinPage> createState() => _GroupJoinPageState();
+Future<void> showGroupJoinModal(BuildContext context, String groupId) async {
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => _GroupJoinModalContent(groupId: groupId),
+  );
 }
 
-class _GroupJoinPageState extends State<GroupJoinPage> {
+class _GroupJoinModalContent extends StatefulWidget {
+  final String groupId;
+
+  const _GroupJoinModalContent({required this.groupId});
+
+  @override
+  State<_GroupJoinModalContent> createState() => _GroupJoinModalContentState();
+}
+
+class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
   Group? group;
   bool isLoading = true;
   bool isJoining = false;
@@ -26,19 +35,22 @@ class _GroupJoinPageState extends State<GroupJoinPage> {
   }
 
   Future<void> _loadGroup() async {
-    group = await GroupService().getGroupById(widget.groupId);
-    setState(() => isLoading = false);
+    final fetched = await GroupService().getGroupById(widget.groupId);
+    setState(() {
+      group = fetched;
+      isLoading = false;
+    });
   }
 
   Future<void> _joinGroup() async {
     setState(() => isJoining = true);
     try {
-      await GroupService().joinGroup(widget.groupId); // Implement this method in GroupService
+      await GroupService().joinGroup(widget.groupId);
       if (mounted) {
+        Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Request sent!')),
+          SnackBar(content: Text(group!.visibility == 'public' ? 'Joined group!' : 'Request sent!')),
         );
-        context.pop();
       }
     } catch (e) {
       if (mounted) {
@@ -53,43 +65,60 @@ class _GroupJoinPageState extends State<GroupJoinPage> {
 
   @override
   Widget build(BuildContext context) {
-    if (isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (group == null) return Scaffold(body: Center(child: Text('Group not found')));
+    if (isLoading) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (group == null) {
+      return const Padding(
+        padding: EdgeInsets.all(32),
+        child: Center(child: Text('Group not found')),
+      );
+    }
 
     final isRequestGroup = group!.visibility == 'request';
     final isPublicGroup = group!.visibility == 'public';
 
-    return Scaffold(
-      appBar: AppBar(title: Text(group!.name)),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (group!.photoUrl != null && group!.photoUrl!.isNotEmpty)
-              Center(
-                child: CircleAvatar(
-                  radius: 50,
-                  backgroundImage: NetworkImage(group!.photoUrl!),
-                ),
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 24,
+        left: 24,
+        right: 24,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (group!.photoUrl != null && group!.photoUrl!.isNotEmpty)
+            CircleAvatar(
+              radius: 40,
+              backgroundImage: NetworkImage(group!.photoUrl!),
+            ),
+          const SizedBox(height: 16),
+          Text(group!.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          const SizedBox(height: 8),
+          Text(group!.description ?? '', textAlign: TextAlign.center),
+          const SizedBox(height: 24),
+          if (isPublicGroup || isRequestGroup)
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: isJoining ? null : _joinGroup,
+                child: isJoining
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : Text(isPublicGroup ? 'Join Group' : 'Request to Join'),
               ),
-            const SizedBox(height: 16),
-            Text(group!.description ?? '', style: const TextStyle(fontSize: 16)),
-            const Spacer(),
-            if (isPublicGroup || isRequestGroup)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: isJoining ? null : _joinGroup,
-                  child: isJoining
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(isPublicGroup ? 'Join Group' : 'Request to Join'),
-                ),
-              )
-            else
-              const Text('This group is invite only.'),
-          ],
-        ),
+            )
+          else
+            const Text('This group is invite only.'),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+        ],
       ),
     );
   }

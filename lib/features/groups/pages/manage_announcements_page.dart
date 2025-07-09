@@ -1,5 +1,6 @@
 // File: manage_announcements_page.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group_announcement.dart';
 import '../widgets/announcement_form_modal.dart';
@@ -126,9 +127,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
               Text(a.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
             if (a.publishedAt != null)
               Text(
-                isPublished
-                    ? 'Published: ${a.publishedAt!.toLocal()}'
-                    : 'Scheduled: ${a.publishedAt!.toLocal()}',
+                '${isPublished ? 'Published' : 'Scheduled'}: ${DateFormat.yMMMd().format(a.publishedAt!.toLocal())}',
                 style: TextStyle(
                   fontSize: 12,
                   color: isPublished ? Colors.green[700] : Colors.orange[700],

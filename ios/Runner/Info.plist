@@ -30,6 +30,10 @@
 	<string>We need access to save images to your gallery.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photos to upload media to the group.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera to take photos.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access.</string>
 	<key>NSCalendarsUsageDescription</key>
 	<string>This app requires calendar access to add events</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

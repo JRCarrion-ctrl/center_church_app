@@ -18,19 +18,18 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
   @override
   void initState() {
     super.initState();
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    _futureGroups = GroupService().getUserGroups(userId);
+    _futureGroups = _loadGroups();
   }
 
-  void _loadGroups() {
+  Future<List<GroupModel>> _loadGroups() {
     final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    _futureGroups = GroupService().getUserGroups(userId);
+    return GroupService().getUserGroups(userId);
   }
 
   /// Public method to allow refresh from parent
   Future<void> refresh() async {
     setState(() {
-      _loadGroups();
+      _futureGroups = _loadGroups();
     });
   }
 
@@ -47,7 +46,7 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
         FutureBuilder<List<GroupModel>>(
           future: _futureGroups,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
+            if (snapshot.connectionState != ConnectionState.done) {
               return const SizedBox(
                 height: 100,
                 child: Center(child: CircularProgressIndicator()),
@@ -55,7 +54,7 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
             }
 
             if (snapshot.hasError) {
-              return Text('Error: ${snapshot.error}');
+              return Text('Error loading your groups: ${snapshot.error}');
             }
 
             final groups = snapshot.data ?? [];
@@ -65,11 +64,12 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
             }
 
             return SizedBox(
-              height: 100,
+              height: 110,
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
                 itemCount: groups.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 16),
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final group = groups[index];
                   return GestureDetector(
@@ -83,15 +83,21 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                           backgroundImage: group.photoUrl != null
                               ? NetworkImage(group.photoUrl!)
                               : null,
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                           child: group.photoUrl == null
-                              ? const Icon(Icons.group, size: 32)
+                              ? const Icon(Icons.group, size: 30, color: Colors.white)
                               : null,
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          group.name,
-                          style: const TextStyle(fontSize: 14),
-                          overflow: TextOverflow.ellipsis,
+                        const SizedBox(height: 6),
+                        SizedBox(
+                          width: 72,
+                          child: Text(
+                            group.name,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontSize: 13),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 2,
+                          ),
                         ),
                       ],
                     ),

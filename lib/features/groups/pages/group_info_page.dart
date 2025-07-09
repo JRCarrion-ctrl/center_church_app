@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -186,7 +187,6 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               child: TextButton.icon(
                 onPressed: () async {
                   final messenger = ScaffoldMessenger.of(context);
-                  final goes = context.go('/groups');
                   final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
@@ -203,12 +203,16 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   try {
                     await GroupService().deleteGroup(widget.groupId);
                     if (mounted) {
+                      if (!mounted) return;
                       messenger.showSnackBar(
                         const SnackBar(content: Text('Group deleted successfully')),
                       );
-                      goes;
+                      if (context.mounted) {
+                      context.go('/groups');
+                      }
                     }
                   } catch (e) {
+                    if (!mounted) return;
                     messenger.showSnackBar(
                       SnackBar(content: Text('Failed to delete group: $e')),
                     );
@@ -232,13 +236,13 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         GestureDetector(
           onTap: widget.isAdmin ? () => _changeGroupPhoto(context) : null,
           child: CircleAvatar(
-            radius: 40,
+            radius: 80,
             child: (group?.photoUrl?.isNotEmpty ?? false)
                 ? ClipOval(
                   child: CachedNetworkImage(
                     imageUrl: group!.photoUrl!,
-                    width: 80,
-                    height: 80,
+                    width: 160,
+                    height: 160,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Center(
                       child: CircularProgressIndicator(strokeWidth: 2),
@@ -246,7 +250,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     errorWidget: (context, url, error) => const Icon(Icons.error, size: 40)
                   ),
                 )
-                : const Icon(Icons.group, size: 40)
+                : const Icon(Icons.group, size: 80)
           ),
         ),
         const SizedBox(height: 12),
@@ -685,18 +689,28 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     try {
       final fileExt = file.path.split('.').last;
       final fileName = 'group_photos/${widget.groupId}_${DateTime.now().millisecondsSinceEpoch}.$fileExt';
+      final contentType = 'image/$fileExt';
       final backendEndpoint = 'https://vhzcbqgehlpemdkvmzvy.supabase.co/functions/v1/generate-presigned-url';
+
+      final accessToken = Supabase.instance.client.auth.currentSession?.accessToken;
+      final headers = {
+        'Content-Type': 'application/json',
+        if (accessToken != null) 'Authorization': 'Bearer $accessToken',
+      };
 
       final res = await http.post(
         Uri.parse(backendEndpoint),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'filename': fileName, 'contentType': 'image/$fileExt'}),
+        headers: headers,
+        body: jsonEncode({'filename': fileName, 'contentType': contentType}),
       );
 
       if (res.statusCode != 200) throw 'Could not get presigned URL';
       final presigned = jsonDecode(res.body);
-      final uploadUrl = presigned['url'] as String;
-      final publicUrl = presigned['publicUrl'] as String;
+      if (presigned['uploadUrl'] == null || presigned['finalUrl'] == null) {
+        throw 'Invalid response from server: ${res.body}';
+      }
+      final uploadUrl = presigned['uploadUrl'] as String;
+      final publicUrl = presigned['finalUrl'] as String;
 
       final uploadRes = await http.put(
         Uri.parse(uploadUrl),

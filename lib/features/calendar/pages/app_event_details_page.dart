@@ -75,6 +75,28 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     }
   }
 
+  Future<void> _removeRSVP() async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.removeAppEventRSVP(widget.event.id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('RSVP removed')),
+        );
+        _loadRSVPs();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+
   void addEventToCalendar(AppEvent event) {
     final Event calendarEvent = Event(
       title: event.title,
@@ -90,6 +112,8 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
+    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
+    final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
     return Scaffold(
       appBar: AppBar(title: Text(e.title)),
       body: ListView(
@@ -127,7 +151,9 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             label: Text('Add to Calendar'),
           ),
           const Divider(height: 32),
-          Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),
+          Text('Are you attending?', 
+            style: Theme.of(context).textTheme.titleMedium
+          ),
           Row(
             children: [
               const Text('Count:'),
@@ -143,7 +169,15 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
               ElevatedButton(
                 onPressed: _saving ? null : _submitRSVP,
                 child: _saving ? const CircularProgressIndicator() : const Text('Submit RSVP'),
-              )
+              ),
+              if (hasRSVP)
+                TextButton(
+                  onPressed: _saving ? null : _removeRSVP,
+                  child: const Text(
+                    'Remove RSVP',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                ),
             ],
           ),
           const Divider(height: 32),

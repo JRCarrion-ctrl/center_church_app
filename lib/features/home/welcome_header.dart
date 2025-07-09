@@ -11,15 +11,18 @@ class WelcomeHeader extends StatefulWidget {
 
 class _WelcomeHeaderState extends State<WelcomeHeader> {
   late Timer _timer;
-  late DateTime _nextService;
-  Duration _remaining = Duration.zero;
+  late DateTime _nextEnglish;
+  late DateTime _nextSpanish;
+  Duration _untilEnglish = Duration.zero;
+  Duration _untilSpanish = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    _nextService = _calculateNextService();
-    _updateCountdown();
-    _timer = Timer.periodic(const Duration(seconds: 60), (_) => _updateCountdown());
+    _nextEnglish = _getNextServiceTime(hour: 9, minute: 30);
+    _nextSpanish = _getNextServiceTime(hour: 11, minute: 30);
+    _updateCountdowns();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _updateCountdowns());
   }
 
   @override
@@ -28,35 +31,80 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
     super.dispose();
   }
 
-  void _updateCountdown() {
+  void _updateCountdowns() {
     final now = DateTime.now();
     setState(() {
-      _remaining = _nextService.difference(now);
+      _untilEnglish = _nextEnglish.difference(now);
+      _untilSpanish = _nextSpanish.difference(now);
     });
   }
 
-  DateTime _calculateNextService() {
+  DateTime _getNextServiceTime({required int hour, required int minute}) {
     final now = DateTime.now();
-    DateTime sunday = now.add(Duration(days: (7 - now.weekday) % 7));
-    return DateTime(sunday.year, sunday.month, sunday.day, 10); // Sunday at 10 AM
+    final sundayOffset = (DateTime.sunday - now.weekday + 7) % 7;
+    final nextSunday = now.add(Duration(days: sundayOffset));
+    var serviceTime = DateTime(nextSunday.year, nextSunday.month, nextSunday.day, hour, minute);
+
+    if (serviceTime.isBefore(now)) {
+      serviceTime = serviceTime.add(const Duration(days: 7));
+    }
+
+    return serviceTime;
+  }
+
+  String _formatDuration(Duration d) {
+    final days = d.inDays;
+    final hours = d.inHours % 24;
+    final minutes = d.inMinutes % 60;
+    return '${days}d ${hours.toString().padLeft(2, '0')}h ${minutes.toString().padLeft(2, '0')}m';
   }
 
   @override
   Widget build(BuildContext context) {
-    final days = _remaining.inDays;
-    final hours = _remaining.inHours % 24;
+    final theme = Theme.of(context).textTheme;
+    final brightness = Theme.of(context).brightness;
+    final color = brightness == Brightness.dark ? Colors.white : Colors.black;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        const Text(
-          'WELCOME',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
         Text(
-          'Next Service In: $days Days, $hours Hours',
-          style: Theme.of(context).textTheme.titleMedium,
+          'WELCOME',
+          style: theme.displaySmall?.copyWith(
+            fontWeight: FontWeight.bold,
+            color: color,
+            letterSpacing: 1.5,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'English Service • 9:30 AM',
+          style: theme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+        Text(
+          'Starts in: ${_formatDuration(_untilEnglish)}',
+          style: theme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          'Spanish Service • 11:30 AM',
+          style: theme.titleLarge?.copyWith(
+            fontWeight: FontWeight.w600,
+            color: color,
+          ),
+        ),
+        Text(
+          'Starts in: ${_formatDuration(_untilSpanish)}',
+          style: theme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w500,
+            color: color,
+          ),
         ),
       ],
     );

@@ -231,8 +231,20 @@ class EventService {
   Future<List<Map<String, dynamic>>> fetchAppEventRSVPs(String appEventId) async {
     final data = await _supabase
         .from('app_event_attendance')
-        .select('attending_count, profiles(display_name, email)')
+        .select('user_id, attending_count, profiles(display_name, email)')
         .eq('app_event_id', appEventId);
     return (data as List).cast<Map<String, dynamic>>();
   }
+
+  Future<void> removeAppEventRSVP(String appEventId) async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) throw Exception("User not authenticated");
+
+    await Supabase.instance.client
+      .from('app_event_attendance')
+      .delete()
+      .eq('app_event_id', appEventId)
+      .eq('user_id', userId);
+  }
+
 }

@@ -7,14 +7,14 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 
 Future<File> _compressImage(File file) async {
   final targetPath = file.path.replaceFirst(
-    RegExp(r'\.(jpg|jpeg|png|heic|webp)\$').pattern,
-    '_compressed.jpg'
+    RegExp(r'\.(jpg|jpeg|png|heic|webp)$'),
+    '_compressed.jpg',
   );
   final compressedBytes = await FlutterImageCompress.compressWithFile(
     file.absolute.path,
     minWidth: 1024,
     minHeight: 1024,
-    quality: 85, // Higher quality for better appearance
+    quality: 85,
     format: CompressFormat.jpeg,
   );
   return File(targetPath)..writeAsBytesSync(compressedBytes!);
@@ -49,7 +49,7 @@ class _InputRowState extends State<InputRow> {
 
   void _handleInputChange() {
     final trimmed = widget.controller.text.trim();
-    final valid = trimmed.isNotEmpty;
+    final valid = trimmed.isNotEmpty || _selectedFile != null;
     if (valid != _canSend) {
       setState(() => _canSend = valid);
     }
@@ -78,7 +78,7 @@ class _InputRowState extends State<InputRow> {
                   if (picked != null) {
                     File file = File(picked.path);
                     file = await _compressImage(file);
-                    await widget.onFilePicked(file);
+                    setState(() => _selectedFile = file);
                   }
                 },
               ),
@@ -91,7 +91,7 @@ class _InputRowState extends State<InputRow> {
                   if (picked != null) {
                     File file = File(picked.path);
                     file = await _compressImage(file);
-                    await widget.onFilePicked(file);
+                    setState(() => _selectedFile = file);
                   }
                 },
               ),
@@ -107,7 +107,7 @@ class _InputRowState extends State<InputRow> {
                     if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
                       file = await _compressImage(file);
                     }
-                    await widget.onFilePicked(file);
+                    setState(() => _selectedFile = file);
                   }
                 },
               ),
@@ -120,7 +120,14 @@ class _InputRowState extends State<InputRow> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final containerColor = isDark
+        ? Color.fromARGB(255, 44, 44, 48)
+        : Color.fromARGB(255, 245, 245, 250);
+
+    final borderColor = isDark
+        ? Color.fromARGB(255, 70, 70, 75)
+        : Color.fromARGB(255, 220, 220, 230);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -177,20 +184,24 @@ class _InputRowState extends State<InputRow> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     decoration: BoxDecoration(
-                      color: theme.colorScheme.surfaceContainerHighest,
+                      color: containerColor,
                       borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: borderColor),
                     ),
                     child: TextField(
                       focusNode: _focusNode,
                       controller: widget.controller,
                       minLines: 1,
                       maxLines: 5,
+                      style: TextStyle(
+                        color: isDark ? Colors.white : Colors.black,
+                      ),
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         hintText: 'Type a message...',
                         border: InputBorder.none,
                       ),
-                      onSubmitted: (_) => widget.onSend(),
+                      onSubmitted: (_) => _handleSend(),
                     ),
                   ),
                 ),
@@ -199,18 +210,28 @@ class _InputRowState extends State<InputRow> {
               IconButton.filled(
                 icon: const Icon(Icons.send_rounded),
                 tooltip: 'Send',
-                onPressed: _canSend
-                    ? () {
-                        widget.onSend();
-                        widget.controller.clear();
-                        setState(() => _canSend = false);
-                      }
-                    : null,
+                onPressed: _canSend ? _handleSend : null,
               ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _handleSend() async {
+    if (_selectedFile != null) {
+      await widget.onFilePicked(_selectedFile!);
+    }
+
+    if (widget.controller.text.trim().isNotEmpty) {
+      widget.onSend();
+    }
+
+    widget.controller.clear();
+    setState(() {
+      _canSend = false;
+      _selectedFile = null;
+    });
   }
 }

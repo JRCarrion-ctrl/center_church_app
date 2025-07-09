@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
-
+import 'package:ccf_app/features/groups/pages/group_join_page.dart';
 
 class JoinableGroupsSection extends StatefulWidget {
   const JoinableGroupsSection({super.key});
@@ -61,11 +60,14 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
           future: _futureGroups,
           builder: (context, snapshot) {
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: CircularProgressIndicator()),
+              );
             }
 
             if (snapshot.hasError) {
-              return Text('Error: ${snapshot.error}');
+              return Text('Error loading groups: ${snapshot.error}');
             }
 
             final groups = snapshot.data ?? [];
@@ -77,13 +79,23 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
             return Column(
               children: groups.map((group) {
                 return Card(
+                  margin: const EdgeInsets.symmetric(vertical: 6),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 2,
                   child: ListTile(
-                    title: Text(group.name),
-                    subtitle: group.description != null
-                        ? Text(group.description!)
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    title: Text(
+                      group.name,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    subtitle: group.description != null && group.description!.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 4.0),
+                            child: Text(group.description!, style: const TextStyle(color: Colors.black54)),
+                          )
                         : null,
                     trailing: const Icon(Icons.arrow_forward),
-                    onTap: () => context.push('/groups/${group.id}/join'),
+                    onTap: () => showGroupJoinModal(context, group.id),
                   ),
                 );
               }).toList(),

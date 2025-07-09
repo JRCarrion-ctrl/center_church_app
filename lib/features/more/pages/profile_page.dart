@@ -10,11 +10,9 @@ import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-
+import 'package:intl/intl.dart';
 
 import '../../../app_state.dart';
-
-
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -27,7 +25,12 @@ class _ProfilePageState extends State<ProfilePage> {
   final Logger _logger = Logger();
 
 
-  String? displayName, bio, photoUrl;
+  String? displayName, bio, photoUrl, phone;
+  String formatUSPhone(String input) {
+    final digits = input.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 10) return input;
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
+  }
   bool? visible;
   bool isLoading = true;
 
@@ -50,7 +53,7 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final profile = await supabase
           .from('profiles')
-          .select('display_name, bio, photo_url, visible_in_directory')
+          .select('display_name, bio, photo_url, visible_in_directory, phone')
           .eq('id', userId)
           .maybeSingle();
 
@@ -63,7 +66,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final familyData = await supabase
           .from('family_members')
-          .select('id, name, relationship, is_child, qr_code')
+          .select('id, display_name, relationship, is_child, qr_code')
           .eq('user_id', userId);
 
       final prayersData = await supabase
@@ -72,22 +75,34 @@ class _ProfilePageState extends State<ProfilePage> {
           .eq('user_id', userId)
           .order('created_at', ascending: false);
 
-      final eventsData = await supabase
-          .from('event_attendance')
-          .select('attending_count, created_at, group_events(title, event_date)')
-          .eq('user_id', userId)
-          .order('created_at', ascending: false);
+      final groupRSVPs = await supabase
+        .from('event_attendance')
+        .select('attending_count, created_at, group_events(title, event_date)')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+
+      final appRSVPs = await supabase
+        .from('app_event_attendance')
+        .select('attending_count, created_at, app_events(title, event_date)')
+        .eq('user_id', userId)
+        .order('created_at', ascending: false);
+      
+      final combinedRsvps = [
+        ...groupRSVPs.map((r) => {...r, 'source': 'group'}),
+        ...appRSVPs.map((r) => {...r, 'source': 'app'}),
+      ];
 
       setState(() {
         displayName = profile?['display_name'];
         bio = profile?['bio'];
         photoUrl = profile?['photo_url'];
+        phone = profile?['phone'];
         visible = profile?['visible_in_directory'] ?? true;
         groups = List<Map<String, dynamic>>.from(groupsData);
         _logger.i('groups in build: ${groups.length}');
         family = List<Map<String, dynamic>>.from(familyData);
         prayerRequests = List<Map<String, dynamic>>.from(prayersData);
-        eventRsvps = List<Map<String, dynamic>>.from(eventsData);
+        eventRsvps = List<Map<String, dynamic>>.from(combinedRsvps);
         isLoading = false;
       });
     } catch (e) {
@@ -157,8 +172,10 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       // 3. Save the public CloudFront URL in your profiles table
-      await supabase.from('profiles').update({'photo_url': finalUrl}).eq('id', userId);
-      setState(() => photoUrl = finalUrl);
+      final cacheBustedUrl = '$finalUrl?ts=${DateTime.now().millisecondsSinceEpoch}';
+      CachedNetworkImage.evictFromCache(photoUrl!);
+      await supabase.from('profiles').update({'photo_url': cacheBustedUrl}).eq('id', userId);
+      setState(() => photoUrl = cacheBustedUrl);
       _showSnackbar('Profile photo updated!');
     } catch (e, st) {
       _logger.e('Error uploading photo', error: e, stackTrace: st);
@@ -257,7 +274,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
     final userId = supabase.auth.currentUser?.id;
     if (userId != null) {
-      await supabase.from('profiles').delete().eq('id', userId);
+      final response = await supabase.functions.invoke('delete-user-account', body: {
+        'user_id': userId,
+      });
+      if (response.status != 200) {
+        _showSnackbar('Account deletion failed.');
+        return;
+      }
     }
     await supabase.auth.signOut();
     if (mounted) {
@@ -346,6 +369,25 @@ class _ProfilePageState extends State<ProfilePage> {
                               ),
                             ],
                           ),
+                          if (phone != null && phone!.isNotEmpty) const SizedBox(height: 4),
+                          if (phone != null)
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(formatUSPhone(phone!), style: const TextStyle(fontSize: 16)),
+                                IconButton(
+                                  icon: const Icon(Icons.edit),
+                                  onPressed: () => _editField(
+                                    label: 'Phone Number',
+                                    initialValue: phone ?? '',
+                                    onSaved: (v) async {
+                                      await _updateProfileField('phone', v);
+                                      setState(() => phone = v);
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
                         ],
                       ),
                     ),
@@ -389,7 +431,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       children: family.map((member) {
                         return ListTile(
                           leading: Icon(member['is_child'] == true ? Icons.child_care : Icons.person),
-                          title: Text(member['name'] ?? ''),
+                          title: Text(member['display_name'] ?? ''),
                           subtitle: Text(member['relationship'] ?? ''),
                           trailing: member['is_child'] == true && member['qr_code'] != null
                               ? IconButton(
@@ -430,12 +472,20 @@ class _ProfilePageState extends State<ProfilePage> {
                       title: 'My Event RSVPs',
                       emptyText: 'No upcoming or past RSVPs.',
                       children: eventRsvps.map((e) {
-                        final event = e['group_events'];
+                        final isAppEvent = e['source'] == 'app';
+                        final event = isAppEvent ? e['app_events'] : e['group_events'];
+                        final title = event?['title'] ?? 'Unnamed Event';
+                        final date = event?['event_date'];
+                        final formattedDate = date != null
+                            ? DateFormat('MMM d, yyyy • h:mm a').format(DateTime.parse(date).toLocal())
+                            : 'Unknown date';
+
                         return ListTile(
-                          leading: const Icon(Icons.event),
-                          title: Text(event?['name'] ?? 'Unnamed Event'),
-                          subtitle: Text('Attending: ${e['attending_count'] ?? 1} • Date: ${event?['date'] ?? ''}'),
+                          leading: Icon(isAppEvent ? Icons.public : Icons.group),
+                          title: Text(title),
+                          subtitle: Text('Attending: ${e['attending_count']} • $formattedDate'),
                         );
+
                       }).toList(),
                     ),
 

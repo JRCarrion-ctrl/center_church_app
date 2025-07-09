@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 
 import '../../calendar/event_service.dart';
@@ -132,7 +133,13 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
           if (e.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(e.imageUrl!, height: 200, fit: BoxFit.cover),
+              child: CachedNetworkImage(
+                imageUrl: e.imageUrl!,
+                height: 200,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 100),
+              )
             ),
           const SizedBox(height: 16),
           Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
@@ -189,8 +196,16 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {
               final profile = rsvp['profiles'] ?? {};
+              final photoUrl = profile['photo_url'];
               return ListTile(
-                leading: const Icon(Icons.person),
+                leading: CircleAvatar(
+                  backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                      ? CachedNetworkImageProvider(photoUrl)
+                      : null,
+                  child: (photoUrl == null || photoUrl.isEmpty)
+                      ? const Icon(Icons.person)
+                      : null,
+                ),
                 title: Text(profile['display_name'] ?? 'Unknown'),
                 subtitle: Text(profile['email'] ?? ''),
                 trailing: Text('x${rsvp['attending_count']}'),

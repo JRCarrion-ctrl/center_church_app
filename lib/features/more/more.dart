@@ -35,20 +35,19 @@ class _MorePageState extends State<MorePage> {
 
         final List<Map<String, dynamic>> moreItems = [
           {'title': 'Profile', 'route': '/more/profile'},
-          {'title': 'Family', 'route': null},
+          {'title': 'Family', 'route': '/more/family'},
           {'title': 'Directory', 'route': '/more/directory'},
           {'title': 'Nursery Staff', 'route': null},
           {'title': 'Bible Studies', 'route': null},
           {'title': 'Settings', 'route': '/more/settings'},
-          {'title': 'Permissions', 'route': null},
           {'title': 'How To', 'route': null},
           {'title': 'FAQ', 'route': null},
         ];
 
         if (isAdmin) {
-          moreItems.insert(9, {
-            'title': 'Group Deletion Requests',
-            'route': '/admin/group-deletion-requests',
+          moreItems.insert(8, {
+            'title': 'Permissions',
+            'route': null,
           });
         }
 

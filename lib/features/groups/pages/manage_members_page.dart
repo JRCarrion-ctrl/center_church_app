@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../group_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
@@ -55,7 +56,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
             ),
             const SizedBox(height: 32),
             FutureBuilder<List<Map<String, dynamic>>>(
-              future: GroupService().getPendingMembers(widget.groupId),
+              future: GroupService().getGroupJoinRequests(widget.groupId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const SizedBox();
@@ -82,9 +83,19 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
 
   Widget _buildMemberTile(Map<String, dynamic> member) {
     final isCurrentUser = Supabase.instance.client.auth.currentUser?.id == member['user_id'];
+    final photoUrl = member['photo_url'] != null
+      ? '${member['photo_url']}?t=${DateTime.now().millisecondsSinceEpoch}'
+      : null;
 
     return ListTile(
-      leading: const CircleAvatar(child: Icon(Icons.person)),
+      leading: CircleAvatar(
+        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+            ? CachedNetworkImageProvider(photoUrl)
+            : null,
+        child: (photoUrl == null || photoUrl.isEmpty)
+            ? const Icon(Icons.person)
+            : null,
+      ),
       title: Text(member['display_name'] + (isCurrentUser ? ' (You)' : '')),
       subtitle: Text(member['role']),
       onTap: () => context.push('/profile/${member['user_id']}'),
@@ -180,9 +191,18 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   }
 
   Widget _buildPendingTile(Map<String, dynamic> member) {
+    final photoUrl = member['photo_url'];
+
     return Card(
       child: ListTile(
-        leading: const CircleAvatar(child: Icon(Icons.person_outline)),
+        leading: CircleAvatar(
+          backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+              ? CachedNetworkImageProvider(photoUrl)
+              : null,
+          child: (photoUrl == null || photoUrl.isEmpty)
+              ? const Icon(Icons.person_outline)
+              : null,
+        ),
         title: Text(member['display_name'] ?? 'Unnamed'),
         subtitle: Text(member['email'] ?? ''),
         trailing: Row(
@@ -192,32 +212,29 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
               icon: const Icon(Icons.check, color: Colors.green),
               tooltip: 'Approve',
               onPressed: () async {
-                await GroupService().approveMemberRequest(widget.groupId, member['user_id']);
-                if (!mounted) return;
-                final updated = await GroupService().getGroupMembers(widget.groupId);
-                if (!mounted) return;
-                setState(() {
-                  _futureMembers = Future.value(updated);
+                await Supabase.instance.client.from('group_memberships').insert({
+                  'group_id': widget.groupId,
+                  'user_id': member['user_id'],
+                  'role': 'member',
+                  'status': 'approved',
+                  'joined_at': DateTime.now().toUtc().toIso8601String(),
                 });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Approved ${member['display_name']}')),
-                );
+                await Supabase.instance.client
+                  .from('group_requests')
+                  .delete()
+                  .eq('group_id', widget.groupId)
+                  .eq('user_id', member['user_id']);
               },
             ),
             IconButton(
               icon: const Icon(Icons.close, color: Colors.red),
               tooltip: 'Deny',
               onPressed: () async {
-                await GroupService().denyMemberRequest(widget.groupId, member['user_id']);
-                if (!mounted) return;
-                final updated = await GroupService().getGroupMembers(widget.groupId);
-                if (!mounted) return;
-                setState(() {
-                  _futureMembers = Future.value(updated);
-                });
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Denied ${member['display_name']}')),
-                );
+                await Supabase.instance.client
+                  .from('group_requests')
+                  .delete()
+                  .eq('group_id', widget.groupId)
+                  .eq('user_id', member['user_id']);
               },
             ),
           ],

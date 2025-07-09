@@ -4,13 +4,14 @@ import 'models/group_message.dart';
 
 class GroupChatService {
   final _client = Supabase.instance.client;
-  final _table = 'group_messages_with_senders';
+  final _view = 'group_messages_with_senders'; // For reading
+  final _table = 'group_messages'; // For writing
 
   /// Get latest messages
   Future<List<GroupMessage>> getMessages(String groupId) async {
     final data = await _client
-        .from(_table)
-        .select('*, profiles:sender_id(display_name)')
+        .from(_view)
+        .select()
         .eq('group_id', groupId)
         .order('created_at', ascending: true);
 
@@ -26,8 +27,8 @@ class GroupChatService {
     required int offset,
   }) async {
     final data = await _client
-        .from(_table)
-        .select('*, profiles:sender_id(display_name)')
+        .from(_view)
+        .select()
         .eq('group_id', groupId)
         .order('created_at', ascending: true)
         .range(offset, offset + limit - 1);
@@ -71,7 +72,7 @@ class GroupChatService {
   /// Real-time message stream (used only for inserts after timestamp)
   Stream<List<GroupMessage>> streamInsertedMessages(String groupId, DateTime since) {
     return _client
-        .from(_table)
+        .from(_view)
         .stream(primaryKey: ['id'])
         .eq('group_id', groupId)
         .order('created_at')
@@ -79,6 +80,17 @@ class GroupChatService {
             .map((row) => GroupMessage.fromMap(row))
             .where((m) => m.createdAt.isAfter(since))
             .toList());
+  }
+
+  /// Listen for new messages (realtime insert-only)
+  Stream<GroupMessage> streamNewMessages(String groupId) {
+    return _client
+        .from(_table)
+        .stream(primaryKey: ['id'])
+        .eq('group_id', groupId)
+        .order('created_at', ascending: true)
+        .map((list) => list.map((row) => GroupMessage.fromMap(row)).toList())
+        .expand((messages) => messages); // emits one message at a time
   }
 
   Future<void> addReaction(String messageId, String emoji) async {
@@ -98,16 +110,5 @@ class GroupChatService {
       result.putIfAbsent(row['message_id'], () => []).add(row['emoji']);
     }
     return result;
-  }
-
-  /// Listen for new messages (realtime insert-only)
-  Stream<GroupMessage> streamNewMessages(String groupId) {
-    return _client
-        .from(_table)
-        .stream(primaryKey: ['id'])
-        .eq('group_id', groupId)
-        .order('created_at', ascending: true)
-        .map((list) => list.map((row) => GroupMessage.fromMap(row)).toList())
-        .expand((messages) => messages); // emits one message at a time
   }
 }

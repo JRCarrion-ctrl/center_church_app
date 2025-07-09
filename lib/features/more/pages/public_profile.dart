@@ -20,6 +20,12 @@ class _PublicProfileState extends State<PublicProfile> {
   Map<String, dynamic>? profile;
   bool isLoading = true;
   String? errorMessage;
+  String formatUSPhone(String input) {
+    final digits = input.replaceAll(RegExp(r'\D'), '');
+    if (digits.length != 10) return input;
+    return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
+  }
+
 
   @override
   void initState() {
@@ -115,7 +121,7 @@ class _PublicProfileState extends State<PublicProfile> {
                 title: GestureDetector(
                   onTap: () => launchUrl(Uri.parse('tel:$phone')),
                   child: Text(
-                    phone,
+                    formatUSPhone(phone),
                     style: const TextStyle(decoration: TextDecoration.underline),
                   ),
                 ),
