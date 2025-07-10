@@ -58,23 +58,62 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
     setState(() => _isSaving = true);
 
     try {
+      // Upload child photo if selected
       String? photoUrl;
-      String filename = 'child_photos/${const Uuid().v4()}.jpg';
+      final imageFileName = 'child_photos/${const Uuid().v4()}.jpg';
       if (_photo != null) {
-        photoUrl = await _uploadPhoto(filename);
+        photoUrl = await _uploadPhoto(imageFileName);
       }
 
+      // Insert child profile (qr_code_url will be updated later)
       final childResponse = await supabase.from('child_profiles').insert({
         'display_name': _nameController.text.trim(),
         'birthday': _birthday?.toIso8601String(),
         'photo_url': photoUrl,
         'allergies': _allergiesController.text.trim(),
         'emergency_contact': _emergencyContactController.text.trim(),
-        'qr_code_url': null, // Set if needed
+        'qr_code_url': null,
       }).select().single();
 
       final childId = childResponse['id'];
 
+      // Generate QR Code for childId
+      final qrUri = Uri.https('api.qrserver.com', '/v1/create-qr-code', {
+        'size': '300x300',
+        'data': childId,
+      });
+
+      final qrResponse = await http.get(qrUri);
+      if (qrResponse.statusCode != 200) throw Exception('Failed to generate QR code');
+
+      // Upload QR code image
+      final qrFileName = 'child_qrcodes/$childId.png';
+      final presigned = await supabase.functions.invoke('generate-presigned-url', body: {
+        'filename': qrFileName,
+        'contentType': 'image/png',
+      });
+
+      final uploadUrl = presigned.data['uploadUrl'];
+      final finalQrUrl = presigned.data['finalUrl'];
+
+      if (uploadUrl == null || finalQrUrl == null) {
+        throw Exception('Presigned QR code upload URL missing');
+      }
+
+      final uploadResp = await http.put(
+        Uri.parse(uploadUrl),
+        body: qrResponse.bodyBytes,
+        headers: {'Content-Type': 'image/png'},
+      );
+
+      if (uploadResp.statusCode != 200) throw Exception('QR code upload failed');
+
+      // Update the child profile with qr_code_url
+      await supabase.from('child_profiles').update({
+        'qr_code_url': finalQrUrl,
+      }).eq('id', childId);
+
+      // Link child to family
       await supabase.from('family_members').insert({
         'family_id': widget.familyId,
         'child_profile_id': childId,
@@ -92,6 +131,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
 
   @override
   Widget build(BuildContext context) {

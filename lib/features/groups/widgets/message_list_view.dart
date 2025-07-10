@@ -65,14 +65,18 @@ class _MessageListViewState extends State<MessageListView> {
   }
 
   void _listenToNewMessages() {
-    _chatService.streamNewMessages(widget.groupId).listen((newMessage) {
+    _chatService.streamNewMessages(widget.groupId).listen((newMessage) async {
       if (!_messages.any((m) => m.id == newMessage.id)) {
+        // Refetch enriched version from the view
+        final enriched = await _chatService.getMessages(widget.groupId);
+        final latest = enriched.firstWhere((m) => m.id == newMessage.id, orElse: () => newMessage);
         setState(() {
-          _messages.add(newMessage);
+          _messages.add(latest);
         });
       }
     });
   }
+
 
   void _onScroll() {
     if (widget.scrollController.offset <= 200 && !_isLoading && _hasMore) {

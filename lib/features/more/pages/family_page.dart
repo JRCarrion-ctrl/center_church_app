@@ -3,14 +3,14 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../more/models/invite_modal.dart';
 
 class FamilyPage extends StatefulWidget {
   final String? familyId;
-  final String currentUserId;
 
-  const FamilyPage({super.key, required this.familyId, required this.currentUserId});
+  const FamilyPage({super.key, required this.familyId});
 
   @override
   State<FamilyPage> createState() => _FamilyPageState();
@@ -18,17 +18,33 @@ class FamilyPage extends StatefulWidget {
 
 class _FamilyPageState extends State<FamilyPage> {
   final supabase = Supabase.instance.client;
+  final logger = Logger();
   List<Map<String, dynamic>> members = [];
   bool isLoading = true;
   String? error;
+  late final String currentUserId;
 
   @override
   void initState() {
     super.initState();
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      context.go('/landing');
+      return;
+    }
+    currentUserId = user.id;
     if (widget.familyId != null) {
       _loadFamily();
     } else {
       setState(() => isLoading = false);
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (widget.familyId != null && members.isEmpty) {
+      _loadFamily();
     }
   }
 
@@ -50,11 +66,17 @@ class _FamilyPageState extends State<FamilyPage> {
     try {
       final result = await supabase
           .from('family_members')
-          .select('*, user:profiles(*), child:child_profiles(*)')
+          .select('*, user:profiles!family_members_user_id_fkey(*), inviter:profiles!family_members_invited_by_fkey(*), child:child_profiles(*)')
           .eq('family_id', familyId);
 
+      logger.i('Fetched family members: count=${result.length}');
+      for (var m in result) {
+        logger.d({'member': m});
+      }
+
       setState(() => members = List<Map<String, dynamic>>.from(result));
-    } catch (e) {
+    } catch (e, stack) {
+      logger.e('Failed to load family members', error: e, stackTrace: stack);
       setState(() => error = 'Failed to load family members');
     } finally {
       setState(() => isLoading = false);
@@ -66,7 +88,7 @@ class _FamilyPageState extends State<FamilyPage> {
     final newFamilyId = response['id'];
 
     await supabase.from('family_members').insert({
-      'user_id': widget.currentUserId,
+      'user_id': currentUserId,
       'family_id': newFamilyId,
       'relationship': 'Self',
       'is_child': false,
@@ -76,7 +98,6 @@ class _FamilyPageState extends State<FamilyPage> {
     if (mounted) {
       context.go('/more/family', extra: {
         'familyId': newFamilyId,
-        'currentUserId': widget.currentUserId,
       });
     }
   }
@@ -116,9 +137,9 @@ class _FamilyPageState extends State<FamilyPage> {
       return Scaffold(body: Center(child: Text(error!)));
     }
 
-    final self = members.where((m) => m['user']?['id'] == widget.currentUserId).toList();
+    final self = members.where((m) => m['user']?['id'] == currentUserId).toList();
     final children = members.where((m) => m['is_child'] == true).toList();
-    final adults = members.where((m) => m['is_child'] != true && m['user']?['id'] != widget.currentUserId).toList();
+    final adults = members.where((m) => m['is_child'] != true && m['user']?['id'] != currentUserId).toList();
     final pending = members.where((m) => m['status'] == 'pending').toList();
 
     return Scaffold(
@@ -136,13 +157,18 @@ class _FamilyPageState extends State<FamilyPage> {
           ),
         ],
       ),
-      body: ListView(
-        children: [
-          if (self.isNotEmpty) _buildSection("You", self),
-          if (children.isNotEmpty) _buildSection("Your Children", children),
-          if (adults.isNotEmpty) _buildSection("Family Members", adults),
-          if (pending.isNotEmpty) _buildSection("Pending Invites", pending),
-        ],
+      body: RefreshIndicator(
+        onRefresh: _loadFamily,
+        child: members.isEmpty
+            ? ListView(children: [SizedBox(height: 200, child: Center(child: Text("No family members found.")))])
+            : ListView(
+                children: [
+                  if (self.isNotEmpty) _buildSection("You", self),
+                  if (children.isNotEmpty) _buildSection("Your Children", children),
+                  if (adults.isNotEmpty) _buildSection("Family Members", adults),
+                  if (pending.isNotEmpty) _buildSection("Pending Invites", pending),
+                ],
+              ),
       ),
     );
   }
@@ -180,7 +206,7 @@ class _FamilyPageState extends State<FamilyPage> {
       ),
       onTap: () {
         if (isChild && child != null) {
-          context.pushNamed('view_child_profile', extra: child['id']);
+          context.pushNamed('view_child_profile', extra: child);
         } else if (user != null) {
           context.push("/profile/${user['id']}");
         }
@@ -195,7 +221,7 @@ class _FamilyPageState extends State<FamilyPage> {
       isScrollControlled: true,
       builder: (_) => InviteExistingUserModal(
         familyId: widget.familyId!,
-        invitedBy: widget.currentUserId,
+        invitedBy: currentUserId,
       ),
     );
   }
@@ -210,7 +236,7 @@ class _FamilyPageState extends State<FamilyPage> {
     final result = await supabase
         .from('family_members')
         .select('*, user:profiles(*)')
-        .eq('linked_user_id', widget.currentUserId)
+        .eq('linked_user_id', currentUserId)
         .eq('status', 'pending');
 
     if (mounted) {
@@ -269,7 +295,6 @@ class _FamilyPageState extends State<FamilyPage> {
       if (mounted && newFamilyId != null) {
         context.go('/more/family', extra: {
           'familyId': newFamilyId,
-          'currentUserId': widget.currentUserId,
         });
         return;
       }

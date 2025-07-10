@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
+import 'package:go_router/go_router.dart';
 
 class EditChildProfilePage extends StatefulWidget {
   final Map<String, dynamic> child;
@@ -90,6 +91,51 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     }
   }
 
+  Future<void> _confirmDelete() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Delete Child Profile'),
+        content: const Text('Are you sure you want to delete this profile? This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _deleteChild();
+    }
+  }
+
+  Future<void> _deleteChild() async {
+    setState(() => _saving = true);
+    try {
+      await _supabase.from('family_members')
+          .delete()
+          .eq('child_profile_id', widget.child['id']);
+      await _supabase.from('child_profiles')
+          .delete()
+          .eq('id', widget.child['id']);
+      if (mounted) {
+        context.go('/more', extra: {'familyId': widget.child['family_id']});
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _selectBirthday() async {
     final initialDate = DateTime.tryParse(_birthdayController.text) ?? DateTime(2015);
     final picked = await showDatePicker(
@@ -156,6 +202,15 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
               ElevatedButton(
                 onPressed: _saving ? null : _save,
                 child: _saving ? const CircularProgressIndicator() : const Text('Save Changes'),
+              ),
+              const SizedBox(height: 12),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red,
+                  foregroundColor: Colors.white,
+                ),
+                onPressed: _saving ? null : _confirmDelete,
+                child: const Text('Delete Profile'),
               )
             ],
           ),

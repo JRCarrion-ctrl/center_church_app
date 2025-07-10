@@ -10,39 +10,27 @@ import '../features/giving/give_page.dart';
 import 'package:ccf_app/features/calendar/pages/app_event_details_page.dart';
 import '../features/calendar/models/app_event.dart';
 import '../features/more/pages/family_page.dart';
+import '../features/more/pages/qr_checkin_scanner.dart';
+import '../features/more/pages/nursery_staff_page.dart';
+import '../features/more/pages/nursery_chat_page.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/give',
-    pageBuilder: (_, _) => buildSlidePage(
-      const GivePage(),
-      direction: SlideDirection.right,
-    ),
+    pageBuilder: (_, _) => buildSlidePage(const GivePage(), direction: SlideDirection.right),
   ),
-  GoRoute(
-    path: '/landing',
-    builder: (_, _) => const LandingPage(),
-  ),
+  GoRoute(path: '/landing', builder: (_, _) => const LandingPage()),
   GoRoute(
     path: '/more/profile',
-    pageBuilder: (_, _) => buildSlidePage(
-      const ProfilePage(),
-      direction: SlideDirection.right,
-    ),
+    pageBuilder: (_, _) => buildSlidePage(const ProfilePage(), direction: SlideDirection.right),
   ),
   GoRoute(
     path: '/more/settings',
-    pageBuilder: (_, _) => buildSlidePage(
-      const SettingsPage(),
-      direction: SlideDirection.right,
-    ),
+    pageBuilder: (_, _) => buildSlidePage(const SettingsPage(), direction: SlideDirection.right),
   ),
   GoRoute(
     path: '/more/directory',
-    pageBuilder: (_, _) => buildSlidePage(
-      const DirectoryPage(),
-      direction: SlideDirection.right,
-    ),
+    pageBuilder: (_, _) => buildSlidePage(const DirectoryPage(), direction: SlideDirection.right),
   ),
   GoRoute(
     path: '/event/:id',
@@ -52,10 +40,7 @@ final List<GoRoute> miscRoutes = [
     path: '/app-event/:id',
     pageBuilder: (context, state) {
       final event = state.extra as AppEvent;
-      return buildSlidePage(
-        AppEventDetailsPage(event: event),
-        direction: SlideDirection.right,
-      );
+      return buildSlidePage(AppEventDetailsPage(event: event), direction: SlideDirection.right);
     },
   ),
   GoRoute(
@@ -65,14 +50,8 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/family',
     pageBuilder: (context, state) {
-      final extra = state.extra as Map<String, dynamic>?;
-      return buildSlidePage(
-        FamilyPage(
-          familyId: extra?['familyId'],
-          currentUserId: extra?['currentUserId'],
-        ),
-        direction: SlideDirection.right,
-      );
+      final familyId = (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
+      return buildSlidePage(FamilyPage(familyId: familyId), direction: SlideDirection.right);
     },
   ),
   GoRoute(
@@ -80,13 +59,8 @@ final List<GoRoute> miscRoutes = [
     name: 'add_child_profile',
     pageBuilder: (context, state) {
       final familyId = state.extra;
-      if (familyId is! String) {
-        throw Exception('Missing or invalid family ID');
-      }
-      return buildSlidePage(
-        AddChildProfilePage(familyId: familyId),
-        direction: SlideDirection.right,
-      );
+      if (familyId is! String) throw Exception('Missing or invalid family ID');
+      return buildSlidePage(AddChildProfilePage(familyId: familyId), direction: SlideDirection.right);
     },
   ),
   GoRoute(
@@ -94,13 +68,8 @@ final List<GoRoute> miscRoutes = [
     name: 'edit_child_profile',
     pageBuilder: (context, state) {
       final child = state.extra;
-      if (child is! Map<String, dynamic>) {
-        throw Exception('Missing or invalid child data for edit');
-      }
-      return buildSlidePage(
-        EditChildProfilePage(child: child),
-        direction: SlideDirection.right,
-      );
+      if (child is! Map<String, dynamic>) throw Exception('Missing or invalid child data for edit');
+      return buildSlidePage(EditChildProfilePage(child: child), direction: SlideDirection.right);
     },
   ),
   GoRoute(
@@ -108,13 +77,24 @@ final List<GoRoute> miscRoutes = [
     name: 'view_child_profile',
     pageBuilder: (context, state) {
       final childId = state.extra;
-      if (childId is! String) {
-        throw Exception('Missing or invalid child ID for view');
-      }
-      return buildSlidePage(
-        ViewChildProfilePage(childId: childId),
-        direction: SlideDirection.right,
-      );
+      if (childId is! String) throw Exception('Missing or invalid child ID for view');
+      return buildSlidePage(ViewChildProfilePage(childId: childId), direction: SlideDirection.right);
+    },
+  ),
+  GoRoute(
+    path: '/nursery',
+    pageBuilder: (_, _) => buildSlidePage(const NurseryStaffPage(), direction: SlideDirection.right),
+  ),
+  GoRoute(
+    path: '/nursery/qr_checkin',
+    pageBuilder: (_, _) => buildSlidePage(const QRCheckinScannerPage(), direction: SlideDirection.right),
+  ),
+  GoRoute(
+    path: '/nursery/chat/:id',
+    pageBuilder: (context, state) {
+      final chatId = state.pathParameters['id'];
+      if (chatId == null) throw Exception('Missing chat ID');
+      return buildSlidePage(NurseryChatPage(chatId: chatId), direction: SlideDirection.right);
     },
   ),
 ];

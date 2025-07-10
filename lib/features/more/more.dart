@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-
 class MorePage extends StatefulWidget {
   const MorePage({super.key});
 
@@ -11,7 +10,6 @@ class MorePage extends StatefulWidget {
 }
 
 class _MorePageState extends State<MorePage> {
-
   Future<String?> _getCurrentUserRole() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return null;
@@ -34,20 +32,49 @@ class _MorePageState extends State<MorePage> {
         final isAdmin = ['admin', 'supervisor', 'leader', 'owner'].contains(role);
 
         final List<Map<String, dynamic>> moreItems = [
-          {'title': 'Profile', 'route': '/more/profile'},
-          {'title': 'Family', 'route': '/more/family'},
-          {'title': 'Directory', 'route': '/more/directory'},
-          {'title': 'Nursery Staff', 'route': null},
-          {'title': 'Bible Studies', 'route': null},
-          {'title': 'Settings', 'route': '/more/settings'},
-          {'title': 'How To', 'route': null},
-          {'title': 'FAQ', 'route': null},
+          {
+            'title': 'Profile',
+            'onTap': () => context.push('/more/profile'),
+          },
+          {
+            'title': 'Family',
+            'onTap': () async {
+              final userId = Supabase.instance.client.auth.currentUser?.id;
+              if (userId == null) return;
+
+              final result = await Supabase.instance.client
+                  .from('family_members')
+                  .select('family_id')
+                  .eq('user_id', userId)
+                  .eq('status', 'accepted')
+                  .maybeSingle();
+
+              final familyId = result?['family_id'] as String?;
+              if (!context.mounted) return;
+              context.push('/more/family', extra: {'familyId': familyId});
+            }
+          },
+          {
+            'title': 'Directory',
+            'onTap': () => context.push('/more/directory'),
+          },
+          {
+            'title': 'Nursery Staff',
+            'onTap': () => context.push('/nursery'),
+          },
+          {'title': 'Bible Studies', 'onTap': null},
+          {
+            'title': 'Settings',
+            'onTap': () => context.push('/more/settings'),
+          },
+          {'title': 'How To', 'onTap': null},
+          {'title': 'FAQ', 'onTap': null},
         ];
 
         if (isAdmin) {
           moreItems.insert(8, {
             'title': 'Permissions',
-            'route': null,
+            'onTap': null,
           });
         }
 
@@ -60,8 +87,9 @@ class _MorePageState extends State<MorePage> {
                 title: Text(item['title']),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () {
-                  if (item['route'] != null) {
-                    context.push(item['route']);
+                  final onTap = item['onTap'];
+                  if (onTap != null) {
+                    onTap();
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('${item['title']} page not available yet')),
@@ -75,5 +103,4 @@ class _MorePageState extends State<MorePage> {
       },
     );
   }
-
 }
