@@ -206,7 +206,7 @@ class _FamilyPageState extends State<FamilyPage> {
       ),
       onTap: () {
         if (isChild && child != null) {
-          context.pushNamed('view_child_profile', extra: child);
+          context.pushNamed('view_child_profile', extra: child['id']);
         } else if (user != null) {
           context.push("/profile/${user['id']}");
         }

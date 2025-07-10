@@ -51,17 +51,6 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId == null) return;
 
     try {
-      final profile = await supabase
-          .from('profiles')
-          .select('display_name, bio, photo_url, visible_in_directory, phone')
-          .eq('id', userId)
-          .maybeSingle();
-
-      final groupsData = await supabase
-          .from('group_memberships')
-          .select('role, groups(id, name)')
-          .eq('user_id', userId);
-
       final familiesData = await supabase
           .from('family_members')
           .select('family_id')
@@ -72,11 +61,22 @@ class _ProfilePageState extends State<ProfilePage> {
       final String? fetchedFamilyId = familiesData?['family_id'];
       familyId = fetchedFamilyId;
 
+      final userProfile = await supabase
+          .from('profiles')
+          .select('display_name, bio, photo_url, visible_in_directory, phone')
+          .eq('id', userId)
+          .maybeSingle();
+
+      final groupsData = await supabase
+          .from('group_memberships')
+          .select('role, groups(id, name)')
+          .eq('user_id', userId);
+
       final List<Map<String, dynamic>> familyData = fetchedFamilyId == null
           ? []
           : List<Map<String, dynamic>>.from(await supabase
               .from('family_members')
-              .select('id, relationship, status, is_child, child_profiles(display_name, qr_code_url), user_profiles(display_name, photo_url)')
+              .select('id, relationship, status, is_child, child:child_profiles(display_name, qr_code_url), user:profiles!family_members_user_id_fkey(display_name, photo_url)')
               .eq('family_id', fetchedFamilyId)
               .eq('status', 'accepted'));
 
@@ -104,11 +104,11 @@ class _ProfilePageState extends State<ProfilePage> {
       ];
 
       setState(() {
-        displayName = profile?['display_name'];
-        bio = profile?['bio'];
-        photoUrl = profile?['photo_url'];
-        phone = profile?['phone'];
-        visible = profile?['visible_in_directory'] ?? true;
+        displayName = userProfile?['display_name'];
+        bio = userProfile?['bio'];
+        photoUrl = userProfile?['photo_url'];
+        phone = userProfile?['phone'];
+        visible = userProfile?['visible_in_directory'] ?? true;
         groups = List<Map<String, dynamic>>.from(groupsData);
         family = familyData;
         prayerRequests = List<Map<String, dynamic>>.from(prayersData);
@@ -440,8 +440,8 @@ class _ProfilePageState extends State<ProfilePage> {
                       emptyText: 'No family members.',
                       children: family.map((member) {
                         final isChild = member['is_child'] == true;
-                        final childProfile = member['child_profiles'];
-                        final userProfile = member['user_profiles'];
+                        final childProfile = member['child'];
+                        final userProfile = member['user'];
                         final name = childProfile?['display_name'] ?? userProfile?['display_name'] ?? 'Unnamed';
                         final qrCode = childProfile?['qr_code_url'];
                         final relationship = member['relationship'] ?? '';

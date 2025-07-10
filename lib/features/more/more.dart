@@ -62,7 +62,10 @@ class _MorePageState extends State<MorePage> {
             'title': 'Nursery Staff',
             'onTap': () => context.push('/nursery'),
           },
-          {'title': 'Bible Studies', 'onTap': null},
+          {
+            'title': 'Bible Studies',
+            'onTap': () => context.push('/more/study'),
+          },
           {
             'title': 'Settings',
             'onTap': () => context.push('/more/settings'),
@@ -75,6 +78,10 @@ class _MorePageState extends State<MorePage> {
           moreItems.insert(8, {
             'title': 'Permissions',
             'onTap': null,
+          });
+          moreItems.insert(9, {
+            'title': 'Bible Study Requests',
+            'onTap': () => context.push('/more/study/requests'),
           });
         }
 
