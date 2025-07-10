@@ -2,6 +2,7 @@
 import 'package:ccf_app/features/more/pages/add_child_profile.dart';
 import 'package:ccf_app/features/more/pages/bible_studies_page.dart';
 import 'package:ccf_app/features/more/pages/bible_study_requests_page.dart';
+import 'package:ccf_app/features/more/pages/child_profile_page.dart';
 import 'package:ccf_app/features/more/pages/edit_bible_study_page.dart';
 import 'package:ccf_app/features/more/pages/edit_child_profile.dart';
 import 'package:ccf_app/features/more/pages/notes_viewer_page.dart';
@@ -165,5 +166,9 @@ final List<GoRoute> miscRoutes = [
       final url = state.extra as String;
       return NotesViewerPage(url: url);
     },
+  ),
+  GoRoute(
+    path: '/nursery/child-profile',
+    builder: (context, state) => ChildProfilePage(child: state.extra as Map<String, dynamic>),
   ),
 ];

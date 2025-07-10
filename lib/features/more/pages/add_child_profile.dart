@@ -77,10 +77,18 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
 
       final childId = childResponse['id'];
 
-      // Generate QR Code for childId
+      // ✅ Generate a random qr_key and store it
+      final qrKey = const Uuid().v4();
+      await supabase.from('child_profile_qr_keys').insert({
+        'child_id': childId,
+        'qr_key': qrKey,
+        // No expires_at — this makes it non-expiring
+      });
+
+      // ✅ Generate QR Code using qrKey, not childId
       final qrUri = Uri.https('api.qrserver.com', '/v1/create-qr-code', {
         'size': '300x300',
-        'data': childId,
+        'data': qrKey,
       });
 
       final qrResponse = await http.get(qrUri);
@@ -131,6 +139,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
       if (mounted) setState(() => _isSaving = false);
     }
   }
+
 
 
   @override

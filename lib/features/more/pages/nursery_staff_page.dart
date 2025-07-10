@@ -32,8 +32,8 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       final result = await supabase
           .from('child_checkins')
           .select('*, child:child_profiles(*)')
-          .filter('checked_out_at', 'is', null)
-          .order('checked_in_at', ascending: false);
+          .filter('check_out_time', 'is', null)
+          .order('check_in_time', ascending: false);
 
       setState(() => checkins = List<Map<String, dynamic>>.from(result));
     } catch (e) {
@@ -46,7 +46,7 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
   Future<void> _checkOut(String checkinId) async {
     await supabase
         .from('child_checkins')
-        .update({'checked_out_at': DateTime.now().toIso8601String()})
+        .update({'check_out_time': DateTime.now().toIso8601String()})
         .eq('id', checkinId);
     _loadCheckins();
   }
@@ -58,8 +58,8 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
 
     final response = await supabase
         .rpc('get_or_create_nursery_chat', params: {
-          'checkin_id': checkinId,
-          'child_id': childId,
+          'p_checkin_id': checkinId,
+          'p_child_id': childId,
         })
         .select()
         .maybeSingle();
@@ -68,6 +68,10 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
     if (chatId != null && mounted) {
       context.push('/nursery/chat/$chatId');
     }
+  }
+
+  void _viewChildProfile(Map<String, dynamic> child) {
+    context.push('/nursery/child-profile', extra: child);
   }
 
   @override
@@ -106,12 +110,21 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
                               : null,
                         ),
                         title: Text(child['display_name'] ?? 'Unnamed'),
-                        subtitle: Text('Checked in at: ${item['checked_in_at']}'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.logout, color: Colors.red),
-                          onPressed: () => _checkOut(item['id']),
+                        subtitle: Text('Checked in at: ${item['check_in_time']}'),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.chat),
+                              onPressed: () => _openOrCreateChat(item),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.logout, color: Colors.red),
+                              onPressed: () => _checkOut(item['id']),
+                            ),
+                          ],
                         ),
-                        onTap: () => _openOrCreateChat(item),
+                        onTap: () => _viewChildProfile(child),
                       );
                     },
                   ),

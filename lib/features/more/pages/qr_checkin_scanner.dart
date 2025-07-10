@@ -53,16 +53,14 @@ class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
   Future<String?> _verifyQrKey(String rawKey) async {
     final response = await supabase
         .from('child_profile_qr_keys')
-        .select('child_id, expires_at')
-        .eq('key', rawKey)
+        .select('child_id')
+        .eq('qr_key', rawKey)
         .maybeSingle();
 
-    if (response == null) return null;
-    final expires = DateTime.tryParse(response['expires_at']);
-    if (expires == null || expires.isBefore(DateTime.now())) return null;
-
-    return response['child_id'] as String?;
+    return response?['child_id'] as String?;
   }
+
+
 
   @override
   Widget build(BuildContext context) {
