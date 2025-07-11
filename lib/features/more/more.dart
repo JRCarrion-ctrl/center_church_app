@@ -70,8 +70,14 @@ class _MorePageState extends State<MorePage> {
             'title': 'Settings',
             'onTap': () => context.push('/more/settings'),
           },
-          {'title': 'How To', 'onTap': null},
-          {'title': 'FAQ', 'onTap': null},
+          {
+            'title': 'How To Use',
+            'onTap': () => context.push('/more/how_to'),
+          },
+          {
+            'title': 'FAQ',
+            'onTap': () => context.push('/more/faq'),
+          },
         ];
 
         if (isAdmin) {

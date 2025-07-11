@@ -5,6 +5,8 @@ import 'package:ccf_app/features/more/pages/bible_study_requests_page.dart';
 import 'package:ccf_app/features/more/pages/child_profile_page.dart';
 import 'package:ccf_app/features/more/pages/edit_bible_study_page.dart';
 import 'package:ccf_app/features/more/pages/edit_child_profile.dart';
+import 'package:ccf_app/features/more/pages/faq_page.dart';
+import 'package:ccf_app/features/more/pages/how_to_use_page.dart';
 import 'package:ccf_app/features/more/pages/notes_viewer_page.dart';
 import 'package:ccf_app/features/more/pages/view_child_profile.dart';
 import 'package:ccf_app/features/more/pages/public_profile.dart';
@@ -42,6 +44,20 @@ final List<GoRoute> miscRoutes = [
     path: '/more/settings',
     pageBuilder: (_, _) => buildSlidePage(
       const SettingsPage(),
+      direction: SlideDirection.right,
+    ),
+  ),
+  GoRoute(
+    path: '/more/faq',
+    pageBuilder: (_, _) => buildSlidePage(
+      const FAQPage(),
+      direction: SlideDirection.right,
+    ),
+  ),
+  GoRoute(
+    path: '/more/how_to',
+    pageBuilder: (_, _) => buildSlidePage(
+      const HowToUsePage(),
       direction: SlideDirection.right,
     ),
   ),
