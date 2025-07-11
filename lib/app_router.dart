@@ -12,6 +12,7 @@ GoRouter createRouter(AppState appState) => GoRouter(
   debugLogDiagnostics: true,
   refreshListenable: appState.authChangeNotifier,
   navigatorKey: navigatorKey,
+  initialLocation: '/landing',
   routes: [
     ...authRoutes,
     ...miscRoutes,
@@ -20,12 +21,20 @@ GoRouter createRouter(AppState appState) => GoRouter(
   ],
 
   redirect: (context, state) {
-    final isAtRoot = state.fullPath == '/' || state.fullPath == null;
+    debugPrint('🔁 REDIRECT from ${state.fullPath}, seenLanding: ${appState.hasSeenLanding}');
+    final path = state.uri.toString();
 
-    if (isAtRoot && !appState.hasSeenLanding) {
+    // Only redirect FROM "/" → "/landing" if landing hasn't been seen
+    if (path == '/' && !appState.hasSeenLanding) {
       return '/landing';
     }
 
+    // Only redirect FROM "/landing" → "/" if landing has been seen
+    if (path == '/landing' && appState.hasSeenLanding) {
+      return '/';
+    }
+
+    // ✅ Do NOT redirect anything else (e.g. /calendar, /groups, etc)
     return null;
   },
 

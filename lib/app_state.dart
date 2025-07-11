@@ -14,8 +14,23 @@ class AppState extends ChangeNotifier {
   bool _initialized = false;
   ThemeMode _themeMode = ThemeMode.system;
   bool _hasSeenLanding = false;
+  bool get isInitialized => _initialized && !_isLoading;
 
   bool get hasSeenLanding => _hasSeenLanding;
+
+  int _previousTabIndex = 2; // default to 'Home'
+  int _currentTabIndex = 2;
+
+  int get previousTabIndex => _previousTabIndex;
+  int get currentTabIndex => _currentTabIndex;
+
+  void updateTabIndex(int newIndex) {
+    if (newIndex != _currentTabIndex) {
+      _previousTabIndex = _currentTabIndex;
+      _currentTabIndex = newIndex;
+      notifyListeners();
+    }
+  }
 
   void markLandingSeen() {
     _hasSeenLanding = true;

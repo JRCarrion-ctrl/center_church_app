@@ -3,6 +3,7 @@ import 'package:ccf_app/app_router.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:go_router/go_router.dart';
 
 import 'app_state.dart';
 import 'features/splash/splash_screen.dart';
@@ -23,6 +24,7 @@ class CCFAppBoot extends StatefulWidget {
 class _CCFAppBootState extends State<CCFAppBoot> {
   bool _ready = false;
   late final AppState appState;
+  late final GoRouter _router;
 
   @override
   void initState() {
@@ -37,6 +39,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     );
 
     appState = AppState();
+    _router = createRouter(appState);
 
     setState(() => _ready = true);
   }
@@ -51,12 +54,16 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       value: appState,
       child: Consumer<AppState>(
         builder: (context, state, _) {
+          if (!state.isInitialized) {
+            return const MaterialApp(home: SplashScreen());
+          }
+
           return MaterialApp.router(
             debugShowCheckedModeBanner: false,
             theme: ccfLightTheme,
             darkTheme: ccfDarkTheme,
             themeMode: state.themeMode, // ✅ Still dynamic
-            routerConfig: createRouter(state),
+            routerConfig: _router,
           );
         },
       ),

@@ -11,19 +11,44 @@ class PrayerPage extends StatefulWidget {
 class _PrayerPageState extends State<PrayerPage> {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _prayerRequests = [];
+  String _userRole = 'user'; // default
   bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _loadPrayerRequests();
+    _loadRoleAndRequests();
+  }
+
+  Future<void> _loadRoleAndRequests() async {
+    await _getUserRole();
+    await _loadPrayerRequests();
+  }
+
+  Future<void> _getUserRole() async {
+    final userId = _supabase.auth.currentUser?.id;
+    if (userId == null) return;
+
+    final result = await _supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle();
+
+    if (mounted) {
+      setState(() {
+        _userRole = (result != null && result['role'] != null)
+            ? result['role'] as String
+            : 'user';
+      });
+    }
   }
 
   Future<void> _loadPrayerRequests() async {
     try {
       final response = await _supabase
           .from('prayer_requests')
-          .select('request, include_name, profiles(display_name)')
+          .select('id, request, include_name, profiles(display_name)')
           .eq('status', 'open')
           .order('created_at', ascending: false);
 
@@ -154,11 +179,13 @@ class _PrayerPageState extends State<PrayerPage> {
                         child: ListTile(
                           title: Text(item['request'] ?? ''),
                           subtitle: Text('From: $name'),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close),
-                            tooltip: 'Mark as closed',
-                            onPressed: () => _confirmAndClosePrayer(item['id']),
-                          ),
+                          trailing: (_userRole == 'supervisor' || _userRole == 'owner')
+                            ? IconButton(
+                                icon: const Icon(Icons.close),
+                                tooltip: 'Mark as closed',
+                                onPressed: () => _confirmAndClosePrayer(item['id']),
+                              )
+                            : null,
                         ),
                       );
                     },

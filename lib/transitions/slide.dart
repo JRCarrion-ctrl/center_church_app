@@ -26,18 +26,23 @@ CustomTransitionPage<T> buildSlidePage<T>(
   SlideDirection direction = SlideDirection.right,
   Curve curve = Curves.easeInOut,
 }) {
+  final offsetAnimation = Tween<Offset>(
+    begin: _getOffset(direction),
+    end: Offset.zero,
+  ).chain(CurveTween(curve: curve));
+
   return CustomTransitionPage<T>(
+    key: ValueKey(child.runtimeType), // helpful for route diffing
     child: child,
     transitionsBuilder: (context, animation, _, child) {
-      final offsetAnimation = Tween<Offset>(
-        begin: _getOffset(direction),
-        end: Offset.zero,
-      ).chain(CurveTween(curve: curve));
-
-      return SlideTransition(
-        position: animation.drive(offsetAnimation),
-        child: child,
+      return FadeTransition(
+        opacity: animation,
+        child: SlideTransition(
+          position: animation.drive(offsetAnimation),
+          child: child,
+        ),
       );
     },
   );
 }
+

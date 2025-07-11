@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../app_state.dart';
 import '../../shared/widgets/widgets.dart';
+import '../../features/auth/profile.dart';
 
 class LandingPage extends StatefulWidget {
   final VoidCallback? onContinue;
@@ -16,17 +17,19 @@ class LandingPage extends StatefulWidget {
 class _LandingPageState extends State<LandingPage> {
   String selectedLanguage = 'en';
 
-  String get churchName =>
-      selectedLanguage == 'en' ? 'Center Church Frederick' : 'Centro Cristiano Frederick';
+  String get churchName => selectedLanguage == 'en'
+      ? 'Center Church Frederick'
+      : 'Centro Cristiano Frederick';
 
   void setLanguage(String lang) {
-    setState(() {
-      selectedLanguage = lang;
-    });
+    setState(() => selectedLanguage = lang);
   }
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final profile = appState.profile;
+
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
 
@@ -34,78 +37,53 @@ class _LandingPageState extends State<LandingPage> {
     final fontSize = screenHeight * 0.022;
     final padding = screenHeight * 0.018;
 
-    final appState = context.watch<AppState>();
-    final profile = appState.profile;
-
-    final statusText = profile != null
-        ? 'Logged in as: ${profile.displayName}'
-        : 'Not Currently Logged In: Login/Signup';
-
     if (appState.isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
       body: Stack(
         children: [
-          // Background image
-          SizedBox.expand(
-            child: Image.asset(
-              'assets/landing_background.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          // Theme-adaptive overlay
-          Container(
-            color: isDark
-                ? Colors.black.withAlpha(64)
-                : Colors.black.withAlpha(32), 
-          ),
-          // Main content
-          Center(
-            child: SingleChildScrollView(
-              physics: const NeverScrollableScrollPhysics(),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  _buildLogo(screenHeight),
-                  SizedBox(height: screenHeight * 0.015),
-                  _buildTitle(fontSize),
-                  SizedBox(height: screenHeight * 0.06),
-                  _buildButtons(fontSize, padding),
-                ],
-              ),
-            ),
-          ),
-          // Auth status prompt
-          Positioned(
-            bottom: 30,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: GestureDetector(
-                onTap: profile == null ? () => context.push('/auth') : null,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(80),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    statusText,
-                    style: const TextStyle(
-                    color: Colors.white,
-                      fontSize: 14,
-                      decoration: TextDecoration.none,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
+          _buildBackground(isDark),
+          _buildMainContent(screenHeight, fontSize, padding),
+          _buildAuthStatus(profile),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBackground(bool isDark) {
+    return Stack(
+      children: [
+        SizedBox.expand(
+          child: Image.asset(
+            'assets/landing_background.png',
+            fit: BoxFit.cover,
+          ),
+        ),
+        Container(
+          color: isDark
+              ? Colors.black.withAlpha(64)
+              : Colors.black.withAlpha(32),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildMainContent(double screenHeight, double fontSize, double padding) {
+    return Center(
+      child: SingleChildScrollView(
+        physics: const NeverScrollableScrollPhysics(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _buildLogo(screenHeight),
+            SizedBox(height: screenHeight * 0.015),
+            _buildTitle(fontSize),
+            SizedBox(height: screenHeight * 0.06),
+            _buildButtons(fontSize, padding),
+          ],
+        ),
       ),
     );
   }
@@ -166,15 +144,50 @@ class _LandingPageState extends State<LandingPage> {
         SizedBox(height: padding * 3.3),
         PrimaryButton(
           title: "Home",
-          onTap: () {
-            context.go('/');
-            Provider.of<AppState>(context, listen: false).setIndex(2);
-            Provider.of<AppState>(context, listen: false).markLandingSeen();
-          },
+          onTap: _goToHome,
           fontSize: fontSize,
           padding: padding,
         ),
       ],
     );
+  }
+
+  Widget _buildAuthStatus(Profile? profile) {
+    final statusText = profile != null
+        ? 'Logged in as: ${profile.displayName}'
+        : 'Not Currently Logged In: Login/Signup';
+
+    return Positioned(
+      bottom: 30,
+      left: 0,
+      right: 0,
+      child: Center(
+        child: GestureDetector(
+          onTap: profile == null ? () => context.push('/auth') : null,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.black.withAlpha(80),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Text(
+              statusText,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                decoration: TextDecoration.none,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _goToHome() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    appState.markLandingSeen();
+    appState.updateTabIndex(2); // Home
+    context.go('/');
   }
 }

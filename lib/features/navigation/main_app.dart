@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../app_state.dart';
 
 class MainApp extends StatelessWidget {
   final Widget child;
 
-  final tabs = const [
+  static const tabs = [
     _TabItem(path: '/groups', icon: Icons.group, label: 'Groups'),
     _TabItem(path: '/calendar', icon: Icons.calendar_today, label: 'Calendar'),
     _TabItem(path: '/', icon: Icons.home, label: 'Home'),
@@ -15,6 +16,13 @@ class MainApp extends StatelessWidget {
   ];
 
   const MainApp({super.key, required this.child});
+
+  int _resolveTabIndex(String location) {
+    final index = tabs.indexWhere(
+      (t) => location == t.path || location.startsWith('${t.path}/'),
+    );
+    return index == -1 ? 2 : index; // default to Home
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -25,10 +33,7 @@ class MainApp extends StatelessWidget {
     return Consumer<AppState>(
       builder: (context, appState, _) {
         final currentLocation = GoRouterState.of(context).uri.toString();
-        final currentIndex = tabs.indexWhere(
-          (t) => currentLocation == t.path || currentLocation.startsWith('${t.path}/'),
-        );
-        final selectedIndex = currentIndex == -1 ? 2 : currentIndex;
+        final selectedIndex = _resolveTabIndex(currentLocation);
 
         return Scaffold(
           appBar: AppBar(
@@ -58,7 +63,7 @@ class MainApp extends StatelessWidget {
             actions: [
               IconButton(
                 icon: Icon(Icons.notifications, color: textColor),
-                onPressed: () => context.pushReplacement('/notifications'),
+                onPressed: () => context.go('/notifications'),
               ),
             ],
             bottom: PreferredSize(
@@ -74,13 +79,12 @@ class MainApp extends StatelessWidget {
             currentIndex: selectedIndex,
             onTap: (index) {
               if (index != selectedIndex) {
-                context.pushReplacement(tabs[index].path);
+                  appState.updateTabIndex(index);
+                  context.go(tabs[index].path);
               }
             },
             selectedItemColor: theme.colorScheme.primary,
             unselectedItemColor: theme.unselectedWidgetColor,
-            selectedLabelStyle: TextStyle(color: theme.colorScheme.primary),
-            unselectedLabelStyle: TextStyle(color: theme.unselectedWidgetColor),
             items: tabs
                 .map((t) => BottomNavigationBarItem(icon: Icon(t.icon), label: t.label))
                 .toList(),
