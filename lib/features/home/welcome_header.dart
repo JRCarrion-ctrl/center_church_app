@@ -1,6 +1,8 @@
 // File: lib/features/home/welcome_header.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:ccf_app/app_state.dart';
 
 class WelcomeHeader extends StatefulWidget {
   const WelcomeHeader({super.key});
@@ -64,6 +66,7 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
     final theme = Theme.of(context).textTheme;
     final brightness = Theme.of(context).brightness;
     final color = brightness == Brightness.dark ? Colors.white : Colors.black;
+    final showCountdown = context.watch<AppState>().showCountdown;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.center,
@@ -84,13 +87,14 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
             color: color,
           ),
         ),
-        Text(
-          'Starts in: ${_formatDuration(_untilEnglish)}',
-          style: theme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: color,
+        if (showCountdown)
+          Text(
+            'Starts in: ${_formatDuration(_untilEnglish)}',
+            style: theme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
           ),
-        ),
         const SizedBox(height: 12),
         Text(
           'Spanish Service • 11:30 AM',
@@ -99,13 +103,14 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
             color: color,
           ),
         ),
-        Text(
-          'Starts in: ${_formatDuration(_untilSpanish)}',
-          style: theme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-            color: color,
+        if (showCountdown)
+          Text(
+            'Starts in: ${_formatDuration(_untilSpanish)}',
+            style: theme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w500,
+              color: color,
+            ),
           ),
-        ),
       ],
     );
   }

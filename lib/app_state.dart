@@ -1,28 +1,79 @@
-// File: lib/app_state.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 import 'features/auth/profile.dart';
 import 'features/auth/profile_service.dart';
 
 class AppState extends ChangeNotifier {
+  // State
   int _selectedIndex = 0;
-  Profile? _profile;
+  int _previousTabIndex = 2;
+  int _currentTabIndex = 2;
   bool _isLoading = true;
   bool _initialized = false;
-  ThemeMode _themeMode = ThemeMode.system;
   bool _hasSeenLanding = false;
+  ThemeMode _themeMode = ThemeMode.system;
+
+  // Profile
+  Profile? _profile;
+  final ValueNotifier<int> _authChangeNotifier = ValueNotifier(0);
+  final _authStreamController = StreamController<void>.broadcast();
+
+  // Settings
+  bool _showCountdown = true;
+  bool _showGroupAnnouncements = true;
+  String _languageCode = 'en';
+  String get languageCode => _languageCode;
+
+  AppState() {
+    _init();
+  }
+
+  // Initialization
+  void _init() async {
+    if (_initialized) return;
+    _initialized = true;
+
+    _setLoading(true);
+    await _loadTheme();
+    await _loadAnnouncementSettings();
+    await _loadCachedProfile();
+    await _loadLanguage();
+
+    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
+      _restoreSession();
+    });
+
+    await _restoreSession();
+    _setLoading(false);
+  }
+
+  // Getters
   bool get isInitialized => _initialized && !_isLoading;
-
+  bool get isLoading => _isLoading;
   bool get hasSeenLanding => _hasSeenLanding;
-
-  int _previousTabIndex = 2; // default to 'Home'
-  int _currentTabIndex = 2;
-
+  int get selectedIndex => _selectedIndex;
   int get previousTabIndex => _previousTabIndex;
   int get currentTabIndex => _currentTabIndex;
+  ThemeMode get themeMode => _themeMode;
+  Profile? get profile => _profile;
+  bool get isAuthenticated => _profile != null;
+  String? get displayName => _profile?.displayName;
+  String? get role => _profile?.role;
+  bool get showCountdown => _showCountdown;
+  bool get showGroupAnnouncements => _showGroupAnnouncements;
+  ValueNotifier<int> get authChangeNotifier => _authChangeNotifier;
+
+  // Navigation
+  void setIndex(int index) {
+    if (_selectedIndex != index) {
+      _selectedIndex = index;
+      notifyListeners();
+    }
+  }
 
   void updateTabIndex(int newIndex) {
     if (newIndex != _currentTabIndex) {
@@ -32,9 +83,17 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // Landing
   void markLandingSeen() {
     _hasSeenLanding = true;
     notifyListeners();
+  }
+
+  void setLanguageCode(String code) async {
+    _languageCode = code;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('language_code', code);
   }
 
   Future<void> resetLandingSeen() async {
@@ -44,55 +103,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  final _authStreamController = StreamController<void>.broadcast();
-
-  AppState() {
-    _init();
+  Future<void> _loadLanguage() async {
+    final prefs = await SharedPreferences.getInstance();
+    _languageCode = prefs.getString('language_code') ?? 'en';
   }
 
-  // Navigation Index
-  int get selectedIndex => _selectedIndex;
-  void setIndex(int index) {
-    if (_selectedIndex != index) {
-      _selectedIndex = index;
-      notifyListeners();
-    }
-  }
-
-  // Theme State
-  ThemeMode get themeMode => _themeMode;
+  // Theme
   void setThemeMode(ThemeMode mode) async {
     _themeMode = mode;
     notifyListeners();
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('theme_mode', mode.name);
-  }
-
-  // Auth & Profile State
-  Profile? get profile => _profile;
-  bool get isLoading => _isLoading;
-  bool get isAuthenticated => _profile != null;
-  String? get displayName => _profile?.displayName;
-  String? get role => _profile?.role;
-
-  final ValueNotifier<int> _authChangeNotifier = ValueNotifier(0);
-  ValueNotifier<int> get authChangeNotifier => _authChangeNotifier;
-
-  void _init() async {
-    if (_initialized) return;
-    _initialized = true;
-
-    _setLoading(true);
-    await _loadTheme();
-    await _loadCachedProfile();
-
-    Supabase.instance.client.auth.onAuthStateChange.listen((event) {
-      _restoreSession();
-    });
-
-    await _restoreSession();
-    _setLoading(false);
   }
 
   Future<void> _loadTheme() async {
@@ -112,6 +134,53 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  // Announcements settings
+  void setShowCountdown(bool value) async {
+    _showCountdown = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('showCountdown', value);
+  }
+
+  void setShowGroupAnnouncements(bool value) async {
+    _showGroupAnnouncements = value;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('showGroupAnnouncements', value);
+  }
+
+  Future<void> _loadAnnouncementSettings() async {
+    final prefs = await SharedPreferences.getInstance();
+    _showCountdown = prefs.getBool('showCountdown') ?? true;
+    _showGroupAnnouncements = prefs.getBool('showGroupAnnouncements') ?? true;
+  }
+
+  // Profile
+  void setProfile(Profile? profile) {
+    _setProfile(profile);
+    _cacheProfile(profile);
+    _notifyAuthChanged();
+  }
+
+  Future<void> signOut() async {
+    await Supabase.instance.client.auth.signOut();
+    _setProfile(null);
+    await _cacheProfile(null);
+    _notifyAuthChanged();
+  }
+
+  void _setProfile(Profile? profile) {
+    if (_profile != profile) {
+      _profile = profile;
+      notifyListeners();
+    }
+  }
+
+  void _notifyAuthChanged() {
+    _authChangeNotifier.value++;
+  }
+
+  // Session
   Future<void> _restoreSession() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
@@ -152,35 +221,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
-    await Supabase.instance.client.auth.signOut();
-    _setProfile(null);
-    await _cacheProfile(null);
-    _notifyAuthChanged();
-  }
-
-  void setProfile(Profile? profile) {
-    _setProfile(profile);
-    _cacheProfile(profile);
-    _notifyAuthChanged();
-  }
-
-  void _setProfile(Profile? profile) {
-    if (_profile != profile) {
-      _profile = profile;
-      notifyListeners();
+  void updateOneSignalUser() {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      OneSignal.login(userId);
+    } else {
+      OneSignal.logout();
     }
   }
 
+  // Cleanup
   void _setLoading(bool loading) {
     if (_isLoading != loading) {
       _isLoading = loading;
       notifyListeners();
     }
-  }
-
-  void _notifyAuthChanged() {
-     _authChangeNotifier.value++;
   }
 
   @override

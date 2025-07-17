@@ -66,6 +66,9 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
     final allergies = (child['allergies'] as String?)?.trim().isNotEmpty == true
         ? child['allergies']
         : 'None';
+    final notes = (child['notes'] as String?)?.trim().isNotEmpty == true
+        ? child['notes']
+        : 'None';
     final emergency = (child['emergency_contact'] as String?)?.trim().isNotEmpty == true
         ? child['emergency_contact']
         : 'None';
@@ -103,6 +106,11 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
               leading: const Icon(Icons.local_hospital),
               title: const Text('Allergies'),
               subtitle: Text(allergies),
+            ),
+            ListTile(
+              leading: const Icon(Icons.local_hospital),
+              title: const Text('Notes'),
+              subtitle: Text(notes),
             ),
             ListTile(
               leading: const Icon(Icons.contact_phone),

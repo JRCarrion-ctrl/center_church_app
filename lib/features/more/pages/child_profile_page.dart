@@ -27,6 +27,8 @@ class ChildProfilePage extends StatelessWidget {
           const SizedBox(height: 10),
           Text('Allergies: ${child['allergies'] ?? 'None'}'),
           const SizedBox(height: 10),
+          Text('Notes: ${child['notes'] ?? 'None'}'),
+          const SizedBox(height: 10),
           Text('Emergency Contact: ${child['emergency_contact'] ?? 'N/A'}'),
         ],
       ),

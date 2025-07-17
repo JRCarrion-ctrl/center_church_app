@@ -22,12 +22,17 @@ class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
 
   Future<void> _handleScan(String rawValue) async {
     if (_processing) return;
-    setState(() => _processing = true);
+    _processing = true;
+    _controller.stop();
 
     try {
       final childId = await _verifyQrKey(rawValue);
       if (childId == null) {
-        setState(() => _error = 'Invalid or expired QR code');
+        setState(() {
+          _error = 'Invalid or expired QR code';
+          _processing = false;
+        });
+        _controller.start();
         return;
       }
 
@@ -44,9 +49,13 @@ class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
       }
     } catch (e, stack) {
       logger.e('Check-in failed', error: e, stackTrace: stack);
-      if (mounted) setState(() => _error = 'Check-in failed.');
-    } finally {
-      if (mounted) setState(() => _processing = false);
+      if (mounted){
+        setState(() {
+          _error = 'Check-in failed.';
+          _processing = false;
+        });
+        _controller.start();
+      }
     }
   }
 
@@ -73,7 +82,7 @@ class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
             onDetect: (BarcodeCapture capture) {
               final barcode = capture.barcodes.firstOrNull;
               final value = barcode?.rawValue;
-              if (value != null) _handleScan(value);
+              if (value != null && !_processing) _handleScan(value);
             },
           ),
           if (_processing)

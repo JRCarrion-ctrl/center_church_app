@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+import 'package:ccf_app/app_state.dart';
 
 class AnnouncementsSection extends StatefulWidget {
   const AnnouncementsSection({super.key});
@@ -89,6 +91,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
 
     final hasMain = mainAnnouncements.isNotEmpty;
     final hasGroup = groupAnnouncements.isNotEmpty;
+    final appState = context.watch<AppState>();
+    final showGroupAnnouncements = appState.showGroupAnnouncements;
 
     if (!hasMain && !hasGroup) {
       return const Center(
@@ -114,13 +118,15 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _buildAnnouncementCard(a),
                   )),
-            const SizedBox(height: 20),
-            const Text(
-              'Group Announcements',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 8),
-            _buildGroupList(),
+            if (showGroupAnnouncements) ...[
+              const SizedBox(height: 20),
+              const Text(
+                'Group Announcements',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 8),
+              _buildGroupList(),
+            ],
           ],
         ),
       ),

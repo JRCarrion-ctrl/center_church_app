@@ -1,4 +1,4 @@
-package com.example.center_church_app
+package com.jcarriondev.CenterApp
 
 import io.flutter.embedding.android.FlutterActivity
 

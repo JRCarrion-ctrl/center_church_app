@@ -4,9 +4,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
-import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'dart:typed_data';
-import 'package:file_saver/file_saver.dart';
 import 'package:logger/logger.dart';
 
 import '../media_cache_service.dart';
@@ -77,37 +76,31 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
 
   Future<void> _downloadFile(File file) async {
     final messenger = ScaffoldMessenger.of(context);
-    if (Platform.isIOS && _isImage(file.path)) {
-      await saveImageToGallery(file);
-    } else {
-      await saveToGallery(file); // FileSaver fallback
-    }
-
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Saved successfully')),
-    );
-  }
-
-  Future<void> saveImageToGallery(File imageFile) async {
-    final messenger = ScaffoldMessenger.of(context);
-    final bytes = await imageFile.readAsBytes();
-    await ImageGallerySaver.saveImage(Uint8List.fromList(bytes), name: "my_image");
-    messenger.showSnackBar(
-      const SnackBar(content: Text('Saved to Gallery')),
-    );
-  }
-
-  Future<void> saveToGallery(File file) async {
-    final fileName = p.basename(file.path);
+    final fileName = p.basenameWithoutExtension(file.path);
     final fileBytes = await file.readAsBytes();
 
-    final res = await FileSaver.instance.saveFile(
-      name: fileName,
-      bytes: fileBytes,
-      mimeType: MimeType.other,
-    );
-
-    _logger.i('Saved: $res');
+    try {
+      if (_isImage(file.path)) {
+        final result = await ImageGallerySaverPlus.saveImage(
+          Uint8List.fromList(fileBytes),
+          quality: 100,
+          name: fileName,
+          isReturnImagePathOfIOS: true,
+        );
+        _logger.i('Image saved result: $result');
+        messenger.showSnackBar(const SnackBar(content: Text('Image saved to gallery')));
+      } else {
+        final result = await ImageGallerySaverPlus.saveFile(
+          file.path,
+          isReturnPathOfIOS: true,
+        );
+        _logger.i('File saved result: $result');
+        messenger.showSnackBar(const SnackBar(content: Text('File saved')));
+      }
+    } catch (e) {
+      _logger.e('Save failed: $e');
+      messenger.showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+    }
   }
 
   @override

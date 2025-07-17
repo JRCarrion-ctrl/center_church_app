@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import 'auth_service.dart';
+import '../../app_state.dart';
 import 'profile_service.dart';
 import 'profile.dart';
 
@@ -46,7 +48,8 @@ class _LoginFormState extends State<LoginForm> {
 
     setState(() => _isLoading = true);
     try {
-      final authResponse = await AuthService().signIn(email, password);
+      final authService = AuthService(context.read<AppState>());
+      final authResponse = await authService.signIn(email, password);
       final user = authResponse.user;
 
       if (user != null) {

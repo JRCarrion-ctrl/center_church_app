@@ -508,13 +508,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     const Divider(),
 
-                    ListTile(
-                      leading: const Icon(Icons.notifications),
-                      title: const Text('Notification Settings'),
-                      onTap: () => _showSnackbar('Notification settings coming soon!'),
-                    ),
-                    const SizedBox(height: 24),
-
                     ElevatedButton(
                       onPressed: _logout,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red),

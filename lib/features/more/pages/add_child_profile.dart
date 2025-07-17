@@ -18,6 +18,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _allergiesController = TextEditingController();
+  final _notesController = TextEditingController();
   final _emergencyContactController = TextEditingController();
   DateTime? _birthday;
   final supabase = Supabase.instance.client;
@@ -71,6 +72,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
         'birthday': _birthday?.toIso8601String(),
         'photo_url': photoUrl,
         'allergies': _allergiesController.text.trim(),
+        "notes" : _notesController.text.trim(),
         'emergency_contact': _emergencyContactController.text.trim(),
         'qr_code_url': null,
       }).select().single();
@@ -173,8 +175,13 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
               ),
               const SizedBox(height: 12),
               TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Notes (optional)'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
                 controller: _emergencyContactController,
-                decoration: const InputDecoration(labelText: 'Emergency Contact'),
+                decoration: const InputDecoration(labelText: 'Emergency Contact [Name, Phone Number]'),
               ),
               const SizedBox(height: 12),
               ListTile(

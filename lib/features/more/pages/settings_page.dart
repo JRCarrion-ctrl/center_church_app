@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:provider/provider.dart';
 import '../../../app_state.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -18,6 +19,53 @@ class _SettingsPageState extends State<SettingsPage> {
     _loadAppVersion();
   }
 
+  void _showLanguageSheet() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    String selected = appState.languageCode;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) => Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                RadioListTile<String>(
+                  title: const Text('English'),
+                  value: 'en',
+                  groupValue: selected,
+                  onChanged: (val) {
+                    if (val != null) {
+                      appState.setLanguageCode(val);
+                      setModalState(() => selected = val);
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                RadioListTile<String>(
+                  title: const Text('Spanish'),
+                  value: 'es',
+                  groupValue: selected,
+                  onChanged: (val) {
+                    if (val != null) {
+                      appState.setLanguageCode(val);
+                      setModalState(() => selected = val);
+                      Navigator.of(context).pop();
+                    }
+                  },
+                ),
+                // Add more languages here
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
     setState(() {
@@ -27,8 +75,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final themeMode = AppState().themeMode;
-    final isOwner = AppState().role == 'Owner';
+    final appState = Provider.of<AppState>(context);
+    final themeMode = appState.themeMode;
+    final isOwner = appState.role == 'Owner';
 
     return Scaffold(
       appBar: AppBar(
@@ -40,7 +89,7 @@ class _SettingsPageState extends State<SettingsPage> {
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         children: [
           _settingsCard(title: 'General', children: [
-            _tile('Language', onTap: () {}),
+            _tile('Language', onTap: _showLanguageSheet),
             _tile('Notifications', onTap: () {}),
             _tile('Calendar Sync', onTap: () {}),
             _tile('Privacy', onTap: () {}),
@@ -66,9 +115,18 @@ class _SettingsPageState extends State<SettingsPage> {
           ]),
 
           _settingsCard(title: 'Announcements', children: [
-            _switchTile('Show Countdown', value: true, onChanged: (_) {}),
-            _switchTile('Show Group Announcements in Home', value: true, onChanged: (_) {}),
+            _switchTile(
+              'Show Countdown',
+              value: appState.showCountdown,
+              onChanged: (val) => appState.setShowCountdown(val),
+            ),
+            _switchTile(
+              'Show Group Announcements in Home',
+              value: appState.showGroupAnnouncements,
+              onChanged: (val) => appState.setShowGroupAnnouncements(val),
+            ),
           ]),
+
 
           _settingsCard(title: 'Link Settings', children: [
             _tile('Default Link Opening', onTap: () {}),
@@ -106,8 +164,7 @@ class _SettingsPageState extends State<SettingsPage> {
 
   void _setThemeMode(ThemeMode? mode) {
     if (mode != null) {
-      AppState().setThemeMode(mode);
-      setState(() {});
+      Provider.of<AppState>(context, listen: false).setThemeMode(mode);
     }
   }
 

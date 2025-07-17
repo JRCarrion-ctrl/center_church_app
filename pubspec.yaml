@@ -35,9 +35,8 @@ dependencies:
   cached_network_image: ^3.4.1
   sqflite: ^2.4.2
   share_plus: ^11.0.0
-  image_gallery_saver: ^2.0.3
+  image_gallery_saver_plus: ^4.0.1
   mime: ^2.0.0
-  file_saver: ^0.3.0
   add_2_calendar: ^3.0.1
   flutter_linkify: ^6.0.0
   flutter_link_previewer: ^3.2.2
@@ -48,6 +47,9 @@ dependencies:
   syncfusion_flutter_pdfviewer: ^30.1.39
   webview_flutter: ^4.13.0
   package_info_plus: ^8.3.0
+  onesignal_flutter: ^5.3.4
+  permission_handler: ^12.0.1
+  easy_localization: ^3.0.7+1
   
 dev_dependencies:
   flutter_test:
@@ -57,6 +59,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
+    - assets/translations/
     - assets/logo_dark.png
     - assets/logo_light.png
     - assets/logo_image.png

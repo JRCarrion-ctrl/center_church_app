@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'auth_service.dart';
+import '../../app_state.dart';
+import 'package:provider/provider.dart';
 import 'profile_service.dart';
 import 'profile.dart';
 
@@ -87,7 +89,8 @@ class _RegisterFormState extends State<RegisterForm> {
     setState(() => _isLoading = true);
 
     try {
-      final response = await AuthService().signUp(email, password);
+      final authService = AuthService(context.read<AppState>());
+      final response = await authService.signUp(email, password);
       final user = response.user;
       final session = response.session;
 

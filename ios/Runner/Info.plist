@@ -30,6 +30,11 @@
 	<string>Used to access PDF files</string>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Used to view downloaded files</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>LSSupportsOpeningDocumentsInPlace</key>

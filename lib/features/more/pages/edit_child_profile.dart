@@ -23,6 +23,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   late TextEditingController _nameController;
   late TextEditingController _birthdayController;
   late TextEditingController _allergiesController;
+  late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
   File? _photoFile;
   String? _initialPhotoUrl;
@@ -34,6 +35,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     _nameController = TextEditingController(text: widget.child['display_name'] ?? '');
     _birthdayController = TextEditingController(text: widget.child['birthday'] ?? '');
     _allergiesController = TextEditingController(text: widget.child['allergies'] ?? '');
+    _notesController = TextEditingController(text: widget.child['notes'] ?? '');
     _emergencyContactController = TextEditingController(text: widget.child['emergency_contact'] ?? '');
     _initialPhotoUrl = widget.child['photo_url'];
   }
@@ -75,6 +77,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       'display_name': _nameController.text.trim(),
       'birthday': _birthdayController.text.trim(),
       'allergies': _allergiesController.text.trim(),
+      'notes': _notesController.text.trim(),
       'emergency_contact': _emergencyContactController.text.trim(),
       'photo_url': photoUrl,
     };
@@ -192,6 +195,11 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
               TextFormField(
                 controller: _allergiesController,
                 decoration: const InputDecoration(labelText: 'Allergies'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(labelText: 'Notes'),
               ),
               const SizedBox(height: 12),
               TextFormField(
