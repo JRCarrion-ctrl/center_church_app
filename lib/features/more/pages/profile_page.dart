@@ -241,11 +241,78 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _changePassword() async {
-    final email = supabase.auth.currentUser?.email;
-    if (email == null) return;
-    await supabase.auth.resetPasswordForEmail(email);
-    _showSnackbar('Password reset email sent.');
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Change Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Current Password'),
+            ),
+            TextField(
+              controller: newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'New Password'),
+            ),
+            TextField(
+              controller: confirmPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirm New Password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    final currentPassword = currentPasswordController.text.trim();
+    final newPassword = newPasswordController.text.trim();
+    final confirmPassword = confirmPasswordController.text.trim();
+
+    if (newPassword != confirmPassword) {
+      _showSnackbar('New passwords do not match.');
+      return;
+    }
+
+    try {
+      final email = supabase.auth.currentUser?.email;
+      if (email == null) throw Exception('Email not found');
+
+      // Reauthenticate to verify current password
+      final signInRes = await supabase.auth.signInWithPassword(email: email, password: currentPassword);
+      if (signInRes.user == null) throw Exception('Current password is incorrect.');
+
+      final updateRes = await supabase.auth.updateUser(UserAttributes(password: newPassword));
+      if (updateRes.user != null) {
+        _showSnackbar('Password updated successfully.');
+      } else {
+        throw Exception('Password update failed.');
+      }
+    } catch (e) {
+      _logger.e('Failed to update password', error: e);
+      _showSnackbar('Failed to update password.');
+    }
   }
+
 
   Future<void> _removePrayerRequest(String id) async {
     await supabase.from('prayer_requests').delete().eq('id', id);

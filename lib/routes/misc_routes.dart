@@ -1,4 +1,6 @@
 // lib/routes/misc_routes.dart
+import 'package:ccf_app/features/more/models/contact_support.dart';
+import 'package:ccf_app/features/more/models/data_delete_account.dart';
 import 'package:ccf_app/features/more/pages/add_child_profile.dart';
 import 'package:ccf_app/features/more/pages/bible_studies_page.dart';
 import 'package:ccf_app/features/more/pages/bible_study_requests_page.dart';
@@ -186,5 +188,13 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/nursery/child-profile',
     builder: (context, state) => ChildProfilePage(child: state.extra as Map<String, dynamic>),
+  ),
+  GoRoute(
+    path: '/data-and-delete',
+    builder: (context, state) => const DataAndDeleteAccountPage(),
+  ),
+  GoRoute(
+    path: '/contact-support',
+    builder: (context, state) => const ContactSupportPage(),
   ),
 ];

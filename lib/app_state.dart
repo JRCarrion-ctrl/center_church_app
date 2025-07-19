@@ -6,6 +6,8 @@ import 'package:onesignal_flutter/onesignal_flutter.dart';
 
 import 'features/auth/profile.dart';
 import 'features/auth/profile_service.dart';
+import 'features/groups/models/group_model.dart';
+import 'features/groups/group_service.dart';
 
 class AppState extends ChangeNotifier {
   // State
@@ -28,6 +30,33 @@ class AppState extends ChangeNotifier {
   String _languageCode = 'en';
   String get languageCode => _languageCode;
 
+  // Groups
+  List<GroupModel> _userGroups = [];
+  List<String> _visibleCalendarGroupIds = [];
+
+  List<GroupModel> get userGroups => _userGroups;
+  List<String> get visibleCalendarGroupIds => _visibleCalendarGroupIds;
+
+  void setUserGroups(List<GroupModel> groups) {
+    _userGroups = groups;
+    notifyListeners();
+  }
+
+  void setVisibleCalendarGroupIds(List<String> groupIds) async {
+    _visibleCalendarGroupIds = groupIds;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('visibleCalendarGroupIds', groupIds);
+  }
+
+  Future<void> loadUserGroups() async {
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId != null) {
+      final groups = await GroupService().getUserGroups(userId);
+      setUserGroups(groups);
+    }
+  }
+
   AppState() {
     _init();
   }
@@ -42,6 +71,7 @@ class AppState extends ChangeNotifier {
     await _loadAnnouncementSettings();
     await _loadCachedProfile();
     await _loadLanguage();
+    await _loadVisibleCalendarGroupIds();
 
     Supabase.instance.client.auth.onAuthStateChange.listen((event) {
       _restoreSession();
@@ -49,6 +79,11 @@ class AppState extends ChangeNotifier {
 
     await _restoreSession();
     _setLoading(false);
+  }
+
+  Future<void> _loadVisibleCalendarGroupIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    _visibleCalendarGroupIds = prefs.getStringList('visibleCalendarGroupIds') ?? [];
   }
 
   // Getters
@@ -189,6 +224,7 @@ class AppState extends ChangeNotifier {
         final profile = await ProfileService().getProfile(user.id);
         _setProfile(profile);
         await _cacheProfile(profile);
+        await loadUserGroups();
       } else {
         _setProfile(null);
         await _cacheProfile(null);

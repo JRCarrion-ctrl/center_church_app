@@ -1,14 +1,15 @@
-// File: lib/features/calendar/pages/calendar_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
 
+import '../../../app_state.dart';
 import '../event_service.dart';
 import '../models/group_event.dart';
 import '../models/app_event.dart';
 import '../widgets/app_event_form_modal.dart';
+import '../../more/models/calendar_settings_modal.dart';
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -33,7 +34,6 @@ class _CalendarPageState extends State<CalendarPage> {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
     if (user == null) return;
-    // fetch global profile role
     final res = await client.from('profiles').select('role').eq('id', user.id).single();
     final role = res['role'] as String?;
     setState(() {
@@ -42,10 +42,15 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   Future<_CalendarData> _loadAllEvents() async {
+    final appState = Provider.of<AppState>(context, listen: false);
     final service = EventService();
     final appEvents = await service.fetchAppEvents();
     final groupEvents = await service.fetchUpcomingGroupEvents();
-    return _CalendarData(appEvents: appEvents, groupEvents: groupEvents);
+
+    final visibleGroupIds = appState.visibleCalendarGroupIds.toSet();
+    final filteredGroupEvents = groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
+
+    return _CalendarData(appEvents: appEvents, groupEvents: filteredGroupEvents);
   }
 
   Future<void> _openAppForm([AppEvent? existing]) async {
@@ -57,69 +62,92 @@ class _CalendarPageState extends State<CalendarPage> {
     setState(() => _calendarFuture = _loadAllEvents());
   }
 
+  void _openCalendarSettings() {
+    CalendarSettingsModal.show(context).then((_) {
+      setState(() {
+        _calendarFuture = _loadAllEvents();
+        _refreshKey = UniqueKey().toString();
+      });
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: FutureBuilder<_CalendarData>(
-        future: _calendarFuture,
-        key: Key(_refreshKey),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text('Error: ${snap.error}'));
-          }
+      body: Stack(
+        children: [
+          FutureBuilder<_CalendarData>(
+            future: _calendarFuture,
+            key: Key(_refreshKey),
+            builder: (context, snap) {
+              if (snap.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snap.hasError) {
+                return Center(child: Text('Error: ${snap.error}'));
+              }
 
-          final appEvents = snap.data!.appEvents;
-          final groupEvents = snap.data!.groupEvents;
+              final appEvents = snap.data!.appEvents;
+              final groupEvents = snap.data!.groupEvents;
 
-          if (appEvents.isEmpty && groupEvents.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                setState(() {
-                  _calendarFuture = _loadAllEvents();
-                  _refreshKey = UniqueKey().toString();
-                });
-                await _calendarFuture;
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: const [
-                  SizedBox(height: 200),
-                  Center(child: Text('No upcoming events.')),
-                ],
-              ),
-            );
-          }
+              if (appEvents.isEmpty && groupEvents.isEmpty) {
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(() {
+                      _calendarFuture = _loadAllEvents();
+                      _refreshKey = UniqueKey().toString();
+                    });
+                    await _calendarFuture;
+                  },
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: const [
+                      SizedBox(height: 200),
+                      Center(child: Text('No upcoming events.')),
+                    ],
+                  ),
+                );
+              }
 
-          final List<Widget> items = [];
+              final List<Widget> items = [];
 
-          if (appEvents.isNotEmpty) {
-            items.add(_sectionHeader('App-Wide Events'));
-            items.addAll(appEvents.map(_buildAppEventCard));
-          }
+              if (appEvents.isNotEmpty) {
+                items.add(_sectionHeader('App-Wide Events'));
+                items.addAll(appEvents.map(_buildAppEventCard));
+              }
 
-          if (groupEvents.isNotEmpty) {
-            items.add(_sectionHeader('Your Group Events'));
-            items.addAll(groupEvents.map(_buildGroupEventCard));
-          }
+              if (groupEvents.isNotEmpty) {
+                items.add(_sectionHeader('Your Group Events'));
+                items.addAll(groupEvents.map(_buildGroupEventCard));
+              }
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _calendarFuture = _loadAllEvents();
-                _refreshKey = UniqueKey().toString();
-                });
-              await _calendarFuture;
+              return RefreshIndicator(
+                onRefresh: () async {
+                  setState(() {
+                    _calendarFuture = _loadAllEvents();
+                    _refreshKey = UniqueKey().toString();
+                  });
+                  await _calendarFuture;
+                },
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  children: items,
+                ),
+              );
             },
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: items,
+          ),
+          Positioned(
+            bottom: 16,
+            left: 16,
+            child: FloatingActionButton.small(
+              heroTag: 'calendar-settings',
+              onPressed: _openCalendarSettings,
+              tooltip: 'Manage Calendars',
+              child: const Icon(Icons.tune),
             ),
-          );
-        },
+          ),
+        ],
       ),
       floatingActionButton: _canManageApp
           ? FloatingActionButton(
@@ -160,7 +188,7 @@ class _CalendarPageState extends State<CalendarPage> {
           leading: e.imageUrl != null
               ? Image.network(
                   e.imageUrl!,
-                  gaplessPlayback: true, // prevents flicker
+                  gaplessPlayback: true,
                   fit: BoxFit.cover,
                 )
               : const Icon(Icons.announcement, size: 40),
@@ -176,7 +204,7 @@ class _CalendarPageState extends State<CalendarPage> {
           leading: e.imageUrl != null
               ? Image.network(
                   e.imageUrl!,
-                  gaplessPlayback: true, // prevents flicker
+                  gaplessPlayback: true,
                   fit: BoxFit.cover,
                 )
               : const Icon(Icons.event, size: 40),
@@ -186,7 +214,6 @@ class _CalendarPageState extends State<CalendarPage> {
       );
 }
 
-/// Simple holder for both lists
 class _CalendarData {
   final List<AppEvent> appEvents;
   final List<GroupEvent> groupEvents;

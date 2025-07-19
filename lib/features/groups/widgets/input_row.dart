@@ -1,6 +1,8 @@
 // File: lib/features/groups/widgets/input_row.dart
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -20,16 +22,27 @@ Future<File> _compressImage(File file) async {
   return File(targetPath)..writeAsBytesSync(compressedBytes!);
 }
 
+Future<List<String>> searchKlipyGifs(String query) async {
+  const apiKey = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
+  final url = Uri.parse('https://api.klipy.io/v1/gifs/search?q=$query&key=$apiKey');
+  final response = await http.get(url);
+  if (response.statusCode != 200) throw Exception('Failed to fetch GIFs');
+  final data = json.decode(response.body);
+  return List<String>.from(data['results'].map((g) => g['url']));
+}
+
 class InputRow extends StatefulWidget {
   final TextEditingController controller;
   final VoidCallback onSend;
   final Future<void> Function(File file) onFilePicked;
+  final Future<void> Function(String gifUrl) onGifPicked;
 
   const InputRow({
     super.key,
     required this.controller,
     required this.onSend,
     required this.onFilePicked,
+    required this.onGifPicked,
   });
 
   @override
@@ -65,116 +78,151 @@ class _InputRowState extends State<InputRow> {
   Future<void> _showAttachmentOptions() async {
     showModalBottomSheet(
       context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_camera),
-                title: const Text('Take Photo'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
-                  if (picked != null) {
-                    File file = File(picked.path);
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: const Text('Take Photo'),
+              onTap: () async {
+                Navigator.pop(context);
+                final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
+                if (picked != null) {
+                  File file = File(picked.path);
+                  file = await _compressImage(file);
+                  setState(() => _selectedFile = file);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Photo Library'),
+              onTap: () async {
+                Navigator.pop(context);
+                final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+                if (picked != null) {
+                  File file = File(picked.path);
+                  file = await _compressImage(file);
+                  setState(() => _selectedFile = file);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.insert_drive_file),
+              title: const Text('Browse Files'),
+              onTap: () async {
+                Navigator.pop(context);
+                final result = await FilePicker.platform.pickFiles();
+                if (result != null && result.files.isNotEmpty && result.files.first.path != null) {
+                  File file = File(result.files.first.path!);
+                  final ext = file.path.toLowerCase();
+                  if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
                     file = await _compressImage(file);
-                    setState(() => _selectedFile = file);
                   }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: const Text('Photo Library'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
-                  if (picked != null) {
-                    File file = File(picked.path);
-                    file = await _compressImage(file);
-                    setState(() => _selectedFile = file);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file),
-                title: const Text('Browse Files'),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final result = await FilePicker.platform.pickFiles();
-                  if (result != null && result.files.isNotEmpty && result.files.first.path != null) {
-                    File file = File(result.files.first.path!);
-                    final ext = file.path.toLowerCase();
-                    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
-                      file = await _compressImage(file);
-                    }
-                    setState(() => _selectedFile = file);
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+                  setState(() => _selectedFile = file);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
     );
+  }
+
+  Future<void> _openGifPicker() async {
+    final gifUrl = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => const _KlipyGifPicker(),
+    );
+
+    if (gifUrl != null) {
+      await widget.onGifPicked(gifUrl);
+      widget.controller.clear();
+      setState(() {
+        _selectedFile = null;
+        _canSend = false;
+      });
+    }
+  }
+
+  bool _isGifUrl(String text) {
+    return text.toLowerCase().endsWith('.gif') && text.startsWith('http');
+  }
+
+  Future<void> _handleSend() async {
+    final text = widget.controller.text.trim();
+
+    if (_selectedFile != null) {
+      await widget.onFilePicked(_selectedFile!);
+    }
+
+    if (_isGifUrl(text)) {
+      await widget.onGifPicked(text);
+    } else if (text.isNotEmpty) {
+      widget.onSend();
+    }
+
+    widget.controller.clear();
+    setState(() {
+      _selectedFile = null;
+      _canSend = false;
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final containerColor = isDark
-        ? Color.fromARGB(255, 44, 44, 48)
-        : Color.fromARGB(255, 245, 245, 250);
+    final containerColor = isDark ? const Color(0xFF2C2C30) : const Color(0xFFF5F5FA);
+    final borderColor = isDark ? const Color(0xFF46464B) : const Color(0xFFDCDCE6);
 
-    final borderColor = isDark
-        ? Color.fromARGB(255, 70, 70, 75)
-        : Color.fromARGB(255, 220, 220, 230);
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 200),
-          child: _selectedFile != null
-              ? Padding(
-                  key: ValueKey(_selectedFile!.path),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                  child: Dismissible(
-                    key: ValueKey(_selectedFile!.path),
-                    direction: DismissDirection.horizontal,
-                    onDismissed: (_) => setState(() => _selectedFile = null),
-                    child: Card(
-                      margin: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                        leading: _selectedFile!.path.endsWith('.png') ||
-                                _selectedFile!.path.endsWith('.jpg') ||
-                                _selectedFile!.path.endsWith('.jpeg') ||
-                                _selectedFile!.path.endsWith('.webp') ||
-                                _selectedFile!.path.endsWith('.heic')
-                            ? ClipRRect(
-                                borderRadius: BorderRadius.circular(8),
-                                child: Image.file(_selectedFile!, width: 48, height: 48, fit: BoxFit.cover),
-                              )
-                            : const Icon(Icons.insert_drive_file),
-                        title: Text(_selectedFile!.path.split('/').last),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => setState(() => _selectedFile = null),
-                        ),
-                      ),
-                    ),
+        if (_selectedFile != null)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            child: Dismissible(
+              key: ValueKey(_selectedFile!.path),
+              direction: DismissDirection.horizontal,
+              onDismissed: (_) => setState(() => _selectedFile = null),
+              child: Card(
+                margin: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                  leading: _selectedFile!.path.endsWith('.png') ||
+                           _selectedFile!.path.endsWith('.jpg') ||
+                           _selectedFile!.path.endsWith('.jpeg') ||
+                           _selectedFile!.path.endsWith('.webp') ||
+                           _selectedFile!.path.endsWith('.heic')
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(_selectedFile!, width: 48, height: 48, fit: BoxFit.cover),
+                        )
+                      : const Icon(Icons.insert_drive_file),
+                  title: Text(_selectedFile!.path.split('/').last),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => setState(() => _selectedFile = null),
                   ),
-                )
-              : const SizedBox.shrink(),
-        ),
+                ),
+              ),
+            ),
+          ),
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               IconButton.filledTonal(
+                icon: const Icon(Icons.gif_box_outlined),
+                tooltip: 'GIF',
+                onPressed: _openGifPicker,
+              ),
+              IconButton.filledTonal(
                 icon: const Icon(Icons.attach_file),
-                tooltip: 'Attach file',
+                tooltip: 'Attach',
                 onPressed: _showAttachmentOptions,
               ),
               const SizedBox(width: 6),
@@ -193,9 +241,7 @@ class _InputRowState extends State<InputRow> {
                       controller: widget.controller,
                       minLines: 1,
                       maxLines: 5,
-                      style: TextStyle(
-                        color: isDark ? Colors.white : Colors.black,
-                      ),
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
                       textCapitalization: TextCapitalization.sentences,
                       decoration: const InputDecoration(
                         hintText: 'Type a message...',
@@ -218,20 +264,80 @@ class _InputRowState extends State<InputRow> {
       ],
     );
   }
+}
 
-  Future<void> _handleSend() async {
-    if (_selectedFile != null) {
-      await widget.onFilePicked(_selectedFile!);
+class _KlipyGifPicker extends StatefulWidget {
+  const _KlipyGifPicker();
+
+  @override
+  State<_KlipyGifPicker> createState() => _KlipyGifPickerState();
+}
+
+class _KlipyGifPickerState extends State<_KlipyGifPicker> {
+  final TextEditingController _searchController = TextEditingController();
+  List<String> gifs = [];
+  bool loading = false;
+
+  Future<void> _search() async {
+    final q = _searchController.text.trim();
+    if (q.isEmpty) return;
+    setState(() => loading = true);
+    try {
+      gifs = await searchKlipyGifs(q);
+    } catch (_) {
+      gifs = [];
     }
+    setState(() => loading = false);
+  }
 
-    if (widget.controller.text.trim().isNotEmpty) {
-      widget.onSend();
-    }
-
-    widget.controller.clear();
-    setState(() {
-      _canSend = false;
-      _selectedFile = null;
-    });
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        top: 16,
+        left: 16,
+        right: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          TextField(
+            controller: _searchController,
+            decoration: InputDecoration(
+              labelText: 'Search GIFs',
+              suffixIcon: IconButton(
+                icon: const Icon(Icons.search),
+                onPressed: _search,
+              ),
+            ),
+            onSubmitted: (_) => _search(),
+          ),
+          const SizedBox(height: 12),
+          if (loading)
+            const CircularProgressIndicator()
+          else if (gifs.isEmpty)
+            const Text('No GIFs yet. Try searching.')
+          else
+            SizedBox(
+              height: 300,
+              child: GridView.count(
+                crossAxisCount: 3,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                children: gifs.map((url) {
+                  return GestureDetector(
+                    onTap: () => Navigator.of(context).pop(url),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(url, fit: BoxFit.cover),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 }

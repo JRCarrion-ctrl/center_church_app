@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../app_state.dart';
+import '../models/calendar_settings_modal.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -18,6 +22,60 @@ class _SettingsPageState extends State<SettingsPage> {
     super.initState();
     _loadAppVersion();
   }
+
+  Future<void> _checkForUpdates(BuildContext context) async {
+    final info = await PackageInfo.fromPlatform();
+    final currentVersion = info.version;
+    if (!context.mounted) return;
+    final platform = Theme.of(context).platform == TargetPlatform.iOS ? 'ios' : 'android';
+
+    final res = await Supabase.instance.client
+        .from('app_versions')
+        .select()
+        .eq('platform', platform)
+        .single();
+
+    final latestVersion = res['latest_version'] as String?;
+    final updateUrl = res['update_url'] as String?;
+
+    if (latestVersion == null || updateUrl == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to check for updates.')),
+      );
+      return;
+    }
+
+    if (latestVersion.compareTo(currentVersion) > 0) {
+      if (!context.mounted) return;
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Update Available'),
+          content: Text('A new version ($latestVersion) is available.'),
+          actions: [
+            TextButton(
+              child: const Text('Later'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Update Now'),
+              onPressed: () {
+                Navigator.of(context).pop();
+                launchUrl(Uri.parse(updateUrl));
+              },
+            ),
+          ],
+        ),
+      );
+    } else {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('You’re using the latest version.')),
+      );
+    }
+  }
+
 
   void _showLanguageSheet() {
     final appState = Provider.of<AppState>(context, listen: false);
@@ -57,13 +115,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     }
                   },
                 ),
-                // Add more languages here
               ],
             ),
           ),
         );
       },
     );
+  }
+
+  void _showCalendarSyncModal() {
+    CalendarSettingsModal.show(context);
   }
 
   Future<void> _loadAppVersion() async {
@@ -77,7 +138,6 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) {
     final appState = Provider.of<AppState>(context);
     final themeMode = appState.themeMode;
-    final isOwner = appState.role == 'Owner';
 
     return Scaffold(
       appBar: AppBar(
@@ -91,15 +151,14 @@ class _SettingsPageState extends State<SettingsPage> {
           _settingsCard(title: 'General', children: [
             _tile('Language', onTap: _showLanguageSheet),
             _tile('Notifications', onTap: () {}),
-            _tile('Calendar Sync', onTap: () {}),
-            _tile('Privacy', onTap: () {}),
-            _tile('Data & Delete Account', onTap: () {}),
+            _tile('Calendar', onTap: _showCalendarSyncModal),
+            _tile('Data & Delete Account', onTap: () {context.push('/data-and-delete');}),
           ]),
 
           _settingsCard(title: 'App Info', children: [
             _disabledTile('Version: $appVersion'),
-            _tile('Check for Updates', onTap: () {}),
-            _tile('Contact Support', onTap: () {}),
+            _tile('Check for Updates', onTap: () => _checkForUpdates(context)),
+            _tile('Contact Support', onTap: () {context.push('/contact-support');}),
             _tile('View Terms and Conditions', onTap: () {}),
             _tile('Privacy Policy', onTap: () {}),
           ]),
@@ -108,10 +167,6 @@ class _SettingsPageState extends State<SettingsPage> {
             _radioTile('System Default', ThemeMode.system, themeMode),
             _radioTile('Light Mode', ThemeMode.light, themeMode),
             _radioTile('Dark Mode', ThemeMode.dark, themeMode),
-          ]),
-
-          _settingsCard(title: 'Security', children: [
-            _switchTile('Enable Biometric Login', value: false, onChanged: (_) {}),
           ]),
 
           _settingsCard(title: 'Announcements', children: [
@@ -127,22 +182,12 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ]),
 
-
-          _settingsCard(title: 'Link Settings', children: [
-            _tile('Default Link Opening', onTap: () {}),
-          ]),
-
           _settingsCard(title: 'Accessibility', children: [
             _tile('Font Size', onTap: () {}),
             _tile('High Contrast Mode', onTap: () {}),
           ]),
 
-          _settingsCard(title: 'Quiet Hours', children: [
-            _tile('Notification Quiet Hours', onTap: () {}),
-          ]),
-
           _settingsCard(title: 'App Behavior', children: [
-            _switchTile('Remember Last Tab', value: true, onChanged: (_) {}),
             _switchTile('Auto-scroll to Latest Message', value: false, onChanged: (_) {}),
           ]),
 
@@ -150,13 +195,6 @@ class _SettingsPageState extends State<SettingsPage> {
             _switchTile('Auto Refresh / Background Sync', value: true, onChanged: (_) {}),
             _tile('Media and Storage Settings', onTap: () {}),
           ]),
-
-          if (isOwner)
-            _settingsCard(title: 'Developer Tools', children: [
-              _tile('Show Logs / Debug Tools', onTap: () {}),
-              _tile('Run Diagnostics', onTap: () {}),
-              _tile('Reset App State', onTap: () {}),
-            ]),
         ],
       ),
     );

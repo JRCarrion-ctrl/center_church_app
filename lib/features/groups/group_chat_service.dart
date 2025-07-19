@@ -39,7 +39,12 @@ class GroupChatService {
   }
 
   /// Send a message
-  Future<void> sendMessage(String groupId, String content, {String? fileUrl}) async {
+  Future<void> sendMessage(
+    String groupId,
+    String content, {
+    String? fileUrl,
+    String type = 'text',
+  }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('User not authenticated');
 
@@ -48,6 +53,8 @@ class GroupChatService {
       'sender_id': userId,
       'content': content,
       'file_url': fileUrl,
+      'type': type,
+      'created_at': DateTime.now().toIso8601String(),
     });
   }
 

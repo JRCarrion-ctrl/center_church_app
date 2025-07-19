@@ -277,6 +277,15 @@ class _GroupChatTabState extends State<GroupChatTab> {
                         );
                         _scrollToBottom();
                       },
+                      onGifPicked: (gifUrl) async {
+                        await _chatService.sendMessage(
+                          widget.groupId,
+                          '[GIF]',
+                          fileUrl: gifUrl,
+                          type: 'gif',
+                        );
+                        _scrollToBottom();
+                      },
                     ),
                   ),
                 ],
