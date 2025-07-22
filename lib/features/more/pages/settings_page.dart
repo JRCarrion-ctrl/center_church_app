@@ -150,7 +150,9 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           _settingsCard(title: 'General', children: [
             _tile('Language', onTap: _showLanguageSheet),
-            _tile('Notifications', onTap: () {}),
+            _tile('Notifications', onTap: () {
+              context.push('/settings/notifications');
+            }),
             _tile('Calendar', onTap: _showCalendarSyncModal),
             _tile('Data & Delete Account', onTap: () {context.push('/data-and-delete');}),
           ]),

@@ -1,4 +1,3 @@
-// File: lib/features/home/announcements_section.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -80,25 +79,16 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
+    final showGroupAnnouncements = appState.showGroupAnnouncements;
+    final hasMain = mainAnnouncements.isNotEmpty;
+    final hasGroup = groupAnnouncements.isNotEmpty;
+
     if (loading) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.symmetric(vertical: 40),
           child: CircularProgressIndicator(),
-        ),
-      );
-    }
-
-    final hasMain = mainAnnouncements.isNotEmpty;
-    final hasGroup = groupAnnouncements.isNotEmpty;
-    final appState = context.watch<AppState>();
-    final showGroupAnnouncements = appState.showGroupAnnouncements;
-
-    if (!hasMain && !hasGroup) {
-      return const Center(
-        child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: Text('No announcements available.'),
         ),
       );
     }
@@ -111,14 +101,17 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
           children: [
             _buildHeader(context),
             const SizedBox(height: 12),
-            if (!hasMain)
-              const Text('No announcements')
-            else
+            if (!hasMain && !hasGroup)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 24),
+                child: Text('No announcements available.'),
+              ),
+            if (hasMain)
               ...mainAnnouncements.map((a) => Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: _buildAnnouncementCard(a),
                   )),
-            if (showGroupAnnouncements) ...[
+            if (showGroupAnnouncements && hasGroup) ...[
               const SizedBox(height: 20),
               const Text(
                 'Group Announcements',
@@ -167,10 +160,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
   }
 
   Widget _buildGroupList() {
-    if (groupAnnouncements.isEmpty) {
-      return const Center(child: Text('No group announcements'));
-    }
-
     return Center(
       child: SizedBox(
         height: 100,
@@ -220,8 +209,11 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
                       ),
                       const SizedBox(height: 6),
                       if (a['body'] != null)
-                        Text(a['body'],
-                            maxLines: 2, overflow: TextOverflow.ellipsis),
+                        Text(
+                          a['body'],
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                     ],
                   ),
                 ),

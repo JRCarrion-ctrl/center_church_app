@@ -63,7 +63,7 @@ class MainApp extends StatelessWidget {
             actions: [
               IconButton(
                 icon: Icon(Icons.notifications, color: textColor),
-                onPressed: () => context.go('/notifications'),
+                onPressed: () => context.push('/notifications')
               ),
             ],
             bottom: PreferredSize(

@@ -30,6 +30,8 @@
 	<string>Used to access PDF files</string>
 	<key>NSDocumentsFolderUsageDescription</key>
 	<string>Used to view downloaded files</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This identifier will be used to deliver personalized notifications.</string>
 	<key>CFBundleLocalizations</key>
 	<array>
 		<string>en</string>
@@ -37,6 +39,10 @@
 	</array>
 	<key>UIFileSharingEnabled</key>
 	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+  		<string>remote-notification</string>
+	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
 	<key>NSPhotoLibraryAddUsageDescription</key>

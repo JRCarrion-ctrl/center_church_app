@@ -71,11 +71,6 @@ final ShellRoute mainShellRoute = ShellRoute(
       },
     ),
     GoRoute(
-      path: '/notifications',
-      name: 'notifications',
-      builder: (_, _) => const NotificationsPage(),
-    ),
-    GoRoute(
       path: '/manage-app-announcements',
       builder: (context, state) => const ManageAppAnnouncementsPage(),
     ),

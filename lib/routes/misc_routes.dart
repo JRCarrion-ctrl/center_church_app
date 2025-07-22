@@ -1,6 +1,7 @@
 // lib/routes/misc_routes.dart
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
+import 'package:ccf_app/features/more/models/notification_settings_page.dart';
 import 'package:ccf_app/features/more/pages/add_child_profile.dart';
 import 'package:ccf_app/features/more/pages/bible_studies_page.dart';
 import 'package:ccf_app/features/more/pages/bible_study_requests_page.dart';
@@ -197,4 +198,13 @@ final List<GoRoute> miscRoutes = [
     path: '/contact-support',
     builder: (context, state) => const ContactSupportPage(),
   ),
+  GoRoute(
+    path: '/notifications',
+    name: 'notifications',
+    builder: (context, state) => const NotificationsPage(),
+  ),
+  GoRoute(
+  path: '/settings/notifications',
+  builder: (context, state) => const NotificationSettingsPage(),
+),
 ];

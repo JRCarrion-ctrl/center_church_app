@@ -1,11 +1,15 @@
 // File: lib/features/groups/widgets/input_row.dart
 import 'dart:io';
 import 'dart:convert';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:logger/logger.dart';
+
+final _logger = Logger();
 
 Future<File> _compressImage(File file) async {
   final targetPath = file.path.replaceFirst(
@@ -23,13 +27,42 @@ Future<File> _compressImage(File file) async {
 }
 
 Future<List<String>> searchKlipyGifs(String query) async {
-  const apiKey = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
-  final url = Uri.parse('https://api.klipy.io/v1/gifs/search?q=$query&key=$apiKey');
+  final userId = Supabase.instance.client.auth.currentUser?.id;
+  if (userId == null) throw Exception('User not logged in');
+
+  const appKey = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
+  const locale = 'US';
+  const contentFilter = 'high';
+
+  final url = Uri.parse(
+    'https://api.klipy.com/api/v1/$appKey/gifs/search'
+    '?q=$query&page=1&per_page=20&customer_id=$userId&locale=$locale&content_filter=$contentFilter',
+  );
+
+  _logger.i('Fetching GIFs from: $url');
+
   final response = await http.get(url);
+  _logger.i('Klipy API response status: ${response.statusCode}');
+  _logger.i('Klipy API response body: ${response.body}');
+
   if (response.statusCode != 200) throw Exception('Failed to fetch GIFs');
+
   final data = json.decode(response.body);
-  return List<String>.from(data['results'].map((g) => g['url']));
+  final items = data['data']?['data'];
+
+  if (items is List && items.isNotEmpty) {
+    return items
+        .map<String?>((g) => g['file']?['md']?['gif']?['url'] as String?)
+        .whereType<String>()
+        .toList();
+  } else {
+    _logger.w('No results returned from Klipy');
+    return [];
+  }
 }
+
+
+
 
 class InputRow extends StatefulWidget {
   final TextEditingController controller;

@@ -166,7 +166,7 @@ class _MessageListViewState extends State<MessageListView> {
       return Text(
         '[Deleted Message]',
         style: TextStyle(
-          color: const Color.fromARGB(255, 255, 255, 255),
+          color: const Color.fromARGB(255, 135, 59, 0),
         ),
       );
     }
