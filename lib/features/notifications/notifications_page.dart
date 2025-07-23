@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
+import 'package:ccf_app/core/time_service.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -218,18 +218,6 @@ class _NotificationTile extends StatelessWidget {
     required this.onRead,
   });
 
-  String _formatTimestamp(String? iso) {
-    if (iso == null) return '';
-    final dt = DateTime.tryParse(iso);
-    if (dt == null) return '';
-    final now = DateTime.now();
-    final diff = now.difference(dt);
-    if (diff.inMinutes < 1) return 'Just now';
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    return DateFormat('MMM d').format(dt);
-  }
-
   @override
   Widget build(BuildContext context) {
     final isUnread = readAt == null;
@@ -237,7 +225,9 @@ class _NotificationTile extends StatelessWidget {
         ? Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)
         : Theme.of(context).textTheme.titleMedium;
 
-    final timestamp = _formatTimestamp(scheduledAt);
+    final timestamp = TimeService.formatRelativeTime(
+      DateTime.tryParse(scheduledAt ?? '') ?? DateTime.now(),
+    );
 
     return ListTile(
       leading: Icon(

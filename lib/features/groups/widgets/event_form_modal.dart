@@ -34,8 +34,9 @@ class _EventFormModalState extends State<EventFormModal> {
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
     if (ev != null) {
-      _selectedDate = ev.eventDate;
-      _selectedTime = TimeOfDay.fromDateTime(ev.eventDate);
+      final local = ev.eventDate.toLocal();
+      _selectedDate = DateTime(local.year, local.month, local.day);
+      _selectedTime = TimeOfDay.fromDateTime(local);
     }
   }
 
@@ -91,7 +92,7 @@ class _EventFormModalState extends State<EventFormModal> {
       description: _descController.text.trim(),
       location: _locationController.text.trim(),
       imageUrl: widget.existing?.imageUrl,
-      eventDate: dt,
+      eventDate: dt.toUtc(),
     );
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);

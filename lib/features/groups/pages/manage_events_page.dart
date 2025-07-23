@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 
-
+import 'package:ccf_app/core/time_service.dart';
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
 
@@ -34,14 +33,16 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
   Future<void> _checkRole() async {
     final user = Supabase.instance.client.auth.currentUser;
     if (user == null) return;
+
     final profile = await Supabase.instance.client
         .from('profiles')
         .select('role')
         .eq('id', user.id)
         .single();
+
     if (mounted) {
       setState(() {
-        _isSupervisor = profile['role'] == 'leader' || profile['role'] == 'supervisor' || profile['role'] == 'owner';
+        _isSupervisor = ['leader', 'supervisor', 'owner'].contains(profile['role']);
       });
     }
   }
@@ -74,10 +75,9 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
     }
   }
 
-
   Future<void> _loadRSVPs() async {
     try {
-      final data = await _eventService.fetchRSVPS(widget.event.id);
+      final data = await _eventService.fetchGroupEventRSVPs(widget.event.id);
       if (mounted) setState(() => _rsvps = data);
     } catch (_) {}
   }
@@ -113,7 +113,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
       title: event.title,
       description: event.description,
       startDate: event.eventDate,
-      endDate: event.eventDate.add(Duration(hours: 1)), // Adjust duration if needed
+      endDate: event.eventDate.add(const Duration(hours: 1)),
       location: event.location ?? 'Center Church',
     );
 
@@ -125,6 +125,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
     final currentUserId = Supabase.instance.client.auth.currentUser?.id;
     final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
     final e = widget.event;
+
     return Scaffold(
       appBar: AppBar(title: Text(e.title)),
       body: ListView(
@@ -139,17 +140,22 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
                 fit: BoxFit.cover,
                 placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
                 errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 100),
-              )
+              ),
             ),
           const SizedBox(height: 16),
           Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
-          Text(DateFormat('EEEE, MMM d, yyyy • h:mm a').format(e.eventDate.toLocal())),
+          Text(
+            TimeService.formatUtcToLocal(
+              e.eventDate,
+              pattern: 'EEEE, MMM d, yyyy • h:mm a',
+            ),
+          ),
           const SizedBox(height: 6),
-          if (e.description != null && e.description?.isNotEmpty == true)
+          if (e.description?.isNotEmpty == true)
             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 6),
-          if (e.location != null && e.location!.isNotEmpty)
+          if (e.location?.isNotEmpty == true)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
@@ -157,8 +163,8 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
           const SizedBox(height: 6),
           ElevatedButton.icon(
             onPressed: () => addEventToCalendar(e),
-            icon: Icon(Icons.event),
-            label: Text('Add to Calendar'),
+            icon: const Icon(Icons.event),
+            label: const Text('Add to Calendar'),
           ),
           const Divider(height: 32),
           Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),

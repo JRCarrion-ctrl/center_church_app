@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_native_timezone_latest/flutter_native_timezone_latest.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:logger/logger.dart';
 
 import 'features/auth/profile.dart';
 import 'features/auth/profile_service.dart';
@@ -17,7 +19,20 @@ class AppState extends ChangeNotifier {
   bool _isLoading = true;
   bool _initialized = false;
   bool _hasSeenLanding = false;
+  final _logger = Logger();
   ThemeMode _themeMode = ThemeMode.system;
+  String? _timezone;
+  String? get timezone => _timezone;
+
+  Future<void> loadTimezone() async {
+    try {
+      _timezone = await FlutterNativeTimezoneLatest.getLocalTimezone();
+      notifyListeners();
+    } catch (e, stackTrace) {
+      _logger.e('Failed to get timezone', error: e, stackTrace: stackTrace);
+      _timezone = 'UTC';
+    }
+  }
 
   // Profile
   Profile? _profile;

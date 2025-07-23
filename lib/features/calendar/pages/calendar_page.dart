@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:ccf_app/core/time_service.dart';
 
 import '../../../app_state.dart';
 import '../event_service.dart';
@@ -193,7 +193,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 )
               : const Icon(Icons.announcement, size: 40),
           title: Text(e.title),
-          subtitle: Text(DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)),
+          subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
         ),
       );
 
@@ -209,7 +209,7 @@ class _CalendarPageState extends State<CalendarPage> {
                 )
               : const Icon(Icons.event, size: 40),
           title: Text(e.title),
-          subtitle: Text(DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)),
+          subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
         ),
       );
 }

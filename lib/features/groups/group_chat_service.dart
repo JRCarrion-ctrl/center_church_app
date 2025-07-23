@@ -54,7 +54,7 @@ class GroupChatService {
       'content': content,
       'file_url': fileUrl,
       'type': type,
-      'created_at': DateTime.now().toIso8601String(),
+      'created_at': DateTime.now().toUtc().toIso8601String(),
     });
   }
 

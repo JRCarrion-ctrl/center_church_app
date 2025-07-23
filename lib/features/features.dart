@@ -4,7 +4,6 @@ export 'prayer/prayer.dart';
 export 'home/home_page.dart';
 export 'groups/groups_page.dart';
 export 'calendar/pages/calendar_page.dart';
-export 'calendar/pages/event_page.dart';
 export 'calendar/event_service.dart';
 export 'calendar/models/group_event.dart';
 export 'more/more.dart';

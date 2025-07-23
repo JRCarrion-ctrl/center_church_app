@@ -8,7 +8,7 @@ class GroupMessageBubble extends StatelessWidget {
   final bool isMe;
   final VoidCallback onLongPress;
   final Widget Function() contentBuilder;
-  final String timestamp;
+  final String formattedTimestamp;
   final List<String> reactions;
 
   const GroupMessageBubble({
@@ -17,7 +17,7 @@ class GroupMessageBubble extends StatelessWidget {
     required this.isMe,
     required this.onLongPress,
     required this.contentBuilder,
-    required this.timestamp,
+    required this.formattedTimestamp,
     required this.reactions,
   });
 
@@ -101,9 +101,9 @@ class GroupMessageBubble extends StatelessWidget {
                             ),
                             const SizedBox(height: 4),
                             Semantics(
-                              label: 'Sent at $timestamp',
+                              label: 'Sent at $formattedTimestamp',
                               child: Text(
-                                timestamp,
+                                formattedTimestamp,
                                 style: TextStyle(
                                   fontSize: 11,
                                   color: isMe

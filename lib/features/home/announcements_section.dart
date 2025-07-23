@@ -1,3 +1,4 @@
+// File: lib/features/home/announcements_section.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
@@ -13,6 +14,7 @@ class AnnouncementsSection extends StatefulWidget {
 
 class _AnnouncementsSectionState extends State<AnnouncementsSection> {
   final supabase = Supabase.instance.client;
+
   List<Map<String, dynamic>> mainAnnouncements = [];
   List<Map<String, dynamic>> groupAnnouncements = [];
   bool loading = true;
@@ -26,11 +28,13 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
 
   Future<void> _loadData() async {
     final userId = supabase.auth.currentUser?.id;
-    final now = DateTime.now().toUtc().toIso8601String();
     if (userId == null) return;
 
+    final nowUtc = DateTime.now().toUtc().toIso8601String();
     setState(() => loading = true);
+
     try {
+      // Check admin role
       final profile = await supabase
           .from('profiles')
           .select('role')
@@ -40,29 +44,34 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
       isAdmin = profile != null &&
           (profile['role'] == 'supervisor' || profile['role'] == 'owner');
 
+      // Fetch main/global announcements
       final global = await supabase
           .from('app_announcements')
           .select()
-          .lte('published_at', now)
+          .lte('published_at', nowUtc)
           .order('published_at', ascending: false);
 
+      // Get group IDs the user is approved in
       final memberships = await supabase
           .from('group_memberships')
           .select('group_id')
           .eq('user_id', userId)
           .eq('status', 'approved');
 
-      final groupIds = (memberships as List<dynamic>)
+      final groupIds = (memberships as List)
           .whereType<Map<String, dynamic>>()
           .map((m) => m['group_id'] as String)
           .toList();
 
-      final groups = await supabase
-          .from('group_announcements')
-          .select()
-          .inFilter('group_id', groupIds)
-          .lte('published_at', now)
-          .order('published_at', ascending: false);
+      List<dynamic> groups = [];
+      if (groupIds.isNotEmpty) {
+        groups = await supabase
+            .from('group_announcements')
+            .select()
+            .inFilter('group_id', groupIds)
+            .lte('published_at', nowUtc)
+            .order('published_at', ascending: false);
+      }
 
       if (mounted) {
         setState(() {
@@ -81,6 +90,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final showGroupAnnouncements = appState.showGroupAnnouncements;
+
     final hasMain = mainAnnouncements.isNotEmpty;
     final hasGroup = groupAnnouncements.isNotEmpty;
 

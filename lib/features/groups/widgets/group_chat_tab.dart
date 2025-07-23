@@ -1,7 +1,7 @@
 // Refactored: lib/features/groups/widgets/group_chat_tab.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
+import 'package:ccf_app/core/time_service.dart';
 
 import '../models/group_message.dart';
 import '../group_chat_service.dart';
@@ -205,17 +205,6 @@ class _GroupChatTabState extends State<GroupChatTab> {
     );
   }
 
-  String _formatSmartTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final local = timestamp.toLocal();
-    final today = DateTime(now.year, now.month, now.day);
-    final messageDay = DateTime(local.year, local.month, local.day);
-    final timePart = DateFormat.jm().format(local);
-    if (messageDay == today) return 'Today, $timePart';
-    if (messageDay == today.subtract(const Duration(days: 1))) return 'Yesterday, $timePart';
-    return DateFormat('MMMM d, y – h:mm a').format(local);
-  }
-
   @override
   void dispose() {
     _reactionChannel.unsubscribe();
@@ -252,7 +241,7 @@ class _GroupChatTabState extends State<GroupChatTab> {
                       scrollController: _scrollController,
                       reactionMap: _reactionMap,
                       onLongPress: _showMessageOptions,
-                      formatTimestamp: _formatSmartTimestamp,
+                      formatTimestamp: TimeService.formatSmartTimestamp,
                       highlightMessageId: _highlightMessageId,
                       onMessagesRendered: () {
                         if (!_initialScrollDone) {

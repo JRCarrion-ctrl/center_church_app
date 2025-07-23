@@ -34,8 +34,9 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
     if (ev != null) {
-      _selectedDate = ev.eventDate;
-      _selectedTime = TimeOfDay.fromDateTime(ev.eventDate);
+      final local = ev.eventDate.toLocal();
+      _selectedDate = DateTime(local.year, local.month, local.day);
+      _selectedTime = TimeOfDay.fromDateTime(local);
     }
   }
 
@@ -86,7 +87,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       id: widget.existing?.id ?? '',
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
-      eventDate: dt,
+      eventDate: dt.toUtc(),
       imageUrl: widget.existing?.imageUrl,
       location: _locationController.text.trim(),
     );

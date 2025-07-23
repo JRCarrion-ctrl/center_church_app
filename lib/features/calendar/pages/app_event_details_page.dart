@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
+import 'package:ccf_app/core/time_service.dart';
 
 import '../event_service.dart';
 import '../models/app_event.dart';
@@ -134,7 +134,12 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             style: Theme.of(context).textTheme.headlineSmall,
           ),
           const SizedBox(height: 6),
-          Text(DateFormat('EEEE, MMM d, yyyy • h:mm a').format(e.eventDate.toLocal())),
+          Text(
+            TimeService.formatUtcToLocal(
+              e.eventDate,
+              pattern: 'EEEE, MMM d, yyyy • h:mm a',
+            ),
+          ),
           const SizedBox(height: 6),
           if (e.description != null && e.description?.isNotEmpty == true)
             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),

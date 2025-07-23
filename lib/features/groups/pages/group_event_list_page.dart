@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:ccf_app/core/time_service.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // 👈 Add this
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
@@ -17,17 +17,23 @@ class GroupEventListPage extends StatefulWidget {
 }
 
 class _GroupEventListPageState extends State<GroupEventListPage> {
-  final EventService _service = EventService();
-  List<GroupEvent> _events = [];
-  Map<String, int> _attendanceCounts = {}; // Event ID -> total attending count
+  final _service = EventService();
+  final _attendanceCounts = <String, int>{};
+  final _events = <GroupEvent>[];
   bool _loading = true;
   bool _isAdmin = false;
 
   @override
   void initState() {
     super.initState();
-    _loadEvents();
-    _checkAdminRole();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    await Future.wait([
+      _loadEvents(),
+      _checkAdminRole(),
+    ]);
   }
 
   Future<void> _checkAdminRole() async {
@@ -43,7 +49,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
     final role = profile['role'];
     if (mounted) {
       setState(() {
-        _isAdmin = role == 'leader' || role == 'supervisor' || role == 'owner';
+        _isAdmin = ['leader', 'supervisor', 'owner'].contains(role);
       });
     }
   }
@@ -55,29 +61,45 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
       final counts = <String, int>{};
 
       for (final event in events) {
-        final rsvps = await _service.fetchRSVPS(event.id);
+        final rsvps = await _service.fetchGroupEventRSVPs(event.id);
         final total = rsvps.fold<int>(
           0,
           (sum, r) => sum + ((r['attending_count'] ?? 0) as int),
         );
-
         counts[event.id] = total;
       }
 
       if (mounted) {
         setState(() {
-          _events = events;
-          _attendanceCounts = counts;
+          _events
+            ..clear()
+            ..addAll(events);
+          _attendanceCounts
+            ..clear()
+            ..addAll(counts);
         });
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Error loading events: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading events: $e')),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  Future<void> _openFormModal({GroupEvent? existing}) async {
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => GroupEventFormModal(
+        existing: existing,
+        groupId: widget.groupId,
+      ),
+    );
+    await _loadEvents();
   }
 
   @override
@@ -86,17 +108,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
       appBar: AppBar(title: const Text('Group Events')),
       floatingActionButton: _isAdmin
           ? FloatingActionButton(
-              onPressed: () async {
-                await showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  builder: (_) => GroupEventFormModal(
-                    existing: null, // creating new event
-                    groupId: widget.groupId, // pass the groupId to the modal
-                  ),
-                );
-                setState(() => _loadEvents());
-              },
+              onPressed: () => _openFormModal(),
               tooltip: 'Add Group Event',
               child: const Icon(Icons.add),
             )
@@ -114,6 +126,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                     itemBuilder: (_, i) {
                       final e = _events[i];
                       final count = _attendanceCounts[e.id] ?? 0;
+
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(
@@ -121,8 +134,10 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                           leading: e.imageUrl != null
                               ? Image.network(
                                   e.imageUrl!,
-                                  gaplessPlayback: true, // prevents flicker
+                                  width: 48,
+                                  height: 48,
                                   fit: BoxFit.cover,
+                                  errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
                                 )
                               : const Icon(Icons.event, size: 40),
                           title: Row(
@@ -132,12 +147,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                                 PopupMenuButton<String>(
                                   onSelected: (action) async {
                                     if (action == 'edit') {
-                                      await showModalBottomSheet(
-                                        context: context,
-                                        isScrollControlled: true,
-                                        builder: (_) => GroupEventFormModal(existing: e),
-                                      );
-                                      setState(() => _loadEvents());
+                                      await _openFormModal(existing: e);
                                     } else if (action == 'delete') {
                                       final confirm = await showDialog<bool>(
                                         context: context,
@@ -151,14 +161,14 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                                             ),
                                             TextButton(
                                               onPressed: () => Navigator.pop(ctx, true),
-                                               child: const Text('Delete'),
+                                              child: const Text('Delete'),
                                             ),
                                           ],
                                         ),
                                       );
                                       if (confirm == true) {
                                         await _service.deleteEvent(e.id);
-                                        setState(() => _loadEvents());
+                                        await _loadEvents();
                                       }
                                     }
                                   },
@@ -170,11 +180,10 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
                             ],
                           ),
                           subtitle: Text(
-                            '${DateFormat('MMM d, yyyy • h:mm a').format(e.eventDate)}\n$count attending',
+                            '${TimeService.formatUtcToLocal(e.eventDate)}\n$count attending',
                           ),
                         ),
                       );
-
                     },
                   ),
                 ),

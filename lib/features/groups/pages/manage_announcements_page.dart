@@ -1,7 +1,7 @@
 // File: manage_announcements_page.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ccf_app/core/time_service.dart';
 import '../models/group_announcement.dart';
 import '../widgets/announcement_form_modal.dart';
 
@@ -19,6 +19,8 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   List<GroupAnnouncement> allAnnouncements = [];
   bool loading = true;
   String filter = 'all'; // 'all', 'published', 'scheduled'
+
+  DateTime get _nowUtc => DateTime.now().toUtc();
 
   @override
   void initState() {
@@ -86,12 +88,11 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   }
 
   List<GroupAnnouncement> get filteredAnnouncements {
-    final now = DateTime.now().toUtc();
     return allAnnouncements.where((a) {
       if (filter == 'published') {
-        return a.publishedAt != null && a.publishedAt!.isBefore(now);
+        return a.publishedAt != null && a.publishedAt!.isBefore(_nowUtc);
       } else if (filter == 'scheduled') {
-        return a.publishedAt != null && a.publishedAt!.isAfter(now);
+        return a.publishedAt != null && a.publishedAt!.isAfter(_nowUtc);
       }
       return true;
     }).toList();
@@ -114,7 +115,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   }
 
   Widget _buildAnnouncementTile(GroupAnnouncement a) {
-    final isPublished = a.publishedAt?.isBefore(DateTime.now().toUtc()) ?? false;
+    final isPublished = a.publishedAt?.isBefore(_nowUtc) ?? false;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -127,7 +128,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
               Text(a.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
             if (a.publishedAt != null)
               Text(
-                '${isPublished ? 'Published' : 'Scheduled'}: ${DateFormat.yMMMd().format(a.publishedAt!.toLocal())}',
+                '${isPublished ? 'Published' : 'Scheduled'}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
                 style: TextStyle(
                   fontSize: 12,
                   color: isPublished ? Colors.green[700] : Colors.orange[700],

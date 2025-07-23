@@ -1,6 +1,7 @@
 // File: lib/features/groups/widgets/announcement_form_modal.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ccf_app/core/time_service.dart';
 import '../models/group_announcement.dart';
 
 class AnnouncementFormModal extends StatefulWidget {
@@ -21,7 +22,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _body = TextEditingController();
-  DateTime? _scheduled;
+  DateTime? _scheduledUtc;
 
   final supabase = Supabase.instance.client;
   bool saving = false;
@@ -32,7 +33,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     if (widget.existing != null) {
       _title.text = widget.existing!.title;
       _body.text = widget.existing!.body ?? '';
-      _scheduled = widget.existing!.publishedAt;
+      _scheduledUtc = widget.existing!.publishedAt;
     }
   }
 
@@ -44,7 +45,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
       'group_id': widget.groupId,
       'title': _title.text.trim(),
       'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
-      'published_at': (_scheduled ?? DateTime.now()).toUtc().toIso8601String(),
+      'published_at': (_scheduledUtc ?? DateTime.now().toUtc()).toIso8601String(),
     };
 
     try {
@@ -75,24 +76,23 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   }
 
   Future<void> _pickDateTime() async {
+    final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: _scheduled ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _scheduledUtc?.toLocal() ?? now,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 365)),
     );
-    if (date == null) return;
-    
-    if (!mounted) return;
+    if (date == null || !mounted) return;
+
     final time = await showTimePicker(
       context: context,
-      initialTime: TimeOfDay.fromDateTime(_scheduled ?? DateTime.now()),
+      initialTime: TimeOfDay.fromDateTime(_scheduledUtc?.toLocal() ?? now),
     );
     if (time == null) return;
 
-    setState(() {
-      _scheduled = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-    });
+    final utc = TimeService.combineLocalDateAndTimeToUtc(date, time);
+    setState(() => _scheduledUtc = utc);
   }
 
   @override
@@ -133,9 +133,11 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.schedule),
-                title: Text(_scheduled == null
-                    ? 'No schedule set'
-                    : 'Scheduled: ${_scheduled!.toLocal()}'),
+                title: Text(
+                  _scheduledUtc == null
+                      ? 'No schedule set'
+                      : 'Scheduled: ${TimeService.formatUtcToLocal(_scheduledUtc!)}',
+                ),
                 trailing: TextButton(
                   onPressed: _pickDateTime,
                   child: const Text('Pick Time'),

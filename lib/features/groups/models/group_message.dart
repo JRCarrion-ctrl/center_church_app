@@ -31,7 +31,7 @@ class GroupMessage {
       senderName: map['sender_name'] ?? 'Unknown',
       content: map['content'] as String,
       fileUrl: map['file_url'] as String?,
-      createdAt: DateTime.parse(map['created_at']),
+      createdAt: DateTime.parse(map['created_at']).toUtc(),
       deleted: map['deleted'] ?? false,
       reportedBy: (map['reported_by'] as List<dynamic>?)?.cast<String>() ?? [],
     );

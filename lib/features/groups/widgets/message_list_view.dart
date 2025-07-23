@@ -232,7 +232,7 @@ class _MessageListViewState extends State<MessageListView> {
                 isMe: isMe,
                 onLongPress: () => widget.onLongPress(msg),
                 contentBuilder: () => _buildContent(msg, isMe),
-                timestamp: widget.formatTimestamp(msg.createdAt),
+                formattedTimestamp: widget.formatTimestamp(msg.createdAt),
                 reactions: widget.reactionMap[msg.id] ?? [],
               ),
             ],

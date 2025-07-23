@@ -162,22 +162,22 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
-  Future<void> _openGifPicker() async {
-    final gifUrl = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => const _KlipyGifPicker(),
-    );
+  //Future<void> _openGifPicker() async {
+    //final gifUrl = await showModalBottomSheet<String>(
+      //context: context,
+      //isScrollControlled: true,
+      //builder: (_) => const _KlipyGifPicker(),
+    //);
 
-    if (gifUrl != null) {
-      await widget.onGifPicked(gifUrl);
-      widget.controller.clear();
-      setState(() {
-        _selectedFile = null;
-        _canSend = false;
-      });
-    }
-  }
+    //if (gifUrl != null) {
+      //await widget.onGifPicked(gifUrl);
+      //widget.controller.clear();
+      //setState(() {
+        //_selectedFile = null;
+        //_canSend = false;
+      //});
+    //}
+  //}
 
   bool _isGifUrl(String text) {
     return text.toLowerCase().endsWith('.gif') && text.startsWith('http');
@@ -248,11 +248,11 @@ class _InputRowState extends State<InputRow> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconButton.filledTonal(
-                icon: const Icon(Icons.gif_box_outlined),
-                tooltip: 'GIF',
-                onPressed: _openGifPicker,
-              ),
+              //IconButton.filledTonal(
+                //icon: const Icon(Icons.gif_box_outlined),
+                //tooltip: 'GIF',
+                //onPressed: _openGifPicker,
+              //),
               IconButton.filledTonal(
                 icon: const Icon(Icons.attach_file),
                 tooltip: 'Attach',

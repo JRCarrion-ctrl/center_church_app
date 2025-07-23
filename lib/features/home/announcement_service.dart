@@ -6,7 +6,8 @@ class AnnouncementService {
   final supabase = Supabase.instance.client;
 
   /// Fetch announcements for groups the user is in
-  Future<List<GroupAnnouncement>> fetchGroupAnnouncements() async {
+  /// [onlyPublished] filters out announcements scheduled for the future
+  Future<List<GroupAnnouncement>> fetchGroupAnnouncements({bool onlyPublished = false}) async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return [];
 
@@ -30,8 +31,15 @@ class AnnouncementService {
         .inFilter('group_id', groupIds.toList())
         .order('published_at', ascending: false);
 
-    return (data as List)
+    final announcements = (data as List)
         .map((e) => GroupAnnouncement.fromMap(e))
+        .toList();
+
+    if (!onlyPublished) return announcements;
+
+    final now = DateTime.now().toUtc();
+    return announcements
+        .where((a) => a.publishedAt.isBefore(now))
         .toList();
   }
 }

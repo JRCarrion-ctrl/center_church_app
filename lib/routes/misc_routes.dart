@@ -72,10 +72,6 @@ final List<GoRoute> miscRoutes = [
     ),
   ),
   GoRoute(
-    path: '/event/:id',
-    builder: (context, state) => EventPage(eventId: state.pathParameters['id']!),
-  ),
-  GoRoute(
     path: '/app-event/:id',
     pageBuilder: (context, state) {
       final event = state.extra as AppEvent;

@@ -28,10 +28,10 @@ class GroupAnnouncement {
       body: map['body'],
       imageUrl: map['image_url'],
       publishedAt: map['published_at'] != null
-          ? DateTime.parse(map['published_at'])
+          ? DateTime.parse(map['published_at']).toUtc()
           : null,
       createdAt: map['created_at'] != null
-          ? DateTime.parse(map['created_at'])
+          ? DateTime.parse(map['created_at']).toUtc()
           : null,
       createdByName: map['profiles']?['display_name'],
     );

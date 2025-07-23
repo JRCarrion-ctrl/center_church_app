@@ -1,27 +1,33 @@
 // File: lib/features/calendar/event_service.dart
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'models/group_event.dart';
 import 'models/app_event.dart';
 
 class EventService {
   final SupabaseClient _supabase = Supabase.instance.client;
 
-  /// Fetch upcoming app-wide events added by supervisors.
+  DateTime get _startOfTodayUtc {
+    final now = DateTime.now().toUtc();
+    return DateTime.utc(now.year, now.month, now.day);
+  }
+
+  // ----------------------
+  // App-Wide Events
+  // ----------------------
+
   Future<List<AppEvent>> fetchAppEvents() async {
     try {
-      final today = DateTime.now().toUtc();
-      final startOfDay = DateTime.utc(today.year, today.month, today.day);
-
       final data = await _supabase
           .from('app_events')
           .select()
-          .gte('event_date', startOfDay.toIso8601String())
+          .gte('event_date', _startOfTodayUtc.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
           .cast<Map<String, dynamic>>()
-          .map((json) => AppEvent.fromMap(json))
+          .map(AppEvent.fromMap)
           .toList();
     } on PostgrestException catch (error) {
       if (error.message.contains('relation "public.app_events" does not exist')) {
@@ -32,34 +38,27 @@ class EventService {
     }
   }
 
-  /// Save (insert or update) an app-wide event.
   Future<void> saveAppEvent(AppEvent event) async {
+    final isNew = event.id.isEmpty;
+    final data = {
+      'title': event.title,
+      'description': event.description,
+      'image_url': event.imageUrl,
+      'event_date': event.eventDate.toUtc().toIso8601String(),
+      'location': event.location,
+    };
+
     try {
-      if (event.id.isEmpty) {
-        final insertData = {
-          'title': event.title,
-          'description': event.description,
-          'image_url': event.imageUrl,
-          'event_date': event.eventDate.toIso8601String(),
-          'location': event.location,
-        };
-        await _supabase.from('app_events').insert(insertData);
+      if (isNew) {
+        await _supabase.from('app_events').insert(data);
       } else {
-        final updateData = {
-          'title': event.title,
-          'description': event.description,
-          'image_url': event.imageUrl,
-          'event_date': event.eventDate.toIso8601String(),
-          'location': event.location,
-        };
-        await _supabase.from('app_events').update(updateData).eq('id', event.id);
+        await _supabase.from('app_events').update(data).eq('id', event.id);
       }
     } on PostgrestException catch (error) {
       throw Exception('Error saving app event: ${error.message}');
     }
   }
 
-  /// Delete an app-wide event.
   Future<void> deleteAppEvent(String eventId) async {
     try {
       await _supabase.from('app_events').delete().eq('id', eventId);
@@ -68,69 +67,61 @@ class EventService {
     }
   }
 
-  /// Fetch upcoming group-specific events for all groups the user is a member of.
+  // ----------------------
+  // Group Events
+  // ----------------------
+
   Future<List<GroupEvent>> fetchUpcomingGroupEvents() async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) throw Exception('User not logged in');
 
-    List<String> groupIds;
     try {
-      final membershipData = await _supabase
+      final memberships = await _supabase
           .from('group_memberships')
           .select('group_id')
           .eq('user_id', userId)
           .eq('status', 'approved');
-      groupIds = (membershipData as List)
-          .map((row) => (row as Map<String, dynamic>)['group_id'] as String)
-          .toList();
-    } on PostgrestException catch (error) {
-      throw Exception('Error loading memberships: ${error.message}');
-    }
-    if (groupIds.isEmpty) return [];
 
-    try {
-      final today = DateTime.now().toUtc();
-      final startOfDay = DateTime.utc(today.year, today.month, today.day);
+      final groupIds = (memberships as List)
+          .map((row) => row['group_id'] as String)
+          .toList();
+
+      if (groupIds.isEmpty) return [];
 
       final data = await _supabase
           .from('group_events')
           .select()
           .inFilter('group_id', groupIds)
-          .gte('event_date', startOfDay.toIso8601String())
+          .gte('event_date', _startOfTodayUtc.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
           .cast<Map<String, dynamic>>()
-          .map((json) => GroupEvent.fromMap(json))
+          .map(GroupEvent.fromMap)
           .toList();
     } on PostgrestException catch (error) {
       throw Exception('Error loading group events: ${error.message}');
     }
   }
 
-  /// Fetch upcoming events for a single group.
   Future<List<GroupEvent>> fetchGroupEvents(String groupId) async {
     try {
-      final today = DateTime.now().toUtc();
-      final startOfDay = DateTime.utc(today.year, today.month, today.day);
-
       final data = await _supabase
           .from('group_events')
           .select()
           .eq('group_id', groupId)
-          .gte('event_date', startOfDay.toIso8601String())
+          .gte('event_date', _startOfTodayUtc.toIso8601String())
           .order('event_date', ascending: true);
 
       return (data as List)
           .cast<Map<String, dynamic>>()
-          .map((json) => GroupEvent.fromMap(json))
+          .map(GroupEvent.fromMap)
           .toList();
     } on PostgrestException catch (error) {
       throw Exception('Error loading group events: ${error.message}');
     }
   }
 
-  /// Fetch all events (past & future) for a single group.
   Future<List<GroupEvent>> fetchAllGroupEvents(String groupId) async {
     try {
       final data = await _supabase
@@ -141,14 +132,13 @@ class EventService {
 
       return (data as List)
           .cast<Map<String, dynamic>>()
-          .map((json) => GroupEvent.fromMap(json))
+          .map(GroupEvent.fromMap)
           .toList();
     } on PostgrestException catch (error) {
       throw Exception('Error loading all group events: ${error.message}');
     }
   }
 
-  /// Fetch a single group event by ID.
   Future<GroupEvent?> getEventById(String eventId) async {
     try {
       final json = await _supabase
@@ -156,33 +146,30 @@ class EventService {
           .select()
           .eq('id', eventId)
           .maybeSingle();
-      if (json == null) return null;
-      return GroupEvent.fromMap(json);
+
+      return json == null ? null : GroupEvent.fromMap(json);
     } on PostgrestException catch (error) {
       throw Exception('Error loading event: ${error.message}');
     }
   }
 
-  /// Save (insert or update) a group event.
   Future<void> saveEvent(GroupEvent event) async {
     final data = event.toMap();
     try {
       if (event.id.isEmpty) {
         data
           ..remove('id')
-          ..removeWhere((k, v) => v == null);
+          ..removeWhere((_, v) => v == null);
         await _supabase.from('group_events').insert(data);
-        return;
+      } else {
+        final updateData = Map.of(data)..remove('id');
+        await _supabase.from('group_events').update(updateData).eq('id', event.id);
       }
-
-      final updateData = event.toMap()..remove('id');
-      await _supabase.from('group_events').update(updateData).eq('id', event.id);
     } on PostgrestException catch (error) {
       throw Exception('Error saving event: ${error.message}');
     }
   }
 
-  /// Delete a group event.
   Future<void> deleteEvent(String eventId) async {
     try {
       await _supabase.from('group_events').delete().eq('id', eventId);
@@ -191,8 +178,11 @@ class EventService {
     }
   }
 
-  /// Fetch all RSVPs for a given event, including profile info.
-  Future<List<Map<String, dynamic>>> fetchRSVPS(String eventId) async {
+  // ----------------------
+  // RSVP Methods
+  // ----------------------
+
+  Future<List<Map<String, dynamic>>> fetchGroupEventRSVPs(String eventId) async {
     try {
       final data = await _supabase
           .from('event_attendance')
@@ -200,11 +190,11 @@ class EventService {
           .eq('event_id', eventId);
       return (data as List).cast<Map<String, dynamic>>();
     } on PostgrestException catch (error) {
-      throw Exception('Error loading RSVPS: ${error.message}');
+      throw Exception('Error loading RSVPs: ${error.message}');
     }
   }
 
-  Future<List<Map<String, dynamic>>> fetchRSVPs(String eventId) async {
+  Future<List<Map<String, dynamic>>> fetchGroupEventRSVPsLite(String eventId) async {
     try {
       final data = await _supabase
           .from('event_attendance')
@@ -216,10 +206,10 @@ class EventService {
     }
   }
 
-  /// RSVP to an app-wide event
   Future<void> rsvpAppEvent({required String appEventId, required int count}) async {
     final userId = _supabase.auth.currentUser?.id;
     if (userId == null) throw Exception('Not logged in');
+
     await _supabase.from('app_event_attendance').upsert({
       'app_event_id': appEventId,
       'user_id': userId,
@@ -227,24 +217,26 @@ class EventService {
     }, onConflict: 'app_event_id, user_id');
   }
 
-  /// Fetch RSVPs for an app-wide event
   Future<List<Map<String, dynamic>>> fetchAppEventRSVPs(String appEventId) async {
-    final data = await _supabase
-        .from('app_event_attendance')
-        .select('user_id, attending_count, profiles(display_name, email)')
-        .eq('app_event_id', appEventId);
-    return (data as List).cast<Map<String, dynamic>>();
+    try {
+      final data = await _supabase
+          .from('app_event_attendance')
+          .select('user_id, attending_count, profiles(display_name, email)')
+          .eq('app_event_id', appEventId);
+      return (data as List).cast<Map<String, dynamic>>();
+    } on PostgrestException catch (error) {
+      throw Exception('Error loading app RSVPs: ${error.message}');
+    }
   }
 
   Future<void> removeAppEventRSVP(String appEventId) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = _supabase.auth.currentUser?.id;
     if (userId == null) throw Exception("User not authenticated");
 
-    await Supabase.instance.client
-      .from('app_event_attendance')
-      .delete()
-      .eq('app_event_id', appEventId)
-      .eq('user_id', userId);
+    await _supabase
+        .from('app_event_attendance')
+        .delete()
+        .eq('app_event_id', appEventId)
+        .eq('user_id', userId);
   }
-
 }

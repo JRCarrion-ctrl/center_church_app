@@ -74,6 +74,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
      await _requestPushPermissionOnce();
 
     appState = AppState();
+    await appState.loadTimezone();
     _router = createRouter(appState);
 
     setState(() => _ready = true);
