@@ -76,7 +76,7 @@ class _ProfilePageState extends State<ProfilePage> {
           ? []
           : List<Map<String, dynamic>>.from(await supabase
               .from('family_members')
-              .select('id, relationship, status, is_child, child:child_profiles(display_name, qr_code_url), user:profiles!family_members_user_id_fkey(display_name, photo_url)')
+              .select('id, relationship, status, is_child, user_id, child:child_profiles(display_name, qr_code_url), user:profiles!family_members_user_id_fkey(display_name, photo_url)')
               .eq('family_id', fetchedFamilyId)
               .eq('status', 'accepted'));
 
@@ -511,12 +511,10 @@ class _ProfilePageState extends State<ProfilePage> {
                         final userProfile = member['user'];
                         final name = childProfile?['display_name'] ?? userProfile?['display_name'] ?? 'Unnamed';
                         final qrCode = childProfile?['qr_code_url'];
-                        final relationship = member['relationship'] ?? '';
 
                         return ListTile(
                           leading: Icon(isChild ? Icons.child_care : Icons.person),
                           title: Text(name),
-                          subtitle: Text(relationship),
                           trailing: isChild && qrCode != null
                               ? IconButton(
                                   icon: const Icon(Icons.qr_code),

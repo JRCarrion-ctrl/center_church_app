@@ -16,16 +16,11 @@ class GroupPage extends StatefulWidget {
 }
 
 class _GroupPageState extends State<GroupPage> {
-  late Future<void> _initFuture;
+  late final Future<void> _initFuture = _initialize();
+
   Group? _group;
   bool _isAdmin = false;
   bool _isOwner = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _initFuture = _initialize();
-  }
 
   Future<void> _initialize() async {
     final group = await GroupService().getGroupById(widget.groupId);
@@ -33,6 +28,7 @@ class _GroupPageState extends State<GroupPage> {
     final isAdmin = await GroupService().isUserGroupAdmin(widget.groupId, userId);
     final isOwner = await GroupService().isUserGroupOwner(widget.groupId, userId);
 
+    if (!mounted) return;
     setState(() {
       _group = group;
       _isAdmin = isAdmin;

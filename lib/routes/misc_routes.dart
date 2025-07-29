@@ -1,6 +1,7 @@
 // lib/routes/misc_routes.dart
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
+import 'package:ccf_app/features/more/models/media_settings.dart';
 import 'package:ccf_app/features/more/models/notification_settings_page.dart';
 import 'package:ccf_app/features/more/pages/add_child_profile.dart';
 import 'package:ccf_app/features/more/pages/bible_studies_page.dart';
@@ -22,7 +23,6 @@ import '../features/calendar/models/app_event.dart';
 import '../features/more/pages/family_page.dart';
 import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
-import '../features/more/pages/nursery_chat_page.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -146,14 +146,6 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (_, _) => buildSlidePage(const QRCheckinScannerPage(), direction: SlideDirection.right),
   ),
   GoRoute(
-    path: '/nursery/chat/:id',
-    pageBuilder: (context, state) {
-      final chatId = state.pathParameters['id'];
-      if (chatId == null) throw Exception('Missing chat ID');
-      return buildSlidePage(NurseryChatPage(chatId: chatId), direction: SlideDirection.right);
-    },
-  ),
-  GoRoute(
     path: '/more/study',
     pageBuilder: (_, _) => buildSlidePage(
       const BibleStudiesPage(),
@@ -200,7 +192,11 @@ final List<GoRoute> miscRoutes = [
     builder: (context, state) => const NotificationsPage(),
   ),
   GoRoute(
-  path: '/settings/notifications',
-  builder: (context, state) => const NotificationSettingsPage(),
-),
+    path: '/settings/notifications',
+    builder: (context, state) => const NotificationSettingsPage(),
+  ),
+  GoRoute(
+    path: '/media-settings',
+    builder: (context, state) => const MediaSettingsPage(),
+  ),
 ];

@@ -1,7 +1,7 @@
-// Refactored: lib/features/groups/widgets/group_chat_tab.dart
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 import '../models/group_message.dart';
 import '../group_chat_service.dart';
@@ -25,7 +25,7 @@ class GroupChatTab extends StatefulWidget {
   State<GroupChatTab> createState() => _GroupChatTabState();
 }
 
-class _GroupChatTabState extends State<GroupChatTab> {
+class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   final _reactionMap = <String, List<String>>{};
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
@@ -44,7 +44,30 @@ class _GroupChatTabState extends State<GroupChatTab> {
   @override
   void initState() {
     super.initState();
-    _initializeChat();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeChat());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _reactionChannel.unsubscribe();
+    _messageController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    setState(() {}); // Triggers MessageListView to rebuild
   }
 
   Future<void> _initializeChat() async {
@@ -61,9 +84,11 @@ class _GroupChatTabState extends State<GroupChatTab> {
             final data = payload.newRecord;
             final messageId = data['message_id'];
             final emoji = data['emoji'];
-            setState(() {
-              _reactionMap.putIfAbsent(messageId, () => []).add(emoji);
-            });
+            if (mounted) {
+              setState(() {
+                _reactionMap.putIfAbsent(messageId, () => []).add(emoji);
+              });
+            }
           },
         )
         .subscribe();
@@ -73,7 +98,7 @@ class _GroupChatTabState extends State<GroupChatTab> {
 
   void _handleScroll() {
     final shouldShow = (_scrollController.position.maxScrollExtent - _scrollController.offset) > 300;
-    if (_showJumpToLatest != shouldShow) {
+    if (_showJumpToLatest != shouldShow && mounted) {
       setState(() => _showJumpToLatest = shouldShow);
     }
   }
@@ -84,7 +109,9 @@ class _GroupChatTabState extends State<GroupChatTab> {
         .select('pinned_message_id')
         .eq('id', widget.groupId)
         .maybeSingle();
-    setState(() => _highlightMessageId = response?['pinned_message_id']);
+    if (mounted) {
+      setState(() => _highlightMessageId = response?['pinned_message_id']);
+    }
   }
 
   void _scrollToPinnedMessage() {
@@ -99,7 +126,8 @@ class _GroupChatTabState extends State<GroupChatTab> {
     }
   }
 
-  void _scrollToBottom({bool instant = false}) {
+  Future<void> _scrollToBottom({bool instant = false}) async {
+    await Future.delayed(const Duration(milliseconds: 10));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         final position = _scrollController.position.maxScrollExtent;
@@ -196,21 +224,13 @@ class _GroupChatTabState extends State<GroupChatTab> {
                   .delete()
                   .match({'message_id': message.id, 'user_id': userId});
               await _chatService.addReaction(message.id, e);
-              setState(() {});
+              if (mounted) setState(() {});
             },
             child: Text(e, style: const TextStyle(fontSize: 28)),
           )).toList(),
         ),
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    _reactionChannel.unsubscribe();
-    _messageController.dispose();
-    _scrollController.dispose();
-    super.dispose();
   }
 
   @override

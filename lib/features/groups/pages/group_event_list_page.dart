@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
@@ -16,7 +17,7 @@ class GroupEventListPage extends StatefulWidget {
   State<GroupEventListPage> createState() => _GroupEventListPageState();
 }
 
-class _GroupEventListPageState extends State<GroupEventListPage> {
+class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware {
   final _service = EventService();
   final _attendanceCounts = <String, int>{};
   final _events = <GroupEvent>[];
@@ -27,6 +28,26 @@ class _GroupEventListPageState extends State<GroupEventListPage> {
   void initState() {
     super.initState();
     _initialize();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _loadEvents();
   }
 
   Future<void> _initialize() async {

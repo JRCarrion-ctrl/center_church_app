@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 class PrayerPage extends StatefulWidget {
   const PrayerPage({super.key});
@@ -8,7 +9,7 @@ class PrayerPage extends StatefulWidget {
   State<PrayerPage> createState() => _PrayerPageState();
 }
 
-class _PrayerPageState extends State<PrayerPage> {
+class _PrayerPageState extends State<PrayerPage> with RouteAware {
   final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _prayerRequests = [];
   String _userRole = 'user'; // default
@@ -153,6 +154,26 @@ class _PrayerPageState extends State<PrayerPage> {
         }
       }),
     );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _loadPrayerRequests();
   }
 
   @override

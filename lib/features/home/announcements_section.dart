@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 class AnnouncementsSection extends StatefulWidget {
   const AnnouncementsSection({super.key});
@@ -12,7 +13,7 @@ class AnnouncementsSection extends StatefulWidget {
   State<AnnouncementsSection> createState() => _AnnouncementsSectionState();
 }
 
-class _AnnouncementsSectionState extends State<AnnouncementsSection> {
+class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteAware {
   final supabase = Supabase.instance.client;
 
   List<Map<String, dynamic>> mainAnnouncements = [];
@@ -26,6 +27,26 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
     _loadData();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _loadData(); // refresh when returning to this tab
+  }
+
   Future<void> _loadData() async {
     final userId = supabase.auth.currentUser?.id;
     if (userId == null) return;
@@ -34,7 +55,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
     setState(() => loading = true);
 
     try {
-      // Check admin role
       final profile = await supabase
           .from('profiles')
           .select('role')
@@ -44,14 +64,12 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> {
       isAdmin = profile != null &&
           (profile['role'] == 'supervisor' || profile['role'] == 'owner');
 
-      // Fetch main/global announcements
       final global = await supabase
           .from('app_announcements')
           .select()
           .lte('published_at', nowUtc)
           .order('published_at', ascending: false);
 
-      // Get group IDs the user is approved in
       final memberships = await supabase
           .from('group_memberships')
           .select('group_id')

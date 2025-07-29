@@ -15,9 +15,12 @@ final List<GoRoute> groupRoutes = [
   GoRoute(
     path: '/groups/:id',
     name: 'group',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      return GroupPage(groupId: groupId);
+      return buildSlidePage(
+        GroupPage(groupId: groupId),
+        direction: SlideDirection.right, // or left if you're popping from the stack
+      );
     },
   ),
   GoRoute(

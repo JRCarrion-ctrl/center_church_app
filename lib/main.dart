@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:app_links/app_links.dart';
 
 import 'app_state.dart';
 import 'features/splash/splash_screen.dart';
@@ -20,6 +21,7 @@ void main() {
 
   runApp(const CCFAppBoot());
 }
+
 Future<void> requestPushPermission() async {
   if (await Permission.notification.isDenied) {
     await Permission.notification.request();
@@ -37,6 +39,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   bool _ready = false;
   late final AppState appState;
   late final GoRouter _router;
+  AppLinks? _appLinks;
 
   @override
   void initState() {
@@ -57,6 +60,41 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     }
   }
 
+  Future<void> _handleIncomingLinks() async {
+    _appLinks = AppLinks();
+
+    // Handle links while app is running
+    _appLinks!.uriLinkStream.listen((Uri? uri) async {
+      if (uri == null) return;
+
+      if (uri.host == 'login-callback') {
+        final response = await Supabase.instance.client.auth.getSessionFromUrl(uri);
+        final session = response.session;
+        OneSignal.login(session.user.id);
+        await appState.restoreSession();
+        _router.go('/');
+      } else if (uri.host == 'reset') {
+        _router.go('/reset-password'); // 👈 Route to your new password screen
+      }
+    }, onError: (err) {
+      debugPrint('Deep link error: $err');
+    });
+
+    // Handle cold-start deep link
+    final initialUri = await _appLinks!.getInitialLink();
+    if (initialUri != null) {
+      if (initialUri.host == 'login-callback') {
+        final response = await Supabase.instance.client.auth.getSessionFromUrl(initialUri);
+        final session = response.session;
+        OneSignal.login(session.user.id);
+        await appState.restoreSession();
+        _router.go('/');
+      } else if (initialUri.host == 'reset') {
+        _router.go('/reset-password'); // 👈 Same here
+      }
+    }
+  }
+
   Future<void> _initializeApp() async {
     await Supabase.initialize(
       url: 'https://vhzcbqgehlpemdkvmzvy.supabase.co',
@@ -67,15 +105,16 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     if (userId != null) {
       OneSignal.login(userId);
     } else {
-      // Optional: use logout if anonymous or show warning
       OneSignal.logout();
     }
 
-     await _requestPushPermissionOnce();
+    await _requestPushPermissionOnce();
 
     appState = AppState();
     await appState.loadTimezone();
     _router = createRouter(appState);
+
+    await _handleIncomingLinks();
 
     setState(() => _ready = true);
   }
@@ -94,15 +133,20 @@ class _CCFAppBootState extends State<CCFAppBoot> {
             return const MaterialApp(home: SplashScreen());
           }
 
-          return MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            theme: ccfLightTheme,
-            darkTheme: ccfDarkTheme,
-            themeMode: state.themeMode, // ✅ Still dynamic
-            routerConfig: _router,
+          return MediaQuery(
+            data: MediaQuery.of(context).copyWith(
+              textScaler: TextScaler.linear(state.fontScale),
+            ),
+            child: MaterialApp.router(
+              debugShowCheckedModeBanner: false,
+              theme: ccfLightTheme,
+              darkTheme: ccfDarkTheme,
+              themeMode: state.themeMode,
+              routerConfig: _router,
+            ),
           );
         },
       ),
     );
   }
-}
+} 

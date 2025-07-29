@@ -30,6 +30,7 @@ class _MorePageState extends State<MorePage> {
       builder: (context, snapshot) {
         final role = snapshot.data ?? 'member';
         final isAdmin = ['admin', 'supervisor', 'leader', 'owner'].contains(role);
+        final isNurseryStaff = ['nursery_staff', 'owner'].contains(role);
 
         final List<Map<String, dynamic>> moreItems = [
           {
@@ -58,14 +59,20 @@ class _MorePageState extends State<MorePage> {
             'title': 'Directory',
             'onTap': () => context.push('/more/directory'),
           },
-          {
-            'title': 'Nursery Staff',
-            'onTap': () => context.push('/nursery'),
-          },
+          if (isNurseryStaff)
+            {
+              'title': 'Nursery Staff',
+              'onTap': () => context.push('/nursery'),
+            },
           {
             'title': 'Bible Studies',
             'onTap': () => context.push('/more/study'),
           },
+          if (isAdmin)
+            {
+              'title': 'Bible Study Requests',
+              'onTap': () => context.push('/more/study/requests'),
+            },
           {
             'title': 'Settings',
             'onTap': () => context.push('/more/settings'),
@@ -78,18 +85,12 @@ class _MorePageState extends State<MorePage> {
             'title': 'FAQ',
             'onTap': () => context.push('/more/faq'),
           },
+          if (isAdmin)
+            {
+              'title': 'Permissions',
+              'onTap': null,
+            },
         ];
-
-        if (isAdmin) {
-          moreItems.insert(8, {
-            'title': 'Permissions',
-            'onTap': null,
-          });
-          moreItems.insert(9, {
-            'title': 'Bible Study Requests',
-            'onTap': () => context.push('/more/study/requests'),
-          });
-        }
 
         return Scaffold(
           body: ListView.builder(

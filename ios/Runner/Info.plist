@@ -14,6 +14,11 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>es</string>
+	</array>
 	<key>CFBundleName</key>
 	<string>center_church_app</string>
 	<key>CFBundlePackageType</key>
@@ -22,40 +27,42 @@
 	<string>$(FLUTTER_BUILD_NAME)</string>
 	<key>CFBundleSignature</key>
 	<string>????</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ccf_app</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Used to access PDF files</string>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>Used to view downloaded files</string>
-	<key>NSUserTrackingUsageDescription</key>
-	<string>This identifier will be used to deliver personalized notifications.</string>
-	<key>CFBundleLocalizations</key>
-	<array>
-		<string>en</string>
-		<string>es</string>
-	</array>
-	<key>UIFileSharingEnabled</key>
-	<true/>
-	<key>UIBackgroundModes</key>
-	<array>
-  		<string>remote-notification</string>
-	</array>
 	<key>LSSupportsOpeningDocumentsInPlace</key>
 	<true/>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app requires calendar access to add events</string>
+	<key>NSCameraUsageDescription</key>
+	<string>This app needs access to your camera to take photos.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>Used to view downloaded files</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app needs microphone access.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>We need access to save images to your gallery.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photos to upload media to the group.</string>
-	<key>NSCameraUsageDescription</key>
-	<string>This app needs access to your camera to take photos.</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>This app needs microphone access.</string>
-	<key>NSCalendarsUsageDescription</key>
-	<string>This app requires calendar access to add events</string>
+	<key>NSUserTrackingUsageDescription</key>
+	<string>This identifier will be used to deliver personalized notifications.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>

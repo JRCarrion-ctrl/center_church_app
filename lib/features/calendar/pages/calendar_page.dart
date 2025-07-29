@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 import '../../../app_state.dart';
 import '../event_service.dart';
@@ -18,7 +19,7 @@ class CalendarPage extends StatefulWidget {
   State<CalendarPage> createState() => _CalendarPageState();
 }
 
-class _CalendarPageState extends State<CalendarPage> {
+class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late Future<_CalendarData> _calendarFuture;
   bool _canManageApp = false;
   String _refreshKey = UniqueKey().toString();
@@ -68,6 +69,29 @@ class _CalendarPageState extends State<CalendarPage> {
         _calendarFuture = _loadAllEvents();
         _refreshKey = UniqueKey().toString();
       });
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    setState(() {
+      _calendarFuture = _loadAllEvents();
+      _refreshKey = UniqueKey().toString();
     });
   }
 

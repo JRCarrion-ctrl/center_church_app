@@ -7,12 +7,14 @@ import 'routes/group_routes.dart';
 import 'routes/main_shell_routes.dart';
 import 'routes/misc_routes.dart';
 import 'core/pages/not_found_page.dart';
+import 'routes/router_observer.dart';
 
 GoRouter createRouter(AppState appState) => GoRouter(
   debugLogDiagnostics: true,
   refreshListenable: appState.authChangeNotifier,
   navigatorKey: navigatorKey,
   initialLocation: '/landing',
+  observers: [routeObserver],
   routes: [
     ...authRoutes,
     ...miscRoutes,

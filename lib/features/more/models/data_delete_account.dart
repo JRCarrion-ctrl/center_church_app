@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:path_provider/path_provider.dart';
 import '../../../app_state.dart';
 
 class DataAndDeleteAccountPage extends StatelessWidget {
   const DataAndDeleteAccountPage({super.key});
+  
 
   void _showDeleteConfirmation(BuildContext context) {
     showDialog(
@@ -62,6 +64,11 @@ class DataAndDeleteAccountPage extends StatelessWidget {
     );
   }
 
+  Future<void> _clearCache() async {
+    final dir = await getTemporaryDirectory();
+    if (await dir.exists()) await dir.delete(recursive: true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -86,6 +93,18 @@ class DataAndDeleteAccountPage extends StatelessWidget {
             subtitle: const Text('Reset app preferences and cached information.'),
             trailing: const Icon(Icons.cleaning_services),
             onTap: () => _clearLocalData(context),
+          ),
+          ListTile(
+            title: const Text('Clear Cache'),
+            subtitle: const Text('Clear Local Cached Data'),
+            trailing: const Icon(Icons.cleaning_services),
+            onTap: () async {
+              await _clearCache();
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Cache cleared.')),
+              );
+            },
           ),
         ],
       ),

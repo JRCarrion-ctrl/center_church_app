@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../app_state.dart';
 import '../../shared/widgets/widgets.dart';
 import '../../features/auth/profile.dart';
@@ -15,24 +16,12 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  String selectedLanguage = 'en';
-
-  String get churchName => selectedLanguage == 'en'
-      ? 'Center Church Frederick'
-      : 'Centro Cristiano Frederick';
-
-  void setLanguage(String lang) {
-    setState(() => selectedLanguage = lang);
-  }
-
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final profile = appState.profile;
-
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-
     final screenHeight = MediaQuery.of(context).size.height;
     final fontSize = screenHeight * 0.022;
     final padding = screenHeight * 0.018;
@@ -45,7 +34,7 @@ class _LandingPageState extends State<LandingPage> {
       body: Stack(
         children: [
           _buildBackground(isDark),
-          _buildMainContent(screenHeight, fontSize, padding),
+          _buildMainContent(screenHeight, fontSize, padding, appState),
           _buildAuthStatus(profile),
         ],
       ),
@@ -62,15 +51,13 @@ class _LandingPageState extends State<LandingPage> {
           ),
         ),
         Container(
-          color: isDark
-              ? Colors.black.withAlpha(64)
-              : Colors.black.withAlpha(32),
+          color: isDark ? Colors.black.withAlpha(64) : Colors.black.withAlpha(32),
         ),
       ],
     );
   }
 
-  Widget _buildMainContent(double screenHeight, double fontSize, double padding) {
+  Widget _buildMainContent(double screenHeight, double fontSize, double padding, AppState appState) {
     return Center(
       child: SingleChildScrollView(
         physics: const NeverScrollableScrollPhysics(),
@@ -79,9 +66,9 @@ class _LandingPageState extends State<LandingPage> {
           children: [
             _buildLogo(screenHeight),
             SizedBox(height: screenHeight * 0.015),
-            _buildTitle(fontSize),
+            _buildTitle(appState.languageCode, fontSize),
             SizedBox(height: screenHeight * 0.06),
-            _buildButtons(fontSize, padding),
+            _buildButtons(fontSize, padding, appState),
           ],
         ),
       ),
@@ -96,11 +83,16 @@ class _LandingPageState extends State<LandingPage> {
         height: screenHeight * 0.12,
         fit: BoxFit.contain,
         color: Colors.white,
+        semanticLabel: 'Church Logo',
       ),
     );
   }
 
-  Widget _buildTitle(double fontSize) {
+  Widget _buildTitle(String languageCode, double fontSize) {
+    final churchName = languageCode == 'en'
+        ? 'Center Church Frederick'
+        : 'Centro Cristiano Frederick';
+
     return Text(
       churchName,
       style: TextStyle(
@@ -118,26 +110,26 @@ class _LandingPageState extends State<LandingPage> {
     );
   }
 
-  Widget _buildButtons(double fontSize, double padding) {
+  Widget _buildButtons(double fontSize, double padding, AppState appState) {
     return Column(
       children: [
         SecondaryButton(
           title: "How to Use",
-          onTap: () {},
+          onTap: () => context.push('/how_to'),
           fontSize: fontSize,
           padding: padding,
         ),
         SizedBox(height: padding * 1.4),
         SecondaryButton(
           title: "Church Information",
-          onTap: () {},
+          onTap: () => launchUrl(Uri.parse('https://www.centrocristianofrederick.com/')),
           fontSize: fontSize,
           padding: padding,
         ),
         SizedBox(height: padding * 1.4),
-        LanguageButtons(
-          selectedLanguage: selectedLanguage,
-          onLanguageChange: setLanguage,
+        SecondaryButton(
+          title: "Select Language",
+          onTap: _showLanguageSelector,
           fontSize: fontSize,
           padding: padding,
         ),
@@ -178,6 +170,39 @@ class _LandingPageState extends State<LandingPage> {
                 decoration: TextDecoration.none,
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showLanguageSelector() {
+    final appState = Provider.of<AppState>(context, listen: false);
+    String selected = appState.languageCode;
+
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              for (final lang in ['en', 'es'])
+                RadioListTile<String>(
+                  title: Text(lang == 'en' ? 'English' : 'Spanish'),
+                  value: lang,
+                  groupValue: selected,
+                  onChanged: (val) {
+                    if (val != null) {
+                      appState.setLanguageCode(val);
+                      setModalState(() => selected = val);
+                      Navigator.pop(context);
+                    }
+                  },
+                ),
+            ],
           ),
         ),
       ),

@@ -23,7 +23,10 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
 
     setState(() => _isLoading = true);
     try {
-      await Supabase.instance.client.auth.resetPasswordForEmail(email);
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: 'ccf_app://reset', // must match what's configured in Supabase Auth
+      );
       if (mounted) _showSuccessDialog();
     } catch (e) {
       _showErrorDialog('Password reset failed.\n${e.toString()}');

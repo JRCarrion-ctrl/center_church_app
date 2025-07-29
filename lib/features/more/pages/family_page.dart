@@ -1,11 +1,15 @@
 // file: lib/features/more/pages/family_page.dart
-
-import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../more/models/invite_modal.dart';
+
+const defaultRelationships = [
+  'Parent', 'Child', 'Sibling', 'Spouse', 'Cousin', 'Uncle', 'Aunt',
+  'Grandparent', 'Grandchild', 'Relative', 'Friend'
+];
 
 class FamilyPage extends StatefulWidget {
   final String? familyId;
@@ -20,9 +24,17 @@ class _FamilyPageState extends State<FamilyPage> {
   final supabase = Supabase.instance.client;
   final logger = Logger();
   List<Map<String, dynamic>> members = [];
+  Map<String, String> userDefinedRelationships = {};
+  String? familyCode;
   bool isLoading = true;
   String? error;
   late final String currentUserId;
+
+  String _generateFamilyCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    final rand = Random.secure();
+    return List.generate(6, (_) => chars[rand.nextInt(chars.length)]).join();
+  }
 
   @override
   void initState() {
@@ -37,14 +49,6 @@ class _FamilyPageState extends State<FamilyPage> {
       _loadFamily();
     } else {
       setState(() => isLoading = false);
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (widget.familyId != null && members.isEmpty) {
-      _loadFamily();
     }
   }
 
@@ -64,41 +68,58 @@ class _FamilyPageState extends State<FamilyPage> {
     }
 
     try {
-      final result = await supabase
+      final membersResult = await supabase
           .from('family_members')
           .select('*, user:profiles!family_members_user_id_fkey(*), inviter:profiles!family_members_invited_by_fkey(*), child:child_profiles(*)')
           .eq('family_id', familyId);
 
-      logger.i('Fetched family members: count=${result.length}');
-      for (var m in result) {
-        logger.d({'member': m});
-      }
+      final relationshipsResult = await supabase
+          .from('user_family_relationships')
+          .select()
+          .eq('viewer_id', currentUserId)
+          .eq('family_id', familyId);
 
-      setState(() => members = List<Map<String, dynamic>>.from(result));
+      final familyResult = await supabase
+          .from('families')
+          .select('family_code')
+          .eq('id', familyId)
+          .maybeSingle();
+
+      setState(() {
+        members = List<Map<String, dynamic>>.from(membersResult);
+        userDefinedRelationships = {
+          for (var r in relationshipsResult)
+            if (r['related_user_id'] != null && r['relationship'] != null)
+              r['related_user_id']: r['relationship']
+        };
+        familyCode = familyResult?['family_code'];
+      });
     } catch (e, stack) {
-      logger.e('Failed to load family members', error: e, stackTrace: stack);
-      setState(() => error = 'Failed to load family members');
+      logger.e('Failed to load family', error: e, stackTrace: stack);
+      setState(() => error = 'Failed to load family');
     } finally {
       setState(() => isLoading = false);
     }
   }
 
-  Future<void> _createFamily() async {
-    final response = await supabase.from('families').insert({}).select('id').single();
-    final newFamilyId = response['id'];
+  Future<void> _updateRelationship(String relatedUserId, String value) async {
+    final familyId = widget.familyId;
+    if (familyId == null) return;
 
-    await supabase.from('family_members').insert({
-      'user_id': currentUserId,
-      'family_id': newFamilyId,
-      'relationship': 'Self',
-      'is_child': false,
-      'status': 'accepted',
-    });
+    try {
+      await supabase
+        .from('user_family_relationships')
+        .upsert({
+          'viewer_id': currentUserId,
+          'related_user_id': relatedUserId,
+          'family_id': familyId,
+          'relationship': value,
+        }, onConflict: 'viewer_id,related_user_id,family_id');
 
-    if (mounted) {
-      context.go('/more/family', extra: {
-        'familyId': newFamilyId,
-      });
+      setState(() => userDefinedRelationships[relatedUserId] = value);
+    } catch (e) {
+      logger.e('Failed to update relationship', error: e);
+      _showSnackbar('Could not update relationship');
     }
   }
 
@@ -107,32 +128,25 @@ class _FamilyPageState extends State<FamilyPage> {
     if (isLoading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
+
     if (widget.familyId == null) {
       return Scaffold(
-        appBar: AppBar(
-          leading: BackButton(onPressed: () => context.go('/more')),
-          title: const Text("Your Family"),
-        ),
+        appBar: AppBar(title: const Text("Your Family")),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text("You are not in a family yet."),
               const SizedBox(height: 16),
-              ElevatedButton(
-                onPressed: _createFamily,
-                child: const Text("Create Family"),
-              ),
+              ElevatedButton(onPressed: _createFamily, child: const Text("Create Family")),
               const SizedBox(height: 12),
-              ElevatedButton(
-                onPressed: _loadInvites,
-                child: const Text("View Family Invites"),
-              ),
+              ElevatedButton(onPressed: _showJoinFamilyDialog, child: const Text("Join Family")),
             ],
           ),
         ),
       );
     }
+
     if (error != null) {
       return Scaffold(body: Center(child: Text(error!)));
     }
@@ -140,35 +154,57 @@ class _FamilyPageState extends State<FamilyPage> {
     final self = members.where((m) => m['user']?['id'] == currentUserId).toList();
     final children = members.where((m) => m['is_child'] == true).toList();
     final adults = members.where((m) => m['is_child'] != true && m['user']?['id'] != currentUserId).toList();
-    final pending = members.where((m) => m['status'] == 'pending').toList();
 
     return Scaffold(
       appBar: AppBar(
-        leading: BackButton(onPressed: () => context.go('/more')),
         title: const Text("Your Family"),
+        leading: BackButton(onPressed: () => context.go('/more')),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.child_care),
-            onPressed: _addChild,
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: _inviteUser,
-          ),
+          IconButton(icon: const Icon(Icons.child_care), onPressed: _addChild),
+          IconButton(icon: const Icon(Icons.person_add), onPressed: _inviteUser),
         ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadFamily,
-        child: members.isEmpty
-            ? ListView(children: [SizedBox(height: 200, child: Center(child: Text("No family members found.")))])
-            : ListView(
+        child: Column(
+          children: [
+            if (familyCode != null)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Family Code: $familyCode',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: [
                   if (self.isNotEmpty) _buildSection("You", self),
-                  if (children.isNotEmpty) _buildSection("Your Children", children),
+                  if (children.isNotEmpty) _buildSection("Children", children),
                   if (adults.isNotEmpty) _buildSection("Family Members", adults),
-                  if (pending.isNotEmpty) _buildSection("Pending Invites", pending),
+                  const SizedBox(height: 100),
                 ],
               ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: ElevatedButton.icon(
+                onPressed: _leaveFamily,
+                icon: const Icon(Icons.logout),
+                label: const Text('Leave Family'),
+                style: ElevatedButton.styleFrom(
+                  foregroundColor: Colors.red,
+                  backgroundColor: Colors.red.shade100,
+                  minimumSize: const Size.fromHeight(48),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -182,33 +218,43 @@ class _FamilyPageState extends State<FamilyPage> {
 
   Widget _buildMemberTile(Map<String, dynamic> m) {
     final isChild = m['is_child'] == true;
-    final status = m['status'] ?? 'accepted';
     final user = m['user'];
     final child = m['child'];
-    final displayName = user?['display_name'] ?? child?['display_name'] ?? 'Unnamed';
-    final photoUrl = user?['photo_url'] ?? child?['photo_url'];
-    final relationship = m['relationship'] ?? '';
+    final userId = user?['id'];
+    final memberUserId = user?['id'];
+    final name = user?['display_name'] ?? child?['display_name'] ?? 'Unnamed';
+    final photo = user?['photo_url'] ?? child?['photo_url'];
+    final relationship = userId != null ? userDefinedRelationships[userId] ?? '' : '';
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? NetworkImage(photoUrl) : null,
-        child: (photoUrl == null || photoUrl.isEmpty)
+        backgroundImage: (photo != null && photo.isNotEmpty) ? NetworkImage(photo) : null,
+        child: (photo == null || photo.isEmpty)
             ? Icon(isChild ? Icons.child_care : Icons.person)
             : null,
       ),
-      title: Text(displayName),
+      title: Text(name),
       subtitle: Wrap(
         spacing: 6,
         children: [
-          if (relationship.isNotEmpty) Chip(label: Text(relationship)),
-          if (status == 'pending') Chip(label: const Text('Pending'), backgroundColor: Colors.orange.shade100),
+          if (!isChild && userId != null && memberUserId != userId)
+            DropdownButton<String>(
+              value: relationship.isEmpty ? null : relationship,
+              hint: const Text('Set Relationship'),
+              items: defaultRelationships
+                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                  .toList(),
+              onChanged: (value) {
+                if (value != null) _updateRelationship(userId, value);
+              },
+            ),
         ],
       ),
       onTap: () {
         if (isChild && child != null) {
           context.pushNamed('view_child_profile', extra: child['id']);
         } else if (user != null) {
-          context.push("/profile/${user['id']}");
+          context.push('/profile/${user['id']}');
         }
       },
     );
@@ -232,79 +278,88 @@ class _FamilyPageState extends State<FamilyPage> {
     }
   }
 
-  Future<void> _loadInvites() async {
-    final result = await supabase
-        .from('family_members')
-        .select('*, user:profiles(*)')
-        .eq('linked_user_id', currentUserId)
-        .eq('status', 'pending');
-
-    if (mounted) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Family Invites'),
-          content: result.isEmpty
-              ? const Text('You have no pending invitations.')
-              : Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: result.map<Widget>((invite) {
-                    final inviter = invite['user'];
-                    final name = inviter?['display_name'] ?? 'Someone';
-                    return ListTile(
-                      title: Text('Invited by $name'),
-                      subtitle: Text(invite['relationship'] ?? 'No relationship'),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          IconButton(
-                            icon: const Icon(Icons.check, color: Colors.green),
-                            onPressed: () => _respondToInvite(invite['id'], true),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.close, color: Colors.red),
-                            onPressed: () => _respondToInvite(invite['id'], false),
-                          ),
-                        ],
-                      ),
-                    );
-                  }).toList(),
-                ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    }
+  Future<void> _createFamily() async {
+    final code = _generateFamilyCode();
+    final res = await supabase.from('families').insert({'family_code': code}).select('id').single();
+    final newId = res['id'];
+    await supabase.from('family_members').insert({
+      'user_id': currentUserId,
+      'family_id': newId,
+      'relationship': 'Self',
+      'is_child': false,
+      'status': 'accepted',
+    });
+    if (mounted) context.go('/more/family', extra: {'familyId': newId});
   }
 
-  Future<void> _respondToInvite(String id, bool accept) async {
-    if (accept) {
-      await supabase.from('family_members').update({'status': 'accepted'}).eq('id', id);
-
-      final updated = await supabase
-          .from('family_members')
-          .select('family_id')
-          .eq('id', id)
-          .maybeSingle();
-
-      final newFamilyId = updated?['family_id'];
-      if (mounted && newFamilyId != null) {
-        context.go('/more/family', extra: {
-          'familyId': newFamilyId,
-        });
-        return;
-      }
-    } else {
-      await supabase.from('family_members').delete().eq('id', id);
+  Future<void> _joinFamilyByCode(String code) async {
+    final formatted = code.trim().toUpperCase();
+    final result = await supabase
+        .from('families')
+        .select('id')
+        .eq('family_code', formatted)
+        .maybeSingle();
+    if (result == null) {
+      _showSnackbar('Family code not found.');
+      return;
     }
-    if (mounted) {
-      Navigator.pop(context);
-      _showSnackbar(accept ? 'Joined family!' : 'Invite declined');
-    }
+    await supabase.from('family_members').insert({
+      'user_id': currentUserId,
+      'family_id': result['id'],
+      'relationship': 'Relative',
+      'is_child': false,
+      'status': 'accepted',
+    });
+    if (mounted) context.go('/more/family', extra: {'familyId': result['id']});
+  }
+
+  Future<void> _leaveFamily() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Leave Family'),
+        content: const Text('Are you sure you want to leave this family?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Leave')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    await supabase
+        .from('family_members')
+        .delete()
+        .eq('user_id', currentUserId)
+        .eq('family_id', widget.familyId!);
+
+    if (mounted) context.go('/more/family', extra: {'familyId': null});
+  }
+
+  void _showJoinFamilyDialog() {
+    final controller = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Join Family'),
+        content: TextField(
+          controller: controller,
+          maxLength: 6,
+          textCapitalization: TextCapitalization.characters,
+          decoration: const InputDecoration(hintText: 'Enter Family Code'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _joinFamilyByCode(controller.text);
+            },
+            child: const Text('Join Family'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _showSnackbar(String msg) {

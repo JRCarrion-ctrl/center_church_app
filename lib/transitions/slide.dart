@@ -32,7 +32,7 @@ CustomTransitionPage<T> buildSlidePage<T>(
   ).chain(CurveTween(curve: curve));
 
   return CustomTransitionPage<T>(
-    key: ValueKey(child.runtimeType), // helpful for route diffing
+    key: ValueKey(child.hashCode), // helpful for route diffing
     child: child,
     transitionsBuilder: (context, animation, _, child) {
       return FadeTransition(

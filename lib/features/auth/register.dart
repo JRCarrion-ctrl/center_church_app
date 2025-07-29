@@ -92,21 +92,34 @@ class _RegisterFormState extends State<RegisterForm> {
       final authService = AuthService(context.read<AppState>());
       final response = await authService.signUp(email, password);
       final user = response.user;
-      final session = response.session;
 
-      if (user != null && session != null) {
+      if (user != null) {
+        // session may be null — wait for confirmation
         await ProfileService().createProfile(
           userId: user.id,
           displayName: displayName,
           email: email,
         );
 
-        final profile = await ProfileService().getProfile(user.id);
-
         if (!mounted) return;
-        Future.delayed(Duration.zero, () {
-          widget.onRegisterSuccess?.call(profile);
-        });
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text("Confirm Your Email"),
+            content: const Text(
+              "Your account was created.\n\nCheck your inbox to confirm your email. Once confirmed, you’ll be automatically signed in.",
+            ),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  widget.onRegisterSuccess?.call(null);
+                },
+                child: const Text("OK"),
+              ),
+            ],
+          ),
+        );
       }
     } catch (e) {
       if (!mounted) return;

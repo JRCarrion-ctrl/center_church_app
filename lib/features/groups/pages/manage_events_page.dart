@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import '../../calendar/event_service.dart';
@@ -16,7 +17,7 @@ class GroupEventDetailsPage extends StatefulWidget {
   State<GroupEventDetailsPage> createState() => _GroupEventDetailsPageState();
 }
 
-class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
+class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with RouteAware {
   final _eventService = EventService();
   int _attendingCount = 1;
   bool _saving = false;
@@ -28,6 +29,27 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> {
     super.initState();
     _checkRole();
     _loadRSVPs();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _loadRSVPs();
+    _checkRole();
   }
 
   Future<void> _checkRole() async {
