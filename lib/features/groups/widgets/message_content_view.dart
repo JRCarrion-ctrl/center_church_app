@@ -35,7 +35,7 @@ class MessageContentView extends StatefulWidget {
 class _MessageContentViewState extends State<MessageContentView> {
   dynamic _previewData;
   static const _placeholders = {'[Image]', '[GIF]', '[File]'};
-  late Future<File?> _mediaFuture;
+  Future<File?>? _mediaFuture;
 
   @override
   void initState() {
@@ -57,7 +57,7 @@ class _MessageContentViewState extends State<MessageContentView> {
     if ((ext.isImage && autoDownloadImages) || (ext.isVideo && autoDownloadVideos)) {
       if (wifiOnly) {
         final result = await Connectivity().checkConnectivity();
-        if (result != ConnectivityResult.wifi) {
+        if (!result.contains(ConnectivityResult.wifi)) {
           setState(() => _mediaFuture = Future.value(null));
           return;
         }
@@ -115,7 +115,7 @@ class _MessageContentViewState extends State<MessageContentView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FutureBuilder<File?>(
-            future: _mediaFuture,
+            future: _mediaFuture ?? Future.value(null),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return _buildPlaceholderImage();
@@ -202,18 +202,39 @@ class _MessageContentViewState extends State<MessageContentView> {
       );
 
   Widget _buildImageView(File file) => GestureDetector(
-        onTap: () => showDialog(
-          context: context,
-          builder: (_) => Dialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: ClipRRect(borderRadius: BorderRadius.circular(16), child: Image.file(file)),
+    onTap: () => showDialog(
+      context: context,
+      builder: (_) => Stack(
+        children: [
+          Container(
+            color: Colors.black,
+            child: InteractiveViewer(
+              panEnabled: true,
+              minScale: 1,
+              maxScale: 5,
+              child: Center(
+                child: Image.file(file),
+              ),
+            ),
           ),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(16),
-          child: Image.file(file, height: 200, fit: BoxFit.cover),
-        ),
-      );
+          Positioned(
+            top: 30,
+            right: 16,
+            child: SafeArea(
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Image.file(file, height: 200, fit: BoxFit.cover),
+    ),
+  );
 
   Widget _buildFileCard(String fileUrl, File file, String extension, Color textColor) => InkWell(
         onTap: () async {

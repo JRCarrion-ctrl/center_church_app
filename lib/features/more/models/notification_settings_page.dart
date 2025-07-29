@@ -106,6 +106,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       body: loading
         ? const Center(child: CircularProgressIndicator())
         : ListView(
+            padding: const EdgeInsets.only(bottom: 24),
             children: [
               SwitchListTile(
                 title: const Text('Mute All Notifications'),
@@ -126,10 +127,35 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                       : (val) => _toggleMute(groupId, !val),
                   subtitle: const Text('Enable notifications'),
                 );
-              })
+              }),
+              const Divider(),
+              ListTile(
+                title: const Text('Re-enable Push Notifications'),
+                subtitle: const Text('If you previously denied them'),
+                trailing: const Icon(Icons.settings),
+                onTap: () async {
+                  final accepted = await OneSignal.Notifications.requestPermission(true);
+                  if (!accepted && context.mounted) {
+                    showDialog(
+                      context: context,
+                      builder: (_) => AlertDialog(
+                        title: const Text("Notification Permission Denied"),
+                        content: const Text(
+                          "Please enable push notifications from your device's settings.",
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text("OK"),
+                          )
+                        ],
+                      ),
+                    );
+                  }
+                },
+              ),
             ],
           ),
-
     );
   }
 }

@@ -14,6 +14,9 @@ class YourGroupsSection extends StatefulWidget {
 
 class YourGroupsSectionState extends State<YourGroupsSection> {
   late Future<List<GroupModel>> _futureGroups;
+  List<GroupModel> _allGroups = [];
+  List<GroupModel> _filteredGroups = [];
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -21,15 +24,25 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     _futureGroups = _loadGroups();
   }
 
-  Future<List<GroupModel>> _loadGroups() {
+  Future<List<GroupModel>> _loadGroups() async {
     final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    return GroupService().getUserGroups(userId);
+    final groups = await GroupService().getUserGroups(userId);
+    _allGroups = groups;
+    _filteredGroups = groups;
+    return groups;
   }
 
   /// Public method to allow refresh from parent
   Future<void> refresh() async {
     setState(() {
       _futureGroups = _loadGroups();
+    });
+  }
+
+  void _filterGroups(String query) {
+    setState(() {
+      _searchQuery = query.toLowerCase();
+      _filteredGroups = _allGroups.where((g) => g.name.toLowerCase().contains(_searchQuery)).toList();
     });
   }
 
@@ -41,6 +54,14 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
         const Text(
           'Your Groups',
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search),
+            hintText: 'Search groups',
+          ),
+          onChanged: _filterGroups,
         ),
         const SizedBox(height: 12),
         FutureBuilder<List<GroupModel>>(
@@ -57,39 +78,42 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
               return Text('Error loading your groups: ${snapshot.error}');
             }
 
-            final groups = snapshot.data ?? [];
-
-            if (groups.isEmpty) {
+            if (_filteredGroups.isEmpty) {
               return const Text('You are not in any groups yet.');
             }
 
-            return SizedBox(
-              height: 110,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                itemCount: groups.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final group = groups[index];
-                  return GestureDetector(
-                    onTap: () {
-                      context.push('/groups/${group.id}');
-                    },
-                    child: Column(
-                      children: [
-                        CircleAvatar(
+            return GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _filteredGroups.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
+                childAspectRatio: 0.75,
+              ),
+              itemBuilder: (context, index) {
+                final group = _filteredGroups[index];
+                return GestureDetector(
+                  onTap: () => context.push('/groups/${group.id}'),
+                  child: Column(
+                    children: [
+                      Hero(
+                        tag: 'group_avatar_${group.id}',
+                        child: CircleAvatar(
                           radius: 32,
-                          backgroundImage: group.photoUrl != null
-                              ? NetworkImage(group.photoUrl!)
-                              : null,
+                          backgroundImage: group.photoUrl != null ? NetworkImage(group.photoUrl!) : null,
                           backgroundColor: Theme.of(context).colorScheme.primaryContainer,
                           child: group.photoUrl == null
                               ? const Icon(Icons.group, size: 30, color: Colors.white)
                               : null,
                         ),
-                        const SizedBox(height: 6),
-                        SizedBox(
+                      ),
+                      const SizedBox(height: 6),
+                      AnimatedOpacity(
+                        opacity: 1.0,
+                        duration: const Duration(milliseconds: 500),
+                        child: SizedBox(
                           width: 72,
                           child: Text(
                             group.name,
@@ -99,11 +123,11 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                             maxLines: 2,
                           ),
                         ),
-                      ],
-                    ),
-                  );
-                },
-              ),
+                      ),
+                    ],
+                  ),
+                );
+              },
             );
           },
         ),

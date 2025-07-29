@@ -23,6 +23,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late Future<_CalendarData> _calendarFuture;
   bool _canManageApp = false;
   String _refreshKey = UniqueKey().toString();
+  final user = Supabase.instance.client.auth.currentUser;
 
   @override
   void initState() {
@@ -46,10 +47,15 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
     final appState = Provider.of<AppState>(context, listen: false);
     final service = EventService();
     final appEvents = await service.fetchAppEvents();
-    final groupEvents = await service.fetchUpcomingGroupEvents();
 
-    final visibleGroupIds = appState.visibleCalendarGroupIds.toSet();
-    final filteredGroupEvents = groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
+    List<GroupEvent> filteredGroupEvents = [];
+
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user != null && appState.visibleCalendarGroupIds.isNotEmpty) {
+      final groupEvents = await service.fetchUpcomingGroupEvents();
+      final visibleGroupIds = appState.visibleCalendarGroupIds.toSet();
+      filteredGroupEvents = groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
+    }
 
     return _CalendarData(appEvents: appEvents, groupEvents: filteredGroupEvents);
   }
@@ -192,7 +198,11 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   Widget _buildAppEventCard(AppEvent e) => Card(
         margin: const EdgeInsets.only(bottom: 12),
         child: ListTile(
-          onTap: () => context.push('/app-event/${e.id}', extra: e),
+          onTap: user == null
+              ? () => ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please log in to view event details.')),
+                )
+              : () => context.push('/app-event/${e.id}', extra: e),
           trailing: _canManageApp
               ? PopupMenuButton<String>(
                   onSelected: (action) async {

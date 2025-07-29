@@ -127,7 +127,7 @@ class _RegisterFormState extends State<RegisterForm> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text("Registration Error"),
-          content: Text("Failed to register:\n\${e.toString()}"),
+          content: Text("Failed to register:\n${e.toString()}"),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),

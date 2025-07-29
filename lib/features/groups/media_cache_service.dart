@@ -2,7 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:connectivity_plus/connectivity_plus.dart' as connectivity_plus;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class MediaCacheService {
@@ -43,8 +43,8 @@ class MediaCacheService {
 
     // Check Wi-Fi connectivity
     if (wifiOnly) {
-      final result = await connectivity_plus.Connectivity().checkConnectivity();
-      if (result != connectivity_plus.ConnectivityResult.wifi) {
+      final result = await Connectivity().checkConnectivity();
+      if (!result.contains(ConnectivityResult.wifi)) {
         throw Exception('Not on Wi-Fi');
       }
     }

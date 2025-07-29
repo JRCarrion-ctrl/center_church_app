@@ -177,8 +177,9 @@ class GroupService {
         .from('group_events')
         .select('id,title,event_date,location,image_url')
         .eq('group_id', groupId)
+        .gte('event_date', DateTime.now().toUtc().toIso8601String()) // only upcoming
         .order('event_date', ascending: true)
-        .limit(3); // Only show next 3 events
+        .limit(3);
 
     return List<Map<String, dynamic>>.from(events);
   }
@@ -188,8 +189,9 @@ class GroupService {
         .from('group_announcements')
         .select('id,title,body,image_url,published_at,created_at')
         .eq('group_id', groupId)
+        .lte('published_at', DateTime.now().toUtc().toIso8601String()) // only published
         .order('published_at', ascending: false)
-        .limit(3); // Only show latest 3 announcements
+        .limit(3);
 
     return List<Map<String, dynamic>>.from(announcements);
   }

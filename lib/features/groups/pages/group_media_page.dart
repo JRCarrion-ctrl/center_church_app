@@ -137,25 +137,48 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                           onTap: () {
                             showDialog(
                               context: context,
-                              builder: (_) => Dialog(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(12),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      if (_isImage(url))
-                                        ClipRRect(
-                                          borderRadius: BorderRadius.circular(12),
-                                          child: Image.file(file, fit: BoxFit.contain),
-                                        )
-                                      else ...[
-                                        const Icon(Icons.insert_drive_file, size: 60),
-                                        const SizedBox(height: 12),
-                                        Text(fileName, style: const TextStyle(fontSize: 16)),
-                                      ],
-                                      const SizedBox(height: 16),
-                                      Row(
+                              builder: (_) => Stack(
+                                children: [
+                                  Container(
+                                    color: Colors.black,
+                                    padding: const EdgeInsets.all(12),
+                                    child: InteractiveViewer(
+                                      panEnabled: true,
+                                      minScale: 1,
+                                      maxScale: 5,
+                                      child: _isImage(url)
+                                          ? Center(
+                                              child: ClipRRect(
+                                                borderRadius: BorderRadius.circular(12),
+                                                child: Image.file(file, fit: BoxFit.contain),
+                                              ),
+                                            )
+                                          : Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                const Icon(Icons.insert_drive_file, size: 60, color: Colors.white),
+                                                const SizedBox(height: 12),
+                                                Text(fileName, style: const TextStyle(fontSize: 16, color: Colors.white)),
+                                              ],
+                                            ),
+                                    ),
+                                  ),
+                                  Positioned(
+                                    top: 30,
+                                    right: 16,
+                                    child: SafeArea(
+                                      child: IconButton(
+                                        icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                                        onPressed: () => Navigator.of(context).pop(),
+                                      ),
+                                    ),
+                                  ),
+                                  if (_isImage(url))
+                                    Positioned(
+                                      bottom: 16,
+                                      left: 16,
+                                      right: 16,
+                                      child: Row(
                                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                                         children: [
                                           ElevatedButton.icon(
@@ -164,22 +187,22 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                                             label: const Text('Download'),
                                           ),
                                           ElevatedButton.icon(
-                                            onPressed: () async{
+                                            onPressed: () async {
                                               await SharePlus.instance.share(
                                                 ShareParams(
-                                                files: [XFile(file.path)],
-                                                text: fileName,
-                                              ));
-                                              },
+                                                  files: [XFile(file.path)],
+                                                  text: fileName,
+                                                ),
+                                              );
+                                            },
                                             icon: const Icon(Icons.share),
                                             label: const Text('Share'),
                                           ),
                                         ],
                                       ),
-                                    ],
-                                  ),
-                                ),
-                              ),
+                                    ),
+                                ],
+                              )
                             );
                           },
                           child: Stack(

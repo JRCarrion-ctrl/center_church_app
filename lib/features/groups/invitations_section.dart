@@ -12,24 +12,25 @@ class InvitationsSection extends StatefulWidget {
 
 class InvitationsSectionState extends State<InvitationsSection> {
   final supabase = Supabase.instance.client;
-  late Future<List<GroupModel>> _futureInvites;
+  List<GroupModel> _invites = [];
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _futureInvites = _loadInvitations();
+    _loadInvitations();
   }
 
-  Future<List<GroupModel>> _loadInvitations() async {
+  Future<void> _loadInvitations() async {
     final userId = supabase.auth.currentUser?.id ?? '';
-    return GroupService().getGroupInvitations(userId);
-  }
-
-  void refresh() {
+    final invites = await GroupService().getGroupInvitations(userId);
     setState(() {
-      _futureInvites = _loadInvitations();
+      _invites = invites;
+      _loading = false;
     });
   }
+
+  void refresh() => _loadInvitations();
 
   Future<void> _acceptInvite(GroupModel group) async {
     final userId = supabase.auth.currentUser?.id;
@@ -49,12 +50,10 @@ class InvitationsSectionState extends State<InvitationsSection> {
         .eq('group_id', group.id)
         .eq('user_id', userId);
 
-    if (context.mounted) {
-      if (!mounted) return;
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Joined ${group.name}')),
       );
-      refresh();
     }
   }
 
@@ -68,90 +67,95 @@ class InvitationsSectionState extends State<InvitationsSection> {
         .eq('group_id', group.id)
         .eq('user_id', userId);
 
-    if (context.mounted) {
-      if (!mounted) return;
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Declined invitation to ${group.name}')),
       );
-      refresh();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<GroupModel>>(
-      future: _futureInvites,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox();
-        }
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-        if (snapshot.hasError) {
-          return const Text('Error loading invitations');
-        }
+    if (_invites.isEmpty) return const SizedBox.shrink();
 
-        final invites = snapshot.data ?? [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Invitations',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: _invites.length,
+          itemBuilder: (context, index) {
+            final group = _invites[index];
 
-        if (invites.isEmpty) return const SizedBox.shrink();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Invitations',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 12),
-            ...invites.map((group) => Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+            return Dismissible(
+              key: ValueKey(group.id),
+              background: Container(
+                alignment: Alignment.centerLeft,
+                padding: const EdgeInsets.only(left: 20),
+                color: Colors.green,
+                child: const Icon(Icons.check, color: Colors.white),
+              ),
+              secondaryBackground: Container(
+                alignment: Alignment.centerRight,
+                padding: const EdgeInsets.only(right: 20),
+                color: Colors.red,
+                child: const Icon(Icons.close, color: Colors.white),
+              ),
+              confirmDismiss: (direction) async {
+                if (direction == DismissDirection.startToEnd) {
+                  await _acceptInvite(group);
+                } else {
+                  await _declineInvite(group);
+                }
+                return true; // Allow Dismissible to remove item
+              },
+              onDismissed: (_) {
+                setState(() {
+                  _invites.removeAt(index);
+                });
+              },
+              child: Card(
+                margin: const EdgeInsets.symmetric(vertical: 6),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                child: ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  leading: CircleAvatar(
+                    backgroundImage: group.photoUrl != null ? NetworkImage(group.photoUrl!) : null,
+                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                    child: group.photoUrl == null
+                        ? const Icon(Icons.group, color: Colors.white)
+                        : null,
                   ),
-                  elevation: 2,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          group.name,
-                          style: const TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
+                  title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: group.description != null && group.description!.isNotEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            group.description!,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        if (group.description != null && group.description!.isNotEmpty)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Text(
-                              group.description!,
-                              style: const TextStyle(color: Colors.black54),
-                            ),
-                          ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton.icon(
-                              icon: const Icon(Icons.check, color: Colors.green),
-                              label: const Text('Accept'),
-                              onPressed: () => _acceptInvite(group),
-                            ),
-                            const SizedBox(width: 8),
-                            TextButton.icon(
-                              icon: const Icon(Icons.close, color: Colors.red),
-                              label: const Text('Decline'),
-                              onPressed: () => _declineInvite(group),
-                            ),
-                          ],
                         )
-                      ],
-                    ),
-                  ),
-                )),
-          ],
-        );
-      },
+                      : null,
+                ),
+              ),
+            );
+          },
+        ),
+      ],
     );
   }
 }

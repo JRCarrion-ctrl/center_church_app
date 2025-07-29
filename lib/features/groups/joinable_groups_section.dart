@@ -12,26 +12,25 @@ class JoinableGroupsSection extends StatefulWidget {
 }
 
 class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
-  late Future<List<GroupModel>> _futureGroups;
+  List<GroupModel> allGroups = [];
+  List<GroupModel> filteredGroups = [];
+  String _query = '';
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _futureGroups = _loadFilteredGroups();
+    _loadFilteredGroups();
   }
 
-  void refresh() {
-    setState(() {
-      _futureGroups = _loadFilteredGroups();
-    });
-  }
+  void refresh() => _loadFilteredGroups();
 
-  Future<List<GroupModel>> _loadFilteredGroups() async {
+  Future<void> _loadFilteredGroups() async {
     final client = Supabase.instance.client;
     final userId = client.auth.currentUser?.id;
-    if (userId == null) return [];
+    if (userId == null) return;
 
-    final allJoinable = await GroupService().getJoinableGroups();
+    final joinable = await GroupService().getJoinableGroups();
 
     final memberships = await client
         .from('group_memberships')
@@ -39,11 +38,19 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
         .eq('user_id', userId)
         .eq('status', 'approved');
 
-    final joinedGroupIds = (memberships as List)
+    final joinedIds = (memberships as List)
         .map((m) => m['group_id'] as String)
         .toSet();
 
-    return allJoinable.where((g) => !joinedGroupIds.contains(g.id)).toList();
+    allGroups = joinable.where((g) => !joinedIds.contains(g.id)).toList();
+    _applyFilter();
+    setState(() => _loading = false);
+  }
+
+  void _applyFilter() {
+    setState(() {
+      filteredGroups = allGroups.where((g) => g.name.toLowerCase().contains(_query.toLowerCase())).toList();
+    });
   }
 
   @override
@@ -51,57 +58,88 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Groups You Can Join',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
+        const Text('Groups You Can Join', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
-        FutureBuilder<List<GroupModel>>(
-          future: _futureGroups,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-
-            if (snapshot.hasError) {
-              return Text('Error loading groups: ${snapshot.error}');
-            }
-
-            final groups = snapshot.data ?? [];
-
-            if (groups.isEmpty) {
-              return const Text('No open groups available at the moment.');
-            }
-
-            return Column(
-              children: groups.map((group) {
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 6),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  elevation: 2,
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    title: Text(
-                      group.name,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                    ),
-                    subtitle: group.description != null && group.description!.isNotEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.only(top: 4.0),
-                            child: Text(group.description!, style: const TextStyle(color: Colors.black54)),
-                          )
-                        : null,
-                    trailing: const Icon(Icons.arrow_forward),
-                    onTap: () => showGroupJoinModal(context, group.id),
-                  ),
-                );
-              }).toList(),
-            );
+        TextField(
+          decoration: const InputDecoration(
+            hintText: 'Search groups...',
+            prefixIcon: Icon(Icons.search),
+            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+          ),
+          onChanged: (val) {
+            _query = val;
+            _applyFilter();
           },
         ),
+        const SizedBox(height: 16),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (filteredGroups.isEmpty)
+          const Text('No open groups available at the moment.')
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: filteredGroups.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              childAspectRatio: 0.9,
+              crossAxisSpacing: 12,
+              mainAxisSpacing: 12,
+            ),
+            itemBuilder: (context, index) {
+              final group = filteredGroups[index];
+              return GestureDetector(
+                onTap: () => showGroupJoinModal(context, group.id),
+                child: Hero(
+                  tag: 'group-${group.id}',
+                  child: Card(
+                    elevation: 3,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        children: [
+                          CircleAvatar(
+                            radius: 30,
+                            backgroundImage: group.photoUrl != null
+                                ? NetworkImage(group.photoUrl!)
+                                : null,
+                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                            child: group.photoUrl == null
+                                ? const Icon(Icons.group, size: 28, color: Colors.white)
+                                : null,
+                          ),
+                          const SizedBox(height: 10),
+                          Text(
+                            group.name,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (group.description != null && group.description!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Text(
+                                group.description!,
+                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
       ],
     );
   }

@@ -32,7 +32,7 @@
 		<dict>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>ccf_app</string>
+				<string>ccfapp</string>
 			</array>
 		</dict>
 	</array>
@@ -56,6 +56,12 @@
 	<string>We need access to your photos to upload media to the group.</string>
 	<key>NSUserTrackingUsageDescription</key>
 	<string>This identifier will be used to deliver personalized notifications.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>This app may use your location to improve notification relevance.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>This app uses Bluetooth to connect to nearby devices.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>This app may use motion data to enhance functionality.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

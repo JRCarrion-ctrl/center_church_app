@@ -13,6 +13,7 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   final _confirmController = TextEditingController();
   bool _loading = false;
   String? _message;
+  bool _showBackToLogin = false;
 
   Future<void> _updatePassword() async {
     final password = _passwordController.text.trim();
@@ -41,11 +42,10 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
       );
 
       if (mounted) {
-        setState(() => _message = 'Password updated successfully!');
-        await Future.delayed(const Duration(milliseconds: 100));
-        if (mounted) {
-          Navigator.of(context).pushReplacementNamed('/landing');
-        }
+        setState(() {
+          _message = 'Password updated successfully!';
+          _showBackToLogin = true;
+        });
       }
     } catch (e) {
       setState(() => _message = 'Failed to update password: $e');
@@ -95,12 +95,19 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
                 ),
               ),
             const SizedBox(height: 16),
-            _loading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _updatePassword,
-                    child: const Text('Update Password'),
-                  ),
+            if (_loading)
+              const CircularProgressIndicator()
+            else ...[
+              ElevatedButton(
+                onPressed: _updatePassword,
+                child: const Text('Update Password'),
+              ),
+              if (_showBackToLogin)
+                TextButton(
+                  onPressed: () => Navigator.of(context).pushReplacementNamed('/auth'),
+                  child: const Text('Back to Login'),
+                ),
+            ],
           ],
         ),
       ),

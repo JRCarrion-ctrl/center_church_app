@@ -52,10 +52,12 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     final hasPrompted = prefs.getBool('notification_prompted') ?? false;
 
     if (!hasPrompted) {
-      final status = await Permission.notification.status;
-      if (status.isDenied || status.isRestricted) {
-        await Permission.notification.request();
-      }
+      // Request OS-level push permission (important for iOS)
+      final accepted = await OneSignal.Notifications.requestPermission(true);
+
+      // (Optional) You can log or react to whether the user accepted:
+      debugPrint('Push permission accepted: $accepted');
+
       await prefs.setBool('notification_prompted', true);
     }
   }

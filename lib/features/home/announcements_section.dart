@@ -44,55 +44,57 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
 
   @override
   void didPopNext() {
-    _loadData(); // refresh when returning to this tab
+    _loadData();
   }
 
   Future<void> _loadData() async {
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
     final nowUtc = DateTime.now().toUtc().toIso8601String();
     setState(() => loading = true);
 
     try {
-      final profile = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', userId)
-          .maybeSingle();
-
-      isAdmin = profile != null &&
-          (profile['role'] == 'supervisor' || profile['role'] == 'owner');
-
       final global = await supabase
           .from('app_announcements')
           .select()
           .lte('published_at', nowUtc)
           .order('published_at', ascending: false);
 
-      final memberships = await supabase
-          .from('group_memberships')
-          .select('group_id')
-          .eq('user_id', userId)
-          .eq('status', 'approved');
-
-      final groupIds = (memberships as List)
-          .whereType<Map<String, dynamic>>()
-          .map((m) => m['group_id'] as String)
-          .toList();
-
       List<dynamic> groups = [];
-      if (groupIds.isNotEmpty) {
-        groups = await supabase
-            .from('group_announcements')
-            .select()
-            .inFilter('group_id', groupIds)
-            .lte('published_at', nowUtc)
-            .order('published_at', ascending: false);
+      String? role;
+
+      if (userId != null) {
+        final profile = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', userId)
+            .maybeSingle();
+
+        role = profile?['role'];
+
+        final memberships = await supabase
+            .from('group_memberships')
+            .select('group_id')
+            .eq('user_id', userId)
+            .eq('status', 'approved');
+
+        final groupIds = (memberships as List)
+            .whereType<Map<String, dynamic>>()
+            .map((m) => m['group_id'] as String)
+            .toList();
+
+        if (groupIds.isNotEmpty) {
+          groups = await supabase
+              .from('group_announcements')
+              .select()
+              .inFilter('group_id', groupIds)
+              .lte('published_at', nowUtc)
+              .order('published_at', ascending: false);
+        }
       }
 
       if (mounted) {
         setState(() {
+          isAdmin = role == 'supervisor' || role == 'owner';
           mainAnnouncements = List<Map<String, dynamic>>.from(global);
           groupAnnouncements = List<Map<String, dynamic>>.from(groups);
           loading = false;
@@ -130,9 +132,18 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
             _buildHeader(context),
             const SizedBox(height: 12),
             if (!hasMain && !hasGroup)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No announcements available.'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Column(
+                  children: [
+                    const Text('No announcements available.'),
+                    if (Supabase.instance.client.auth.currentUser == null)
+                      const Text(
+                        'Log in to view group announcements.',
+                        style: TextStyle(color: Colors.grey),
+                      ),
+                  ],
+                ),
               ),
             if (hasMain)
               ...mainAnnouncements.map((a) => Padding(
@@ -141,9 +152,18 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                   )),
             if (showGroupAnnouncements && hasGroup) ...[
               const SizedBox(height: 20),
-              const Text(
-                'Group Announcements',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Group Announcements',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                  TextButton(
+                    onPressed: () => GoRouter.of(context).push('/group-announcements'),
+                    child: const Text('View All'),
+                  ),
+                ],
               ),
               const SizedBox(height: 8),
               _buildGroupList(),

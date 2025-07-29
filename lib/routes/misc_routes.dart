@@ -1,4 +1,5 @@
 // lib/routes/misc_routes.dart
+import 'package:ccf_app/features/home/models/group_announcements_page.dart';
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
 import 'package:ccf_app/features/more/models/media_settings.dart';
@@ -199,4 +200,8 @@ final List<GoRoute> miscRoutes = [
     path: '/media-settings',
     builder: (context, state) => const MediaSettingsPage(),
   ),
+  GoRoute(
+    path: '/group-announcements',
+    builder: (context, state) => const GroupAnnouncementsPage(),
+  )
 ];

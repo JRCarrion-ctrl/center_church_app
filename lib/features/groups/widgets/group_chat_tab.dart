@@ -38,6 +38,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   bool _showJumpToLatest = false;
   bool _initialScrollDone = false;
   String? _highlightMessageId;
+  String? _pinnedPreview;
 
   String? get _userId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -109,8 +110,23 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         .select('pinned_message_id')
         .eq('id', widget.groupId)
         .maybeSingle();
-    if (mounted) {
-      setState(() => _highlightMessageId = response?['pinned_message_id']);
+
+    final pinnedId = response?['pinned_message_id'];
+    if (pinnedId != null) {
+      final message = await Supabase.instance.client
+          .from('group_messages')
+          .select('content')
+          .eq('id', pinnedId)
+          .maybeSingle();
+      setState(() {
+        _highlightMessageId = pinnedId;
+        _pinnedPreview = message?['content'];
+      });
+    } else {
+      setState(() {
+        _highlightMessageId = null;
+        _pinnedPreview = null;
+      });
     }
   }
 
@@ -254,6 +270,34 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
               color: Theme.of(context).colorScheme.surface,
               child: Column(
                 children: [
+                  if (_highlightMessageId != null && _pinnedPreview != null)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+                      child: GestureDetector(
+                        onTap: _scrollToPinnedMessage,
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade100,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.push_pin, size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  _pinnedPreview!.length > 80
+                                      ? '${_pinnedPreview!.substring(0, 80)}...'
+                                      : _pinnedPreview!,
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
                   Expanded(
                     child: MessageListView(
                       groupId: widget.groupId,
