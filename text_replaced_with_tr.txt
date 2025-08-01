@@ -1,0 +1,2112 @@
+577 results - 75 files
+lib\core\pages\not_found_page.dart:
+   8      return Scaffold(
+   9:       appBar: AppBar(title: const Text('key_001'.tr())),
+  10        body: const Center(
+  11:         child: Text('key_002'.tr()),
+  12        ),
+
+lib\core\pages\placeholder_page.dart:
+  11      return Center(
+  12:       child: Text('key_003'.tr()),
+  13      );
+
+lib\features\auth\auth_page.dart:
+  56                onPressed: () => _setAuthMode(AuthMode.forgotPassword),
+  57:               child: const Text('key_004'.tr()),
+  58              ),
+
+  60                onPressed: () => _setAuthMode(AuthMode.register),
+  61:               child: const Text('key_005'.tr()),
+  62              ),
+
+  71                onPressed: () => _setAuthMode(AuthMode.login),
+  72:               child: const Text('key_006'.tr()),
+  73              ),
+
+  82                onPressed: () => _setAuthMode(AuthMode.login),
+  83:               child: const Text('key_007'.tr()),
+  84              ),
+
+  93        appBar: AppBar(
+  94:         title: const Text('key_008'.tr()),
+  95          leading: IconButton(
+
+lib\features\auth\forgot_password.dart:
+   43        builder: (context) => AlertDialog(
+   44:         title: const Text('key_009'.tr()),
+   45:         content: const Text('key_010'.tr()),
+   46          actions: [
+
+   51              },
+   52:             child: const Text('key_011'.tr()),
+   53            ),
+
+   64        builder: (context) => AlertDialog(
+   65:         title: const Text('key_012'.tr()),
+   66:         content: Text(message),
+   67          actions: [
+
+   69              onPressed: () => Navigator.pop(context),
+   70:             child: const Text('key_013'.tr()),
+   71            ),
+
+   89            children: [
+   90:             const Text("Reset Password",
+   91                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+  103                      onPressed: _resetPassword,
+  104:                     child: const Text('key_014'.tr()),
+  105                    ),
+
+lib\features\auth\login.dart:
+   27        builder: (context) => AlertDialog(
+   28:         title: const Text('key_015'.tr()),
+   29:         content: Text(message),
+   30          actions: [
+
+   32              onPressed: () => Navigator.pop(context),
+   33:             child: const Text('key_016'.tr()),
+   34            ),
+
+   80            children: [
+   81:             const Text(
+   82                "Login",
+
+  102                      onPressed: _login,
+  103:                     child: const Text('key_017'.tr()),
+  104                    ),
+
+lib\features\auth\register.dart:
+  107            builder: (_) => AlertDialog(
+  108:             title: const Text('key_018'.tr()),
+  109:             content: const Text(
+  110                "Your account was created.\n\nCheck your inbox to confirm your email. Once confirmed, you’ll be automatically signed in.",
+
+  117                  },
+  118:                 child: const Text('key_019'.tr()),
+  119                ),
+
+  128          builder: (context) => AlertDialog(
+  129:           title: const Text('key_020'.tr()),
+  130:           content: Text('key_021'.tr()),
+  131            actions: [
+
+  133                onPressed: () => Navigator.of(context).pop(),
+  134:               child: const Text('key_022'.tr()),
+  135              ),
+
+  159            children: [
+  160:             const Text("Register", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+  161              const SizedBox(height: 16),
+
+  190                      onPressed: _register,
+  191:                     child: const Text('key_023'.tr()),
+  192                    ),
+
+lib\features\auth\reset_password.dart:
+   66      return Scaffold(
+   67:       appBar: AppBar(title: const Text('key_024'.tr())),
+   68        body: Padding(
+
+   71            children: [
+   72:             const Text(
+   73                'Enter your new password',
+
+   88              if (_message != null)
+   89:               Text(
+   90                  _message!,
+
+  102                  onPressed: _updatePassword,
+  103:                 child: const Text('key_025'.tr()),
+  104                ),
+
+  107                    onPressed: () => Navigator.of(context).pushReplacementNamed('/auth'),
+  108:                   child: const Text('key_026'.tr()),
+  109                  ),
+
+lib\features\calendar\pages\app_event_details_page.dart:
+   62          ScaffoldMessenger.of(context).showSnackBar(
+   63:           const SnackBar(content: Text('key_027'.tr())),
+   64          );
+
+   69          ScaffoldMessenger.of(context).showSnackBar(
+   70:           SnackBar(content: Text('key_028'.tr())),
+   71          );
+
+   83          ScaffoldMessenger.of(context).showSnackBar(
+   84:           const SnackBar(content: Text('key_029'.tr())),
+   85          );
+
+   90          ScaffoldMessenger.of(context).showSnackBar(
+   91:           SnackBar(content: Text('key_030'.tr())),
+   92          );
+
+  117      return Scaffold(
+  118:       appBar: AppBar(title: Text(e.title)),
+  119        body: ListView(
+
+  131            const SizedBox(height: 16),
+  132:           Text(
+  133              e.title,
+
+  136            const SizedBox(height: 6),
+  137:           Text(
+  138              TimeService.formatUtcToLocal(
+
+  144            if (e.description != null && e.description?.isNotEmpty == true)
+  145:             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
+  146            const SizedBox(height: 6),
+
+  149                padding: const EdgeInsets.only(bottom: 8),
+  150:               child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
+  151              ),
+
+  155              icon: Icon(Icons.event),
+  156:             label: Text('key_031'.tr()),
+  157            ),
+  158            const Divider(height: 32),
+  159:           Text('Are you attending?', 
+  160              style: Theme.of(context).textTheme.titleMedium
+
+  163              children: [
+  164:               const Text('key_032'.tr()),
+  165                const SizedBox(width: 8),
+
+  169                  items: List.generate(10, (i) => i + 1)
+  170:                     .map((i) => DropdownMenuItem(value: i, child: Text(i.toString())))
+  171                      .toList(),
+
+  175                  onPressed: _saving ? null : _submitRSVP,
+  176:                 child: _saving ? const CircularProgressIndicator() : const Text('key_033'.tr()),
+  177                ),
+
+  180                    onPressed: _saving ? null : _removeRSVP,
+  181:                   child: const Text(
+  182                      'Remove RSVP',
+
+  189            if (_isSupervisor && _rsvps.isNotEmpty) ...[
+  190:             Text('RSVP Summary:', style: Theme.of(context).textTheme.titleMedium),
+  191              const SizedBox(height: 8),
+
+  195                  leading: const Icon(Icons.person),
+  196:                 title: Text(profile['display_name'] ?? 'Unknown'),
+  197:                 subtitle: Text(profile['email'] ?? ''),
+  198:                 trailing: Text('key_034'.tr()),
+  199                );
+
+lib\features\calendar\pages\calendar_page.dart:
+  116                if (snap.hasError) {
+  117:                 return Center(child: Text('key_035'.tr()));
+  118                }
+
+  135                        SizedBox(height: 200),
+  136:                       Center(child: Text('key_036'.tr())),
+  137                      ],
+
+  193          padding: const EdgeInsets.symmetric(vertical: 8),
+  194:         child: Text(text,
+  195              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+
+  202                ? () => ScaffoldMessenger.of(context).showSnackBar(
+  203:                   const SnackBar(content: Text('key_037'.tr())),
+  204                  )
+
+  216                    itemBuilder: (_) => const [
+  217:                     PopupMenuItem(value: 'edit', child: Text('key_038'.tr())),
+  218:                     PopupMenuItem(value: 'delete', child: Text('key_039'.tr())),
+  219                    ],
+
+  228                : const Icon(Icons.announcement, size: 40),
+  229:           title: Text(e.title),
+  230:           subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
+  231          ),
+
+  244                : const Icon(Icons.event, size: 40),
+  245:           title: Text(e.title),
+  246:           subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
+  247          ),
+
+lib\features\calendar\widgets\app_event_form_modal.dart:
+   72        if (mounted){ ScaffoldMessenger.of(context)
+   73:           .showSnackBar(const SnackBar(content: Text('key_040'.tr())));}
+   74        return;
+
+  100        if (mounted){ ScaffoldMessenger.of(context)
+  101:           .showSnackBar(SnackBar(content: Text('key_041'.tr())));}
+  102      } finally {
+
+  118                children: [
+  119:                 Text(
+  120                    widget.existing == null ? 'Add App Event' : 'Edit App Event',
+
+  143                          onPressed: _pickDate,
+  144:                         child: Text(
+  145                            _selectedDate == null
+
+  154                          onPressed: _pickTime,
+  155:                         child: Text(
+  156                            _selectedTime == null
+
+  168                        ? const CircularProgressIndicator()
+  169:                       : Text(widget.existing == null ? 'Create' : 'Update'),
+  170                  ),
+
+lib\features\calendar\widgets\group_event_form_modal.dart:
+   75          ScaffoldMessenger.of(context).showSnackBar(
+   76:           const SnackBar(content: Text('key_042'.tr())),
+   77          );
+
+  110          ScaffoldMessenger.of(context).showSnackBar(
+  111:           SnackBar(content: Text('key_043'.tr())),
+  112          );
+
+  130                children: [
+  131:                 Text(
+  132                    widget.existing == null ? 'Add Group Event' : 'Edit Group Event',
+
+  155                          onPressed: _pickDate,
+  156:                         child: Text(
+  157                            _selectedDate == null
+
+  166                          onPressed: _pickTime,
+  167:                         child: Text(
+  168                            _selectedTime == null
+
+  180                        ? const CircularProgressIndicator()
+  181:                       : Text(widget.existing == null ? 'Create' : 'Update'),
+  182                  ),
+
+lib\features\giving\give_page.dart:
+   98        builder: (_) => AlertDialog(
+   99:         title: const Text('key_044'.tr()),
+  100:         content: const Text('key_045'.tr()),
+  101          actions: [
+
+  103              onPressed: () => Navigator.of(context).pop(),
+  104:             child: const Text('key_046'.tr()),
+  105            ),
+
+  136        appBar: AppBar(
+  137:         title: const Text('key_047'.tr()),
+  138          bottom: TabBar(
+
+  168                  items: mockFunds
+  169:                     .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+  170                      .toList(),
+
+  182                SwitchListTile(
+  183:                 title: const Text('key_048'.tr()),
+  184                  value: _isRecurring,
+
+  229      if (_history.isEmpty) {
+  230:       return const Center(child: Text('key_049'.tr()));
+  231      }
+
+  238            child: ListTile(
+  239:             title: Text('key_050'.tr()),
+  240:             subtitle: Text(DateFormat.yMMMMd().format(donation.date)),
+  241            ),
+
+lib\features\groups\group_page.dart:
+   55            return const Scaffold(
+   56:             body: Center(child: Text('key_051'.tr())),
+   57            );
+
+  113                                const SizedBox(height: 4),
+  114:                               Text(
+  115                                  group.name,
+
+lib\features\groups\groups_page.dart:
+   44            child: AlertDialog(
+   45:             title: const Text('key_052'.tr()),
+   46              content: Column(
+
+   69                    items: const [
+   70:                     DropdownMenuItem(value: 'invite_only', child: Text('key_053'.tr())),
+   71:                     DropdownMenuItem(value: 'public', child: Text('key_054'.tr())),
+   72                    ],
+
+   79                  onPressed: () => Navigator.pop(ctx, false),
+   80:                 child: const Text('key_055'.tr()),
+   81                ),
+
+   91                            ScaffoldMessenger.of(ctx).showSnackBar(
+   92:                             const SnackBar(content: Text('key_056'.tr())),
+   93                            );
+
+  128                              ScaffoldMessenger.of(ctx).showSnackBar(
+  129:                               SnackBar(content: Text('key_057'.tr())),
+  130                              );
+
+  135                        },
+  136:                 child: const Text('key_058'.tr()),
+  137                ),
+
+  180              padding: EdgeInsets.all(24.0),
+  181:             child: Text(
+  182                'You must be logged in to view groups.',
+
+  195                icon: const Icon(Icons.add),
+  196:               label: const Text('key_059'.tr()),
+  197              )
+
+lib\features\groups\invitations_section.dart:
+   55        ScaffoldMessenger.of(context).showSnackBar(
+   56:         SnackBar(content: Text('key_060'.tr())),
+   57        );
+
+   72        ScaffoldMessenger.of(context).showSnackBar(
+   73:         SnackBar(content: Text('key_061'.tr())),
+   74        );
+
+   91        children: [
+   92:         const Text(
+   93            'Invitations',
+
+  123                      ),
+  124:                     title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+  125                      subtitle: group.description != null && group.description!.isNotEmpty
+
+  127                              padding: const EdgeInsets.only(top: 4),
+  128:                             child: Text(
+  129                                group.description!,
+
+  151                              icon: const Icon(Icons.check),
+  152:                             label: const Text('key_062'.tr()),
+  153                            ),
+
+  162                              icon: const Icon(Icons.close),
+  163:                             label: const Text('key_063'.tr()),
+  164                            ),
+
+lib\features\groups\joinable_groups_section.dart:
+   60        children: [
+   61:         const Text('Groups You Can Join', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+   62          const SizedBox(height: 12),
+
+   80          else if (filteredGroups.isEmpty)
+   81:           const Text('key_064'.tr())
+   82          else
+
+  116                            const SizedBox(height: 10),
+  117:                           Text(
+  118                              group.name,
+
+  126                                padding: const EdgeInsets.only(top: 6),
+  127:                               child: Text(
+  128                                  group.description!,
+
+lib\features\groups\your_groups_section.dart:
+   53        children: [
+   54:         const Text(
+   55            'Your Groups',
+
+   77              if (snapshot.hasError) {
+   78:               return Text('key_065'.tr());
+   79              }
+
+   81              if (_filteredGroups.isEmpty) {
+   82:               return const Text('key_066'.tr());
+   83              }
+
+  117                            width: 72,
+  118:                           child: Text(
+  119                              group.name,
+
+lib\features\groups\pages\edit_group_info_page.dart:
+  58      } catch (e) {
+  59:       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('key_067'.tr())));
+  60      } finally {
+
+  67      return Scaffold(
+  68:       appBar: AppBar(title: const Text('key_068'.tr())),
+  69        body: Padding(
+
+lib\features\groups\pages\group_event_list_page.dart:
+  105          ScaffoldMessenger.of(context).showSnackBar(
+  106:           SnackBar(content: Text('key_069'.tr())),
+  107          );
+
+  128      return Scaffold(
+  129:       appBar: AppBar(title: const Text('key_070'.tr())),
+  130        floatingActionButton: _isAdmin
+
+  139            : _events.isEmpty
+  140:               ? const Center(child: Text('key_071'.tr()))
+  141                : RefreshIndicator(
+
+  165                              children: [
+  166:                               Expanded(child: Text(e.title)),
+  167                                if (_isAdmin)
+
+  175                                          builder: (ctx) => AlertDialog(
+  176:                                           title: const Text('key_072'.tr()),
+  177:                                           content: const Text('key_073'.tr()),
+  178                                            actions: [
+
+  180                                                onPressed: () => Navigator.pop(ctx, false),
+  181:                                               child: const Text('key_074'.tr()),
+  182                                              ),
+
+  184                                                onPressed: () => Navigator.pop(ctx, true),
+  185:                                               child: const Text('key_075'.tr()),
+  186                                              ),
+
+  196                                    itemBuilder: (_) => const [
+  197:                                     PopupMenuItem(value: 'edit', child: Text('key_076'.tr())),
+  198:                                     PopupMenuItem(value: 'delete', child: Text('key_077'.tr())),
+  199                                    ],
+
+  202                            ),
+  203:                           subtitle: Text(
+  204                              '${TimeService.formatUtcToLocal(e.eventDate)}\n$count attending',
+
+lib\features\groups\pages\group_info_page.dart:
+   75        builder: (ctx) => AlertDialog(
+   76:         title: const Text('key_078'.tr()),
+   77:         content: const Text('key_079'.tr()),
+   78          actions: [
+   79:           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('key_080'.tr())),
+   80:           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('key_081'.tr())),
+   81          ],
+
+   89        ScaffoldMessenger.of(context).showSnackBar(
+   90:         const SnackBar(content: Text('key_082'.tr())),
+   91        );
+
+   95          ScaffoldMessenger.of(context).showSnackBar(
+   96:           SnackBar(content: Text('key_083'.tr())),
+   97          );
+
+  114        messenger.showSnackBar(
+  115:         const SnackBar(content: Text('key_084'.tr())),
+  116        );
+
+  118        messenger.showSnackBar(
+  119:         SnackBar(content: Text('key_085'.tr())),
+  120        );
+
+  134      if (isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+  135:     if (group == null) return Scaffold(body: Center(child: Text('key_086'.tr())));
+  136  
+
+  138        appBar: AppBar(
+  139:         title: const Text('key_087'.tr()),
+  140          actions: [
+
+  177                  icon: const Icon(Icons.exit_to_app),
+  178:                 label: const Text('key_088'.tr()),
+  179                  style: TextButton.styleFrom(
+
+  192                      builder: (ctx) => AlertDialog(
+  193:                       title: const Text('key_089'.tr()),
+  194:                       content: const Text('key_090'.tr()),
+  195                        actions: [
+  196:                         TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('key_091'.tr())),
+  197:                         TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('key_092'.tr())),
+  198                        ],
+
+  207                        messenger.showSnackBar(
+  208:                         const SnackBar(content: Text('key_093'.tr())),
+  209                        );
+
+  216                      messenger.showSnackBar(
+  217:                       SnackBar(content: Text('key_094'.tr())),
+  218                      );
+
+  221                  icon: const Icon(Icons.delete),
+  222:                 label: const Text('key_095'.tr()),
+  223                  style: TextButton.styleFrom(
+
+  262          else
+  263:           Text(group?.name ?? '', style: const TextStyle(fontSize: 20)),
+  264          const SizedBox(height: 8),
+
+  271          else
+  272:           Text(group?.description ?? ''),
+  273        ],
+
+  276  
+  277:   Widget _buildSectionHeader(String title) => Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold));
+  278  
+
+  294                padding: EdgeInsets.all(12),
+  295:               child: Text('key_096'.tr()),
+  296              ),
+
+  305                children: [
+  306:                 Text('📌 “${data['content']}”',
+  307                      maxLines: 2,
+
+  310                  const SizedBox(height: 4),
+  311:                 Text(
+  312                    'Posted by ${data['sender']} • ${_formatRelativeTime(data['created_at'])}',
+
+  351                child: Column (
+  352:               children: [const Text('key_097'.tr()),
+  353                  if (widget.isAdmin)
+  354                    TextButton.icon(
+  355:                     label: const Text('key_098'.tr()),
+  356                      onPressed: () => context.push('/groups/${widget.groupId}/events'),
+
+  373                        Flexible(
+  374:                         child: Text(
+  375                            event['title'] ?? '',
+
+  379                        ),
+  380:                       Text(
+  381                          _formatEventDate(event['event_date']),
+
+  392                        onPressed: () => context.push('/groups/${widget.groupId}/events'),
+  393:                       child: const Text('key_099'.tr()),
+  394                      ),
+
+  430                child: Column (
+  431:               children: [const Text('key_100'.tr()),
+  432                  if (widget.isAdmin)
+  433                    TextButton.icon(
+  434:                     label: const Text('key_101'.tr()),
+  435                      onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
+
+  456                        if (a['title'] != null)
+  457:                         Text(
+  458                            a['title'],
+
+  463                            padding: const EdgeInsets.only(top: 4.0),
+  464:                           child: Text(
+  465                              a['body'],
+
+  469                          ),
+  470:                       Text(
+  471                          _formatAnnouncementDate(a['published_at'] ?? a['created_at']),
+
+  481                        onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
+  482:                       child: const Text('key_102'.tr()),
+  483                      ),
+
+  518                padding: EdgeInsets.all(12),
+  519:               child: Text('key_103'.tr()),
+  520              ),
+
+  553                        onPressed: () => context.push('/groups/${widget.groupId}/media'),
+  554:                       child: const Text('key_104'.tr()),
+  555                      ),
+
+  583                padding: EdgeInsets.all(12),
+  584:               child: Text('key_105'.tr()),
+  585              ),
+
+  597                      children: [
+  598:                       Text(member['display_name'], style: Theme.of(context).textTheme.bodyMedium),
+  599:                       Text(member['role'], style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+  600                      ],
+
+  608                        icon: const Icon(Icons.person_add),
+  609:                       label: const Text('key_106'.tr()),
+  610                      ),
+
+  617                        onPressed: () => context.push('/groups/${widget.groupId}/members'),
+  618:                       child: const Text('key_107'.tr()),
+  619                      ),
+
+  640                  leading: const Icon(Icons.photo_camera),
+  641:                 title: const Text('key_108'.tr()),
+  642                  onTap: () async {
+
+  653                  leading: const Icon(Icons.photo_library),
+  654:                 title: const Text('key_109'.tr()),
+  655                  onTap: () async {
+
+  666                  leading: const Icon(Icons.insert_drive_file),
+  667:                 title: const Text('key_110'.tr()),
+  668                  onTap: () async {
+
+  728        await _loadGroup();
+  729:       messenger.showSnackBar(const SnackBar(content: Text('key_111'.tr())));
+  730      } catch (e) {
+  731:       messenger.showSnackBar(SnackBar(content: Text('key_112'.tr())));
+  732      }
+
+lib\features\groups\pages\group_join_page.dart:
+   51          ScaffoldMessenger.of(context).showSnackBar(
+   52:           SnackBar(content: Text(group!.visibility == 'public' ? 'Joined group!' : 'Request sent!')),
+   53          );
+
+   57          ScaffoldMessenger.of(context).showSnackBar(
+   58:           SnackBar(content: Text('key_113'.tr())),
+   59          );
+
+   77          padding: EdgeInsets.all(32),
+   78:         child: Center(child: Text('key_114'.tr())),
+   79        );
+
+  100            const SizedBox(height: 16),
+  101:           Text(group!.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+  102            const SizedBox(height: 8),
+  103:           Text(group!.description ?? '', textAlign: TextAlign.center),
+  104            const SizedBox(height: 24),
+
+  111                      ? const CircularProgressIndicator(color: Colors.white)
+  112:                     : Text(isPublicGroup ? 'Join Group' : 'Request to Join'),
+  113                ),
+
+  115            else
+  116:             const Text('key_115'.tr()),
+  117            TextButton(
+  118              onPressed: () => Navigator.pop(context),
+  119:             child: const Text('key_116'.tr()),
+  120            ),
+
+lib\features\groups\pages\group_media_page.dart:
+   60          ScaffoldMessenger.of(context).showSnackBar(
+   61:           SnackBar(content: Text('key_117'.tr())),
+   62          );
+
+   90          _logger.i('Image saved result: $result');
+   91:         messenger.showSnackBar(const SnackBar(content: Text('key_118'.tr())));
+   92        } else {
+
+   97          _logger.i('File saved result: $result');
+   98:         messenger.showSnackBar(const SnackBar(content: Text('key_119'.tr())));
+   99        }
+
+  101        _logger.e('Save failed: $e');
+  102:       messenger.showSnackBar(SnackBar(content: Text('key_120'.tr())));
+  103      }
+
+  108      return Scaffold(
+  109:       appBar: AppBar(title: const Text('key_121'.tr())),
+  110        body: _loading
+
+  112            : _mediaUrls.isEmpty
+  113:               ? const Center(child: Text('key_122'.tr()))
+  114                : GridView.builder(
+
+  173                                                  const SizedBox(height: 12),
+  174:                                                 Text(fileName, style: const TextStyle(fontSize: 16, color: Colors.white)),
+  175                                                ],
+
+  199                                              icon: const Icon(Icons.download),
+  200:                                             label: const Text('key_123'.tr()),
+  201                                            ),
+
+  211                                              icon: const Icon(Icons.share),
+  212:                                             label: const Text('key_124'.tr()),
+  213                                            ),
+
+lib\features\groups\pages\manage_announcements_page.dart:
+   47          ScaffoldMessenger.of(context).showSnackBar(
+   48:           const SnackBar(content: Text('key_125'.tr())),
+   49          );
+
+   74        builder: (_) => AlertDialog(
+   75:         title: const Text('key_126'.tr()),
+   76:         content: const Text('key_127'.tr()),
+   77          actions: [
+   78:           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('key_128'.tr())),
+   79:           ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('key_129'.tr())),
+   80          ],
+
+  105          segments: const [
+  106:           ButtonSegment(value: 'all', label: Text('key_130'.tr())),
+  107:           ButtonSegment(value: 'published', label: Text('key_131'.tr())),
+  108:           ButtonSegment(value: 'scheduled', label: Text('key_132'.tr())),
+  109          ],
+
+  122        child: ListTile(
+  123:         title: Text(a.title, maxLines: 1, overflow: TextOverflow.ellipsis),
+  124          subtitle: Column(
+
+  127              if (a.body != null)
+  128:               Text(a.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
+  129              if (a.publishedAt != null)
+  130:               Text(
+  131                  '${isPublished ? 'Published' : 'Scheduled'}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
+
+  137              if (a.createdByName != null)
+  138:               Text(
+  139                  'Posted by ${a.createdByName!}',
+
+  155      return Scaffold(
+  156:       appBar: AppBar(title: const Text('key_133'.tr())),
+  157        body: loading
+
+  165                      child: filteredAnnouncements.isEmpty
+  166:                         ? const Center(child: Text('key_134'.tr()))
+  167                          : ListView.builder(
+
+  180          icon: const Icon(Icons.add),
+  181:         label: const Text('key_135'.tr()),
+  182        ),
+
+lib\features\groups\pages\manage_events_page.dart:
+   84          ScaffoldMessenger.of(context).showSnackBar(
+   85:           const SnackBar(content: Text('key_136'.tr())),
+   86          );
+
+   91          ScaffoldMessenger.of(context).showSnackBar(
+   92:           SnackBar(content: Text('key_137'.tr())),
+   93          );
+
+  117          ScaffoldMessenger.of(context).showSnackBar(
+  118:           const SnackBar(content: Text('key_138'.tr())),
+  119          );
+
+  124          ScaffoldMessenger.of(context).showSnackBar(
+  125:           SnackBar(content: Text('key_139'.tr())),
+  126          );
+
+  151      return Scaffold(
+  152:       appBar: AppBar(title: Text(e.title)),
+  153        body: ListView(
+
+  167            const SizedBox(height: 16),
+  168:           Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
+  169            const SizedBox(height: 6),
+  170:           Text(
+  171              TimeService.formatUtcToLocal(
+
+  177            if (e.description?.isNotEmpty == true)
+  178:             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
+  179            const SizedBox(height: 6),
+
+  182                padding: const EdgeInsets.only(bottom: 8),
+  183:               child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
+  184              ),
+
+  188              icon: const Icon(Icons.event),
+  189:             label: const Text('key_140'.tr()),
+  190            ),
+  191            const Divider(height: 32),
+  192:           Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),
+  193            Row(
+  194              children: [
+  195:               const Text('key_141'.tr()),
+  196                const SizedBox(width: 8),
+
+  200                  items: List.generate(10, (i) => i + 1)
+  201:                     .map((i) => DropdownMenuItem(value: i, child: Text(i.toString())))
+  202                      .toList(),
+
+  208                      ? const CircularProgressIndicator()
+  209:                     : const Text('key_142'.tr()),
+  210                ),
+
+  213                    onPressed: _saving ? null : _removeRSVP,
+  214:                   child: const Text(
+  215                      'Remove RSVP',
+
+  222            if (_isSupervisor && _rsvps.isNotEmpty) ...[
+  223:             Text('RSVP Summary:', style: Theme.of(context).textTheme.titleMedium),
+  224              const SizedBox(height: 8),
+
+  236                  ),
+  237:                 title: Text(profile['display_name'] ?? 'Unknown'),
+  238:                 subtitle: Text(profile['email'] ?? ''),
+  239:                 trailing: Text('key_143'.tr()),
+  240                );
+
+lib\features\groups\pages\manage_members_page.dart:
+   27      return Scaffold(
+   28:       appBar: AppBar(title: const Text('key_144'.tr())),
+   29        body: SingleChildScrollView(
+
+   40                  if (snapshot.hasError) {
+   41:                   return Center(child: Text('key_145'.tr()));
+   42                  }
+
+   44                  final members = snapshot.data ?? [];
+   45:                 if (members.isEmpty) return const Text('key_146'.tr());
+   46  
+
+   49                    children: [
+   50:                     const Text('Current Members', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+   51                      const SizedBox(height: 8),
+
+   70                    children: [
+   71:                     const Text('Pending Requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+   72                      const SizedBox(height: 8),
+
+   98        ),
+   99:       title: Text(member['display_name'] + (isCurrentUser ? ' (You)' : '')),
+  100:       subtitle: Text(member['role']),
+  101        onTap: () => context.push('/profile/${member['user_id']}'),
+
+  122          final actions = <PopupMenuEntry<String>>[];
+  123:         actions.add(const PopupMenuItem(value: 'remove', child: Text('key_147'.tr())));
+  124  
+
+  126            if (targetRole == 'member') {
+  127:             actions.add(const PopupMenuItem(value: 'promote', child: Text('key_148'.tr())));
+  128            } else if (targetRole == 'admin') {
+  129:             actions.add(const PopupMenuItem(value: 'demote', child: Text('key_149'.tr())));
+  130            }
+
+  145              builder: (ctx) => AlertDialog(
+  146:               title: const Text('key_150'.tr()),
+  147:               content: Text('key_151'.tr()),
+  148                actions: [
+  149:                 TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('key_152'.tr())),
+  150:                 TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('key_153'.tr())),
+  151                ],
+
+  162              ScaffoldMessenger.of(context).showSnackBar(
+  163:               SnackBar(content: Text('key_154'.tr())),
+  164              );
+
+  174            ScaffoldMessenger.of(context).showSnackBar(
+  175:             SnackBar(content: Text('key_155'.tr())),
+  176            );
+
+  185            ScaffoldMessenger.of(context).showSnackBar(
+  186:             SnackBar(content: Text('key_156'.tr())),
+  187            );
+
+  205          ),
+  206:         title: Text(member['display_name'] ?? 'Unnamed'),
+  207:         subtitle: Text(member['email'] ?? ''),
+  208          trailing: Row(
+
+lib\features\groups\widgets\announcement_form_modal.dart:
+   69          ScaffoldMessenger.of(context).showSnackBar(
+   70:           SnackBar(content: Text('key_157'.tr())),
+   71          );
+
+  111              children: [
+  112:               Text(
+  113                  isEditing ? 'Edit Announcement' : 'New Announcement',
+
+  135                  leading: const Icon(Icons.schedule),
+  136:                 title: Text(
+  137                    _scheduledUtc == null
+
+  142                    onPressed: _pickDateTime,
+  143:                   child: const Text('key_158'.tr()),
+  144                  ),
+
+  155                          onPressed: _submit,
+  156:                         child: Text(isEditing ? 'Update' : 'Create'),
+  157                        ),
+
+  161                        onPressed: () => Navigator.of(context).pop(),
+  162:                       child: const Text('key_159'.tr()),
+  163                      ),
+
+lib\features\groups\widgets\event_form_modal.dart:
+   73        ScaffoldMessenger.of(context)
+   74:           .showSnackBar(const SnackBar(content: Text('key_160'.tr())));
+   75        return;
+
+  104        messenger
+  105:           .showSnackBar(SnackBar(content: Text('key_161'.tr())));
+  106      } finally {
+
+  122                children: [
+  123:                 Text(
+  124                    widget.existing == null ? 'Add Event' : 'Edit Event',
+
+  147                          onPressed: _pickDate,
+  148:                         child: Text(
+  149                            _selectedDate == null
+
+  158                          onPressed: _pickTime,
+  159:                         child: Text(
+  160                            _selectedTime == null
+
+  172                        ? const CircularProgressIndicator()
+  173:                       : Text(widget.existing == null ? 'Create' : 'Update'),
+  174                  ),
+
+lib\features\groups\widgets\group_chat_tab.dart:
+  178              leading: const Icon(Icons.delete),
+  179:             title: const Text('key_162'.tr()),
+  180              onTap: () async {
+
+  187              leading: const Icon(Icons.push_pin_outlined),
+  188:             title: const Text('key_163'.tr()),
+  189              onTap: () async {
+
+  197              leading: const Icon(Icons.report),
+  198:             title: const Text('key_164'.tr()),
+  199              onTap: () async {
+
+  205            leading: const Icon(Icons.emoji_emotions),
+  206:           title: const Text('key_165'.tr()),
+  207            onTap: () {
+
+  214              leading: const Icon(Icons.remove_circle_outline),
+  215:             title: const Text('key_166'.tr()),
+  216              onTap: () async {
+
+  244              },
+  245:             child: Text(e, style: const TextStyle(fontSize: 28)),
+  246            )).toList(),
+
+  288                                Expanded(
+  289:                                 child: Text(
+  290                                    _pinnedPreview!.length > 80
+
+lib\features\groups\widgets\group_info_preview.dart:
+  48        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+  49:       title: Text(title, style: const TextStyle(fontWeight: FontWeight.w500)),
+  50        trailing: trailing,
+
+lib\features\groups\widgets\group_message_bubble.dart:
+  104                                label: 'Sent at $formattedTimestamp',
+  105:                               child: Text(
+  106                                  formattedTimestamp,
+
+  136                          ),
+  137:                         child: Text(
+  138                            '${entry.key} ${entry.value}',
+
+lib\features\groups\widgets\input_row.dart:
+  118                leading: const Icon(Icons.photo_camera),
+  119:               title: const Text('key_167'.tr()),
+  120                onTap: () async {
+
+  131                leading: const Icon(Icons.photo_library),
+  132:               title: const Text('key_168'.tr()),
+  133                onTap: () async {
+
+  144                leading: const Icon(Icons.insert_drive_file),
+  145:               title: const Text('key_169'.tr()),
+  146                onTap: () async {
+
+  236                        : const Icon(Icons.insert_drive_file),
+  237:                   title: Text(_selectedFile!.path.split('/').last),
+  238                    trailing: IconButton(
+
+  352            else if (gifs.isEmpty)
+  353:             const Text('key_170'.tr())
+  354            else
+
+lib\features\groups\widgets\invite_user_modal.dart:
+   73      messenger.showSnackBar(
+   74:       const SnackBar(content: Text('key_171'.tr())),
+   75      );
+
+   87      messenger.showSnackBar(
+   88:       const SnackBar(content: Text('key_172'.tr())),
+   89      );
+
+   98          children: [
+   99:           const Text('Invite Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+  100            const SizedBox(height: 8),
+
+  110              ..._results.map((user) => ListTile(
+  111:               title: Text(user['display_name']),
+  112:               subtitle: Text(user['email']),
+  113                trailing: user['isMember'] == true
+
+lib\features\groups\widgets\message_content_view.dart:
+  132                padding: const EdgeInsets.only(top: 6),
+  133:               child: Text(
+  134                  content,
+
+  182                  ScaffoldMessenger.of(context).showSnackBar(
+  183:                   const SnackBar(content: Text('key_173'.tr())),
+  184                  );
+
+  199            Icon(Icons.broken_image, size: 48, color: Colors.grey),
+  200:           Text('Failed to load file', style: TextStyle(fontSize: 12)),
+  201          ],
+
+  245              debugPrint('Error opening file: \$e\n\$s');
+  246:             messenger.showSnackBar(const SnackBar(content: Text('key_174'.tr())));
+  247            }
+
+  266                    Expanded(
+  267:                     child: Text(
+  268                        fileUrl.split('/').last,
+
+  313                      Icon(Icons.broken_image, size: 48, color: Colors.grey),
+  314:                     Text('Failed to load GIF', style: TextStyle(fontSize: 12)),
+  315                    ],
+
+  322                padding: const EdgeInsets.only(top: 6),
+  323:               child: Text(
+  324                  content,
+
+lib\features\groups\widgets\message_list_view.dart:
+  165      if (msg.deleted) {
+  166:       return Text(
+  167          '[Deleted Message]',
+
+  192            child: Center(
+  193:             child: Text(
+  194                '— ${entry.key} —',
+
+  220                    padding: const EdgeInsets.only(left: 12, bottom: 4),
+  221:                   child: Text(
+  222                      msg.senderName != null && msg.senderName!.isNotEmpty ? msg.senderName! : 'Unknown',
+
+lib\features\home\announcements_section.dart:
+  138                    children: [
+  139:                     const Text('key_175'.tr()),
+  140                      if (Supabase.instance.client.auth.currentUser == null)
+  141:                       const Text(
+  142                          'Log in to view group announcements.',
+
+  157                  children: [
+  158:                   const Text(
+  159                      'Group Announcements',
+
+  163                      onPressed: () => GoRouter.of(context).push('/group-announcements'),
+  164:                     child: const Text('key_176'.tr()),
+  165                    ),
+
+  180        children: [
+  181:         const Text(
+  182            'Announcements',
+
+  187              onPressed: () => GoRouter.of(context).push('/manage-app-announcements'),
+  188:             child: const Text('key_177'.tr()),
+  189            ),
+
+  197        child: ExpansionTile(
+  198:         title: Text(
+  199            a['title'] ?? '',
+
+  203          children: [
+  204:           if (a['body'] != null) Text(a['body']),
+  205          ],
+
+  235                        builder: (dialogContext) => AlertDialog(
+  236:                         title: Text(a['title'] ?? ''),
+  237:                         content: Text(a['body'] ?? ''),
+  238                          actions: [
+
+  240                              onPressed: () => Navigator.of(dialogContext).pop(),
+  241:                             child: const Text('key_178'.tr()),
+  242                            ),
+
+  253                      children: [
+  254:                       Text(
+  255                          a['title'] ?? '',
+
+  259                        if (a['body'] != null)
+  260:                         Text(
+  261                            a['body'],
+
+lib\features\home\church_info_card.dart:
+  48                  ),
+  49:                 child: const Text(
+  50                    'Learn More About Our Church',
+
+lib\features\home\livestream_preview.dart:
+   91      if (mounted) {
+   92:       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+   93      }
+
+  115          if (videoId == null || videoId.isEmpty) {
+  116:           return const Center(child: Text('key_179'.tr()));
+  117          }
+
+  131                    children: [
+  132:                     const Text(
+  133                        'Livestream',
+
+  161                      icon: const Icon(Icons.open_in_new),
+  162:                     label: const Text('key_180'.tr()),
+  163                    ),
+
+lib\features\home\manage_app_announcements_page.dart:
+   49          ScaffoldMessenger.of(context).showSnackBar(
+   50:           const SnackBar(content: Text('key_181'.tr())),
+   51          );
+
+   56          ScaffoldMessenger.of(context).showSnackBar(
+   57:           SnackBar(content: Text('key_182'.tr())),
+   58          );
+
+   77      return Scaffold(
+   78:       appBar: AppBar(title: const Text('key_183'.tr())),
+   79        body: loading
+
+   83                child: announcements.isEmpty
+   84:                   ? const Center(child: Text('key_184'.tr()))
+   85                    : ListView.builder(
+
+  102                                  : const Icon(Icons.announcement, size: 40),
+  103:                             title: Text(title),
+  104                              subtitle: Column(
+
+  107                                  if (body.isNotEmpty)
+  108:                                   Text(body, maxLines: 2, overflow: TextOverflow.ellipsis),
+  109                                  if (published != null)
+  110:                                   Text(
+  111                                      'Published: ${DateFormat('MMM d, yyyy • h:mm a').format(published)}',
+
+  124                                itemBuilder: (_) => const [
+  125:                                 PopupMenuItem(value: 'edit', child: Text('key_185'.tr())),
+  126:                                 PopupMenuItem(value: 'delete', child: Text('key_186'.tr())),
+  127                                ],
+
+  136          icon: const Icon(Icons.add),
+  137:         label: const Text('key_187'.tr()),
+  138        ),
+
+lib\features\home\quick_links_footer.dart:
+  25            children: [
+  26:             const Text(
+  27                'Quick Links',
+
+  33                child: ListTile(
+  34:                 title: const Text('key_188'.tr()),
+  35                  trailing: const Icon(Icons.chevron_right),
+
+  47                        icon: const Icon(Icons.link),
+  48:                       label: Text(link.label),
+  49                        onPressed: () => _launchUrl(context, link.url),
+
+  65        messenger.showSnackBar(
+  66:         SnackBar(content: Text('key_189'.tr())),
+  67        );
+
+lib\features\home\welcome_header.dart:
+   73        children: [
+   74:         Text(
+   75            'WELCOME',
+
+   82          const SizedBox(height: 12),
+   83:         Text(
+   84            'English Service • 9:30 AM',
+
+   90          if (showCountdown)
+   91:           Text(
+   92              'Starts in: ${_formatDuration(_untilEnglish)}',
+
+   98          const SizedBox(height: 12),
+   99:         Text(
+  100            'Spanish Service • 11:30 AM',
+
+  106          if (showCountdown)
+  107:           Text(
+  108              'Starts in: ${_formatDuration(_untilSpanish)}',
+
+lib\features\home\models\app_announcement_form_modal.dart:
+   60          ScaffoldMessenger.of(context).showSnackBar(
+   61:           const SnackBar(content: Text('key_190'.tr())),
+   62          );
+
+   91          ScaffoldMessenger.of(context).showSnackBar(
+   92:           SnackBar(content: Text('key_191'.tr())),
+   93          );
+
+  113              children: [
+  114:               Text(
+  115                  isEditing ? 'Edit Announcement' : 'New Announcement',
+
+  137                  leading: const Icon(Icons.schedule),
+  138:                 title: Text(
+  139                    _scheduled == null
+
+  144                    onPressed: _pickDateTime,
+  145:                   child: const Text('key_192'.tr()),
+  146                  ),
+
+  156                              onPressed: saving ? null : _submit,
+  157:                             child: Text(isEditing ? 'Update' : 'Create'),
+  158                            ),
+
+  162                            onPressed: () => Navigator.of(context).pop(),
+  163:                           child: const Text('key_193'.tr()),
+  164                          ),
+
+lib\features\home\models\group_announcements_page.dart:
+  70      return Scaffold(
+  71:       appBar: AppBar(title: const Text('key_194'.tr())),
+  72        body: _loading
+
+  74            : _announcements.isEmpty
+  75:               ? const Center(child: Text('key_195'.tr()))
+  76                : ListView.separated(
+
+  83                        child: ExpansionTile(
+  84:                         title: Text(
+  85                            a['title'] ?? '',
+
+  88                          subtitle: a['published_at'] != null
+  89:                             ? Text(TimeService.formatUtcToLocal(
+  90                                  DateTime.parse(a['published_at']),
+
+  95                          children: [
+  96:                           if (a['body'] != null) Text(a['body']),
+  97                          ],
+
+lib\features\landing\landing_page.dart:
+   95  
+   96:     return Text(
+   97        churchName,
+
+  164              ),
+  165:             child: Text(
+  166                statusText,
+
+  190              children: [
+  191:               const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+  192                for (final lang in ['en', 'es'])
+  193                  RadioListTile<String>(
+  194:                   title: Text(lang == 'en' ? 'English' : 'Spanish'),
+  195                    value: lang,
+
+lib\features\more\more.dart:
+  100                return ListTile(
+  101:                 title: Text(item['title']),
+  102                  trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+
+  108                      ScaffoldMessenger.of(context).showSnackBar(
+  109:                       SnackBar(content: Text('key_196'.tr())),
+  110                      );
+
+lib\features\more\models\calendar_settings_modal.dart:
+  30                    children: [
+  31:                     const Text(
+  32                        'Select Calendars to Show',
+
+  49                          ),
+  50:                         const Text('key_197'.tr()),
+  51                        ],
+
+  60                            return CheckboxListTile(
+  61:                             title: Text(group.name),
+  62                              value: isSelected,
+
+  79                        child: ElevatedButton(
+  80:                         child: const Text('key_198'.tr()),
+  81                          onPressed: () {
+
+lib\features\more\models\contact_support.dart:
+  38          ScaffoldMessenger.of(context).showSnackBar(
+  39:           const SnackBar(content: Text('key_199'.tr())),
+  40          );
+
+  47        ScaffoldMessenger.of(context).showSnackBar(
+  48:         SnackBar(content: Text('key_200'.tr())),
+  49        );
+
+  67      return Scaffold(
+  68:       appBar: AppBar(title: const Text('key_201'.tr())),
+  69        body: Padding(
+
+  75              children: [
+  76:               Text('key_202'.tr()),
+  77                const SizedBox(height: 16),
+
+  96                        ? const CircularProgressIndicator()
+  97:                       : const Text('key_203'.tr()),
+  98                  ),
+
+lib\features\more\models\data_delete_account.dart:
+   15        builder: (_) => AlertDialog(
+   16:         title: const Text('key_204'.tr()),
+   17:         content: const Text(
+   18            'Are you sure you want to delete your account? This action cannot be undone.'
+
+   22              onPressed: () => Navigator.of(context).pop(),
+   23:             child: const Text('key_205'.tr()),
+   24            ),
+
+   30              style: TextButton.styleFrom(foregroundColor: Colors.red),
+   31:             child: const Text('key_206'.tr()),
+   32            ),
+
+   52        ScaffoldMessenger.of(context).showSnackBar(
+   53:         SnackBar(content: Text('key_207'.tr())),
+   54        );
+
+   62      ScaffoldMessenger.of(context).showSnackBar(
+   63:       const SnackBar(content: Text('key_208'.tr())),
+   64      );
+
+   74      return Scaffold(
+   75:       appBar: AppBar(title: const Text('key_209'.tr())),
+   76        body: ListView(
+
+   78          children: [
+   79:           const Text(
+   80              'Manage your account data and deletion preferences.',
+
+   84            ListTile(
+   85:             title: const Text('key_210'.tr()),
+   86:             subtitle: const Text('key_211'.tr()),
+   87              trailing: const Icon(Icons.delete_forever, color: Colors.red),
+
+   91            ListTile(
+   92:             title: const Text('key_212'.tr()),
+   93:             subtitle: const Text('key_213'.tr()),
+   94              trailing: const Icon(Icons.cleaning_services),
+
+   97            ListTile(
+   98:             title: const Text('key_214'.tr()),
+   99:             subtitle: const Text('key_215'.tr()),
+  100              trailing: const Icon(Icons.cleaning_services),
+
+  104                ScaffoldMessenger.of(context).showSnackBar(
+  105:                 const SnackBar(content: Text('key_216'.tr())),
+  106                );
+
+lib\features\more\models\invite_modal.dart:
+   72          ScaffoldMessenger.of(context).showSnackBar(
+   73:           SnackBar(content: Text('key_217'.tr())),
+   74          );
+
+   92                  children: [
+   93:                   const Text('Invite a Family Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+   94                    IconButton(
+
+  112                  value: relationship,
+  113:                 items: relationships.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+  114                  onChanged: (val) => setState(() => relationship = val!),
+
+  118                if (isLoading) const LinearProgressIndicator(),
+  119:               if (error != null) Text(error!, style: const TextStyle(color: Colors.red)),
+  120                if (suggestions.isNotEmpty)
+
+  132                      ),
+  133:                     title: Text(displayName),
+  134:                     subtitle: Text(contact),
+  135                      onTap: () => _sendInvite(profile),
+
+  140                    padding: EdgeInsets.only(top: 8),
+  141:                   child: Text('No users found', style: TextStyle(color: Colors.grey)),
+  142                  ),
+
+lib\features\more\models\media_settings.dart:
+   61        builder: (_) => AlertDialog(
+   62:         title: const Text('key_218'.tr()),
+   63:         content: const Text('key_219'.tr()),
+   64          actions: [
+   65:           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('key_220'.tr())),
+   66:           TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('key_221'.tr())),
+   67          ],
+
+   76        ScaffoldMessenger.of(context).showSnackBar(
+   77:         const SnackBar(content: Text('key_222'.tr())),
+   78        );
+
+   92      return Scaffold(
+   93:       appBar: AppBar(title: const Text('key_223'.tr())),
+   94        body: ListView(
+
+   96            SwitchListTile(
+   97:             title: const Text('key_224'.tr()),
+   98              value: _autoDownloadImages,
+
+  101            SwitchListTile(
+  102:             title: const Text('key_225'.tr()),
+  103              value: _autoDownloadVideos,
+
+  106            SwitchListTile(
+  107:             title: const Text('key_226'.tr()),
+  108:             subtitle: const Text('key_227'.tr()),
+  109              value: appState.wifiOnlyMediaDownload,
+
+  112            ListTile(
+  113:             title: const Text('key_228'.tr()),
+  114              trailing: _clearingCache
+
+lib\features\more\models\notification_settings_page.dart:
+  104      return Scaffold(
+  105:       appBar: AppBar(title: const Text('key_229'.tr())),
+  106        body: loading
+
+  111                SwitchListTile(
+  112:                 title: const Text('key_230'.tr()),
+  113                  value: globalMute,
+  114                  onChanged: savingGlobalMute ? null : _toggleGlobalMute,
+  115:                 subtitle: const Text('key_231'.tr()),
+  116                ),
+
+  122                  return SwitchListTile(
+  123:                   title: Text(groupName),
+  124                    value: !mutedGroupIds.contains(groupId),
+
+  127                        : (val) => _toggleMute(groupId, !val),
+  128:                   subtitle: const Text('key_232'.tr()),
+  129                  );
+
+  132                ListTile(
+  133:                 title: const Text('key_233'.tr()),
+  134:                 subtitle: const Text('key_234'.tr()),
+  135                  trailing: const Icon(Icons.settings),
+
+  141                        builder: (_) => AlertDialog(
+  142:                         title: const Text('key_235'.tr()),
+  143:                         content: const Text(
+  144                            "Please enable push notifications from your device's settings.",
+
+  148                              onPressed: () => Navigator.pop(context),
+  149:                             child: const Text('key_236'.tr()),
+  150                            )
+
+lib\features\more\pages\add_child_profile.dart:
+  137        if (mounted) {
+  138:         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('key_237'.tr())));
+  139        }
+
+  149      return Scaffold(
+  150:       appBar: AppBar(title: const Text('key_238'.tr())),
+  151        body: Padding(
+
+  187                ListTile(
+  188:                 title: Text(_birthday != null
+  189                      ? 'Birthday: ${_birthday!.toLocal().toString().split(' ')[0]}'
+
+  204                  onPressed: _isSaving ? null : _submit,
+  205:                 child: _isSaving ? const CircularProgressIndicator() : const Text('key_239'.tr()),
+  206                ),
+
+lib\features\more\pages\bible_studies_page.dart:
+   73          return AlertDialog(
+   74:           title: const Text('key_240'.tr()),
+   75            content: TextField(
+
+   82            actions: [
+   83:             TextButton(onPressed: () => Navigator.pop(context), child: const Text('key_241'.tr())),
+   84              ElevatedButton(
+   85                onPressed: () => Navigator.pop(context, controller.text.trim()),
+   86:               child: const Text('key_242'.tr()),
+   87              ),
+
+  103      ScaffoldMessenger.of(context).showSnackBar(
+  104:       const SnackBar(content: Text('key_243'.tr())),
+  105      );
+
+  137        ScaffoldMessenger.of(context).showSnackBar(
+  138:         const SnackBar(content: Text('key_244'.tr())),
+  139        );
+
+  146        appBar: AppBar(
+  147:         title: const Text('key_245'.tr()),
+  148          actions: [
+
+  171                    child: ListTile(
+  172:                     title: Text(study['title']),
+  173:                     subtitle: Text(formattedDate),
+  174                      trailing: hasAccess
+
+  184                                  },
+  185:                                 child: const Text('key_246'.tr()),
+  186                                ),
+
+  195                                    },
+  196:                                   child: const Text('key_247'.tr()),
+  197                                  ),
+
+  208                          : status == 'pending'
+  209:                             ? const Text('Pending', style: TextStyle(color: Colors.orange))
+  210                              : TextButton(
+  211                                  onPressed: () => _submitAccessRequest(study['id']),
+  212:                                 child: const Text('key_248'.tr()),
+  213                                ),
+
+lib\features\more\pages\bible_study_requests_page.dart:
+   60      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+   61:       content: Text(approve ? 'Request approved' : 'Request denied'),
+   62      ));
+
+   67      return Scaffold(
+   68:       appBar: AppBar(title: const Text('key_249'.tr())),
+   69        body: isLoading
+
+   71            : error != null
+   72:               ? Center(child: Text(error!))
+   73                : requests.isEmpty
+   74:                   ? const Center(child: Text('key_250'.tr()))
+   75                    : ListView.builder(
+
+   85                            child: ListTile(
+   86:                             title: Text('key_251'.tr()),
+   87:                             subtitle: Text(req['reason'] ?? 'No reason provided'),
+   88                              trailing: status == 'pending'
+
+  102                                  : Chip(
+  103:                                     label: Text(status),
+  104                                      backgroundColor: status == 'approved'
+
+lib\features\more\pages\child_profile_page.dart:
+  32      return Scaffold(
+  33:       appBar: AppBar(title: Text(displayName)),
+  34        body: ListView(
+
+  46            const SizedBox(height: 20),
+  47:           Text('key_252'.tr()),
+  48            const SizedBox(height: 10),
+  49:           Text('key_253'.tr()),
+  50            const SizedBox(height: 10),
+  51:           Text('key_254'.tr()),
+  52            const SizedBox(height: 10),
+  53:           Text('key_255'.tr()),
+  54            if (child['is_checked_in'] == true)
+
+  58                  avatar: const Icon(Icons.check_circle, color: Colors.green),
+  59:                 label: const Text('key_256'.tr()),
+  60                ),
+
+lib\features\more\pages\directory_page.dart:
+  29        appBar: AppBar(
+  30:         title: const Text('key_257'.tr()),
+  31          leading: BackButton(
+
+  42            if (snapshot.hasError) {
+  43:             return Center(child: Text('key_258'.tr()));
+  44            }
+
+  48            if (users.isEmpty) {
+  49:             return const Center(child: Text('key_259'.tr()));
+  50            }
+
+  67                      : const CircleAvatar(child: Icon(Icons.person)),
+  68:                 title: Text(user['display_name'] ?? 'Unnamed User'),
+  69                  onTap: () {
+
+lib\features\more\pages\edit_bible_study_page.dart:
+   62        ScaffoldMessenger.of(context).showSnackBar(
+   63:         const SnackBar(content: Text('key_260'.tr())),
+   64        );
+
+   78        ScaffoldMessenger.of(context).showSnackBar(
+   79:         const SnackBar(content: Text('key_261'.tr())),
+   80        );
+
+   83        ScaffoldMessenger.of(context).showSnackBar(
+   84:         SnackBar(content: Text('key_262'.tr())),
+   85        );
+
+  112          ScaffoldMessenger.of(context).showSnackBar(
+  113:           SnackBar(content: Text(widget.study == null ? 'Bible study added' : 'Updated')),
+  114          );
+
+  118          ScaffoldMessenger.of(context).showSnackBar(
+  119:           const SnackBar(content: Text('key_263'.tr())),
+  120          );
+
+  138        appBar: AppBar(
+  139:         title: Text(widget.study == null ? 'Add Bible Study' : 'Edit Bible Study'),
+  140        ),
+
+  153                ListTile(
+  154:                 title: Text('key_264'.tr())[0]}'),
+  155                  trailing: const Icon(Icons.calendar_today),
+
+  176                  icon: const Icon(Icons.upload_file),
+  177:                 label: const Text('key_265'.tr()),
+  178                  onPressed: isSaving ? null : _pickAndUploadFile,
+
+  187                  onPressed: isSaving ? null : _save,
+  188:                 child: Text(widget.study == null ? 'Add' : 'Update'),
+  189                ),
+
+lib\features\more\pages\edit_child_profile.dart:
+   89        if (mounted) {
+   90:         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('key_266'.tr())));
+   91        }
+
+  100        builder: (_) => AlertDialog(
+  101:         title: const Text('key_267'.tr()),
+  102:         content: const Text('key_268'.tr()),
+  103          actions: [
+
+  105              onPressed: () => Navigator.pop(context, false),
+  106:             child: const Text('key_269'.tr()),
+  107            ),
+
+  109              onPressed: () => Navigator.pop(context, true),
+  110:             child: const Text('Delete', style: TextStyle(color: Colors.red)),
+  111            ),
+
+  134        if (mounted) {
+  135:         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('key_270'.tr())));
+  136        }
+
+  157      return Scaffold(
+  158:       appBar: AppBar(title: const Text('key_271'.tr())),
+  159        body: Padding(
+
+  178                  icon: const Icon(Icons.photo),
+  179:                 label: const Text('key_272'.tr()),
+  180                ),
+
+  211                  onPressed: _saving ? null : _save,
+  212:                 child: _saving ? const CircularProgressIndicator() : const Text('key_273'.tr()),
+  213                ),
+
+  220                  onPressed: _saving ? null : _confirmDelete,
+  221:                 child: const Text('key_274'.tr()),
+  222                )
+
+lib\features\more\pages\family_page.dart:
+  133        return Scaffold(
+  134:         appBar: AppBar(title: const Text('key_275'.tr())),
+  135          body: Center(
+
+  138              children: [
+  139:               const Text('key_276'.tr()),
+  140                const SizedBox(height: 16),
+  141:               ElevatedButton(onPressed: _createFamily, child: const Text('key_277'.tr())),
+  142                const SizedBox(height: 12),
+  143:               ElevatedButton(onPressed: _showJoinFamilyDialog, child: const Text('key_278'.tr())),
+  144              ],
+
+  150      if (error != null) {
+  151:       return Scaffold(body: Center(child: Text(error!)));
+  152      }
+
+  159        appBar: AppBar(
+  160:         title: const Text('key_279'.tr()),
+  161          leading: BackButton(onPressed: () => context.go('/more')),
+
+  175                    alignment: Alignment.centerLeft,
+  176:                   child: Text(
+  177                      'Family Code: $familyCode',
+
+  197                  icon: const Icon(Icons.logout),
+  198:                 label: const Text('key_280'.tr()),
+  199                  style: ElevatedButton.styleFrom(
+
+  213      return ExpansionTile(
+  214:       title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
+  215        children: items.map(_buildMemberTile).toList(),
+
+  235        ),
+  236:       title: Text(name),
+  237        subtitle: Wrap(
+
+  242                value: relationship.isEmpty ? null : relationship,
+  243:               hint: const Text('key_281'.tr()),
+  244                items: defaultRelationships
+  245:                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+  246                    .toList(),
+
+  319        builder: (_) => AlertDialog(
+  320:         title: const Text('key_282'.tr()),
+  321:         content: const Text('key_283'.tr()),
+  322          actions: [
+  323:           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('key_284'.tr())),
+  324:           ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('key_285'.tr())),
+  325          ],
+
+  343        builder: (_) => AlertDialog(
+  344:         title: const Text('key_286'.tr()),
+  345          content: TextField(
+
+  351          actions: [
+  352:           TextButton(onPressed: () => Navigator.pop(context), child: const Text('key_287'.tr())),
+  353            ElevatedButton(
+
+  357              },
+  358:             child: const Text('key_288'.tr()),
+  359            ),
+
+  365    void _showSnackbar(String msg) {
+  366:     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  367    }
+
+lib\features\more\pages\faq_page.dart:
+  47        appBar: AppBar(
+  48:         title: const Text('key_289'.tr()),
+  49          centerTitle: true,
+
+  83          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+  84:         title: Text(widget.faq.question, style: Theme.of(context).textTheme.titleMedium),
+  85          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+
+  88          children: [
+  89:           Text(widget.faq.answer, style: Theme.of(context).textTheme.bodyMedium),
+  90          ],
+
+lib\features\more\pages\how_to_use_page.dart:
+  52        appBar: AppBar(
+  53:         title: const Text('key_290'.tr()),
+  54          centerTitle: true,
+
+  80        child: ExpansionTile(
+  81:         title: Text(section.title, style: Theme.of(context).textTheme.titleMedium),
+  82          childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+
+  84          children: [
+  85:           Text(section.content, style: Theme.of(context).textTheme.bodyMedium),
+  86          ],
+
+lib\features\more\pages\notes_viewer_page.dart:
+  77      return Scaffold(
+  78:       appBar: AppBar(title: const Text('key_291'.tr())),
+  79        body: _loading
+
+  81            : _error != null
+  82:               ? Center(child: Text(_error!))
+  83                : isPdf
+
+  86                        ? WebViewWidget(controller: _webViewController)
+  87:                       : Center(child: Text('key_292'.tr())),
+  88      );
+
+lib\features\more\pages\nursery_staff_page.dart:
+  124    void _showSnackbar(String message) {
+  125:     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  126    }
+
+  136        ),
+  137:       title: Text(child['display_name'] ?? 'Unnamed'),
+  138:       subtitle: Text('key_293'.tr()),
+  139        trailing: Row(
+
+  160          leading: BackButton(onPressed: () => context.go('/more')),
+  161:         title: const Text('key_294'.tr()),
+  162          actions: [
+
+  171            : error != null
+  172:               ? Center(child: Text(error!))
+  173                : RefreshIndicator(
+
+lib\features\more\pages\profile_page.dart:
+  204        builder: (context) => AlertDialog(
+  205:         title: Text('key_295'.tr()),
+  206          content: TextField(
+
+  211          actions: [
+  212:           TextButton(onPressed: () => context.pop(), child: const Text('key_296'.tr())),
+  213            TextButton(
+  214              onPressed: () => context.pop(controller.text.trim()),
+  215:             child: const Text('key_297'.tr()),
+  216            ),
+
+  250        builder: (_) => AlertDialog(
+  251:         title: const Text('key_298'.tr()),
+  252          content: Column(
+
+  274              onPressed: () => Navigator.of(context).pop(false),
+  275:             child: const Text('key_299'.tr()),
+  276            ),
+
+  278              onPressed: () => Navigator.of(context).pop(true),
+  279:             child: const Text('key_300'.tr()),
+  280            ),
+
+  338        builder: (context) => AlertDialog(
+  339:         title: const Text('key_301'.tr()),
+  340:         content: const Text('key_302'.tr()),
+  341          actions: [
+  342:           TextButton(onPressed: () => context.pop(false), child: const Text('key_303'.tr())),
+  343            TextButton(
+  344              onPressed: () => context.pop(true),
+  345:             child: const Text('Delete', style: TextStyle(color: Colors.red)),
+  346            ),
+
+  370      if (!mounted) return;
+  371:     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  372    }
+
+  378        appBar: AppBar(
+  379:         title: const Text('key_304'.tr()),
+  380          leading: BackButton(
+
+  410                              onPressed: _editPhoto,
+  411:                             child: const Text('key_305'.tr()),
+  412                            ),
+
+  416                              children: [
+  417:                               Text(displayName ?? '', style: const TextStyle(fontSize: 20)),
+  418                                IconButton(
+
+  434                              children: [
+  435:                               Flexible(child: Text(bio ?? '', maxLines: 2, overflow: TextOverflow.ellipsis)),
+  436                                IconButton(
+
+  453                                children: [
+  454:                                 Text(formatUSPhone(phone!), style: const TextStyle(fontSize: 16)),
+  455                                  IconButton(
+
+  473                      SwitchListTile(
+  474:                       title: const Text('key_306'.tr()),
+  475                        value: visible ?? true,
+
+  479                        leading: const Icon(Icons.lock),
+  480:                       title: const Text('key_307'.tr()),
+  481                        onTap: _changePassword,
+
+  492                            leading: const Icon(Icons.group),
+  493:                           title: Text(g['name'] ?? 'Unnamed Group'),
+  494:                           subtitle: Text(group['role'] ?? ''),
+  495                            onTap: () {
+
+  516                            leading: Icon(isChild ? Icons.child_care : Icons.person),
+  517:                           title: Text(name),
+  518                            trailing: isChild && qrCode != null
+
+  541                            leading: Icon(Icons.favorite),
+  542:                           title: Text(req['request'] ?? ''),
+  543:                           subtitle: Text('key_308'.tr()),
+  544                            trailing: IconButton(
+
+  566                            leading: Icon(isAppEvent ? Icons.public : Icons.group),
+  567:                           title: Text(title),
+  568:                           subtitle: Text('key_309'.tr()),
+  569                          );
+
+  578                        style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+  579:                       child: const Text('key_310'.tr()),
+  580                      ),
+
+  583                        onPressed: _deleteAccount,
+  584:                       child: const Text('key_311'.tr()),
+  585                      ),
+
+  615            children: [
+  616:             Text(title, style: Theme.of(context).textTheme.titleMedium),
+  617              ...children.isEmpty
+
+  619                      padding: const EdgeInsets.symmetric(vertical: 8),
+  620:                     child: Text(emptyText, style: TextStyle(color: Colors.grey)),
+  621                    )]
+
+lib\features\more\pages\public_profile.dart:
+   61      if (errorMessage != null) {
+   62:       return Scaffold(body: Center(child: Text(errorMessage!)));
+   63      }
+   64      if (profile == null) {
+   65:       return const Scaffold(body: Center(child: Text('key_312'.tr())));
+   66      }
+
+   74      return Scaffold(
+   75:       appBar: AppBar(title: Text(name.isNotEmpty ? name : 'Profile')),
+   76        body: SingleChildScrollView(
+
+  100              if (bio.isNotEmpty)
+  101:               Text(
+  102                  bio,
+
+  111                    onTap: () => launchUrl(Uri.parse('mailto:$email')),
+  112:                   child: Text(
+  113                      email,
+
+  122                    onTap: () => launchUrl(Uri.parse('tel:$phone')),
+  123:                   child: Text(
+  124                      formatUSPhone(phone),
+
+lib\features\more\pages\qr_checkin_scanner.dart:
+  46          ScaffoldMessenger.of(context).showSnackBar(
+  47:           const SnackBar(content: Text('key_313'.tr())),
+  48          );
+
+  76      return Scaffold(
+  77:       appBar: AppBar(title: const Text('key_314'.tr())),
+  78        body: Stack(
+
+  97                  color: Colors.red.shade200,
+  98:                 child: Text(_error!, textAlign: TextAlign.center),
+  99                ),
+
+lib\features\more\pages\settings_page.dart:
+   74        builder: (_) => AlertDialog(
+   75:         title: const Text('key_315'.tr()),
+   76:         content: Text('key_316'.tr()),
+   77          actions: [
+   78:           TextButton(child: const Text('key_317'.tr()), onPressed: () => Navigator.pop(context)),
+   79            TextButton(
+   80:             child: const Text('key_318'.tr()),
+   81              onPressed: () {
+
+   92      if (!context.mounted) return;
+   93:     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+   94    }
+
+  107              children: [
+  108:               const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+  109                for (final lang in ['en', 'es'])
+  110                  RadioListTile<String>(
+  111:                   title: Text(lang == 'en' ? 'English' : 'Spanish'),
+  112                    value: lang,
+
+  147                return RadioListTile<double>(
+  148:                 title: Text(entry.key),
+  149                  value: entry.value,
+
+  177      return Scaffold(
+  178:       appBar: AppBar(title: const Text('key_319'.tr()), centerTitle: true, elevation: 0),
+  179        body: ListView(
+
+  241            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+  242:           child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+  243          ),
+
+  249    Widget _tile(String title, {VoidCallback? onTap}) => ListTile(
+  250:     title: Text(title),
+  251      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+
+  254  
+  255:   Widget _disabledTile(String title) => ListTile(title: Text(title), enabled: false);
+  256  
+  257    Widget _switchTile(String title, bool value, ValueChanged<bool> onChanged) => SwitchListTile(
+  258:     title: Text(title),
+  259      value: value,
+
+  264    Widget _radioTile(String title, ThemeMode value, ThemeMode groupValue) => RadioListTile<ThemeMode>(
+  265:     title: Text(title),
+  266      value: value,
+
+lib\features\more\pages\view_child_profile.dart:
+   55      if (_error != null || _child == null) {
+   56:       return Scaffold(body: Center(child: Text(_error ?? 'Child not found')));
+   57      }
+
+   78        appBar: AppBar(
+   79:         title: Text(name),
+   80          actions: [
+
+  100              const SizedBox(height: 20),
+  101:             Text(name, style: Theme.of(context).textTheme.headlineSmall),
+  102              if (formattedBirthday != null)
+  103:               Text('key_320'.tr()),
+  104              const SizedBox(height: 24),
+
+  106                leading: const Icon(Icons.local_hospital),
+  107:               title: const Text('key_321'.tr()),
+  108:               subtitle: Text(allergies),
+  109              ),
+
+  111                leading: const Icon(Icons.local_hospital),
+  112:               title: const Text('key_322'.tr()),
+  113:               subtitle: Text(notes),
+  114              ),
+
+  116                leading: const Icon(Icons.contact_phone),
+  117:               title: const Text('key_323'.tr()),
+  118:               subtitle: Text(emergency),
+  119              ),
+
+  125                    children: [
+  126:                     const Text(
+  127                        'Check-in QR Code',
+
+lib\features\navigation\main_app.dart:
+  44                child: Center(
+  45:                 child: Text(
+  46                    'CCF App',
+
+lib\features\notifications\notifications_page.dart:
+   15            leading: const BackButton(),
+   16:           title: const Text('key_324'.tr()),
+   17            actions: [
+
+   31                        ScaffoldMessenger.of(context).showSnackBar(
+   32:                         const SnackBar(content: Text('key_325'.tr())),
+   33                        );
+
+  147      if (notifications.isEmpty) {
+  148:       return const Center(child: Text('key_326'.tr()));
+  149      }
+
+  169                  builder: (context) => AlertDialog(
+  170:                   title: const Text('key_327'.tr()),
+  171:                   content: const Text('key_328'.tr()),
+  172                    actions: [
+  173:                     TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('key_329'.tr())),
+  174:                     TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('key_330'.tr())),
+  175                    ],
+
+  236        ),
+  237:       title: Text(title, style: titleStyle),
+  238        subtitle: Column(
+
+  240          children: [
+  241:           Text(subtitle),
+  242            if (timestamp.isNotEmpty)
+
+  244                padding: const EdgeInsets.only(top: 4.0),
+  245:               child: Text(timestamp, style: Theme.of(context).textTheme.bodySmall),
+  246              ),
+
+lib\features\prayer\prayer.dart:
+   65          ScaffoldMessenger.of(context).showSnackBar(
+   66:           SnackBar(content: Text('key_331'.tr())),
+   67          );
+
+   75        builder: (ctx) => AlertDialog(
+   76:         title: const Text('key_332'.tr()),
+   77:         content: const Text('key_333'.tr()),
+   78          actions: [
+
+   80              onPressed: () => Navigator.of(ctx).pop(false),
+   81:             child: const Text('key_334'.tr()),
+   82            ),
+
+   84              onPressed: () => Navigator.of(ctx).pop(true),
+   85:             child: const Text('key_335'.tr()),
+   86            ),
+
+  103          ScaffoldMessenger.of(context).showSnackBar(
+  104:           const SnackBar(content: Text('key_336'.tr())),
+  105          );
+
+  109          ScaffoldMessenger.of(context).showSnackBar(
+  110:           SnackBar(content: Text('key_337'.tr())),
+  111          );
+
+  127            ScaffoldMessenger.of(context).showSnackBar(
+  128:             const SnackBar(content: Text('key_338'.tr())),
+  129            );
+
+  142              ScaffoldMessenger.of(context).showSnackBar(
+  143:               const SnackBar(content: Text('key_339'.tr())),
+  144              );
+
+  150              ScaffoldMessenger.of(context).showSnackBar(
+  151:               SnackBar(content: Text('key_340'.tr())),
+  152              );
+
+  184            : _prayerRequests.isEmpty
+  185:               ? const Center(child: Text('key_341'.tr()))
+  186                : RefreshIndicator(
+
+  200                          child: ListTile(
+  201:                           title: Text(item['request'] ?? ''),
+  202:                           subtitle: Text('key_342'.tr()),
+  203                            trailing: (_userRole == 'supervisor' || _userRole == 'owner')
+
+  251            children: [
+  252:             const Text(
+  253                'Submit Prayer Request',
+
+  262              SwitchListTile(
+  263:               title: const Text('key_343'.tr()),
+  264                value: _includeName,
+
+  269                icon: const Icon(Icons.send),
+  270:               label: const Text('key_344'.tr()),
+  271                onPressed: () {
+
+lib\shared\magic_links.dart:
+  44      return Scaffold(
+  45:       appBar: AppBar(title: const Text('key_345'.tr())),
+  46        body: Padding(
+
+  58                    ? const CircularProgressIndicator()
+  59:                   : const Text('key_346'.tr()),
+  60              ),
+
+  62                const SizedBox(height: 16),
+  63:               Text(_message!, style: const TextStyle(color: Colors.green)),
+  64              ],
+
+lib\shared\widgets\language_buttons.dart:
+  38            ),
+  39:           child: const Text('key_347'.tr()),
+  40          ),
+
+  51            ),
+  52:           child: const Text('key_348'.tr()),
+  53          ),
+
+lib\shared\widgets\primary_button.dart:
+  40        onPressed: onTap,
+  41:       child: Text(title),
+  42      );
+
+lib\shared\widgets\secondary_button.dart:
+  29        onPressed: onTap,
+  30:       child: Text(title),
+  31      );
