@@ -14,6 +14,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
   final supabase = Supabase.instance.client;
   List<GroupModel> _invites = [];
   bool _loading = true;
+  String? _expandedGroupId;
 
   @override
   void initState() {
@@ -99,61 +100,75 @@ class InvitationsSectionState extends State<InvitationsSection> {
           itemCount: _invites.length,
           itemBuilder: (context, index) {
             final group = _invites[index];
+            final isExpanded = _expandedGroupId == group.id;
 
-            return Dismissible(
-              key: ValueKey(group.id),
-              background: Container(
-                alignment: Alignment.centerLeft,
-                padding: const EdgeInsets.only(left: 20),
-                color: Colors.green,
-                child: const Icon(Icons.check, color: Colors.white),
-              ),
-              secondaryBackground: Container(
-                alignment: Alignment.centerRight,
-                padding: const EdgeInsets.only(right: 20),
-                color: Colors.red,
-                child: const Icon(Icons.close, color: Colors.white),
-              ),
-              confirmDismiss: (direction) async {
-                if (direction == DismissDirection.startToEnd) {
-                  await _acceptInvite(group);
-                } else {
-                  await _declineInvite(group);
-                }
-                return true; // Allow Dismissible to remove item
-              },
-              onDismissed: (_) {
-                setState(() {
-                  _invites.removeAt(index);
-                });
-              },
-              child: Card(
-                margin: const EdgeInsets.symmetric(vertical: 6),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                  leading: CircleAvatar(
-                    backgroundImage: group.photoUrl != null ? NetworkImage(group.photoUrl!) : null,
-                    backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                    child: group.photoUrl == null
-                        ? const Icon(Icons.group, color: Colors.white)
+            return Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                children: [
+                  ListTile(
+                    onTap: () {
+                      setState(() {
+                        _expandedGroupId = isExpanded ? null : group.id;
+                      });
+                    },
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    leading: CircleAvatar(
+                      backgroundImage: group.photoUrl != null ? NetworkImage(group.photoUrl!) : null,
+                      backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                      child: group.photoUrl == null
+                          ? const Icon(Icons.group, color: Colors.white)
+                          : null,
+                    ),
+                    title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: group.description != null && group.description!.isNotEmpty
+                        ? Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              group.description!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          )
                         : null,
+                    trailing: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
                   ),
-                  title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  subtitle: group.description != null && group.description!.isNotEmpty
-                      ? Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            group.description!,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
+                  if (isExpanded)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await _acceptInvite(group);
+                              setState(() {
+                                _invites.removeAt(index);
+                                _expandedGroupId = null;
+                              });
+                            },
+                            icon: const Icon(Icons.check),
+                            label: const Text('Accept'),
                           ),
-                        )
-                      : null,
-                ),
+                          OutlinedButton.icon(
+                            onPressed: () async {
+                              await _declineInvite(group);
+                              setState(() {
+                                _invites.removeAt(index);
+                                _expandedGroupId = null;
+                              });
+                            },
+                            icon: const Icon(Icons.close),
+                            label: const Text('Decline'),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
               ),
             );
-          },
+          }
         ),
       ],
     );

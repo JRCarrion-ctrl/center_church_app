@@ -115,7 +115,7 @@ class _MessageContentViewState extends State<MessageContentView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           FutureBuilder<File?>(
-            future: _mediaFuture ?? Future.value(null),
+            future: _mediaFuture ?? MediaCacheService().getMediaFile(fileUrl),
             builder: (context, snapshot) {
               if (snapshot.connectionState != ConnectionState.done) {
                 return _buildPlaceholderImage();

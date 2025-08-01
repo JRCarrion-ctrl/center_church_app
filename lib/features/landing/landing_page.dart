@@ -115,7 +115,7 @@ class _LandingPageState extends State<LandingPage> {
       children: [
         SecondaryButton(
           title: "How to Use",
-          onTap: () => context.push('/how_to'),
+          onTap: () => context.push('/more/how_to'),
           fontSize: fontSize,
           padding: padding,
         ),

@@ -124,14 +124,27 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                     return FutureBuilder<File>(
                       future: MediaCacheService().getMediaFile(url),
                       builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
+                        if (snapshot.connectionState != ConnectionState.done) {
                           return Container(
                             color: Colors.grey[300],
                             child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                           );
                         }
 
-                        final file = snapshot.data!;
+                        final file = snapshot.data;
+                        if (file == null) {
+                          return _isImage(url)
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.network(url, fit: BoxFit.cover),
+                                )
+                              : Container(
+                                  color: Colors.white,
+                                  padding: const EdgeInsets.all(8),
+                                  child: const Icon(Icons.insert_drive_file, size: 32),
+                                );
+                        }
+
                         final fileName = p.basename(url);
                         return GestureDetector(
                           onTap: () {
