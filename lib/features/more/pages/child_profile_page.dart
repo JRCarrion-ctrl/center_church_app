@@ -1,6 +1,6 @@
 // File: lib/features/nursery/pages/child_profile_page.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ChildProfilePage extends StatelessWidget {
   final Map<String, dynamic> child;
@@ -44,19 +44,19 @@ class ChildProfilePage extends StatelessWidget {
                 : null,
           ),
           const SizedBox(height: 20),
-          Text('Birthday: $birthday'),
+          Text("key_252".tr(args: [birthday])),
           const SizedBox(height: 10),
-          Text('Allergies: $allergies'),
+          Text("key_253".tr(args: [allergies])),
           const SizedBox(height: 10),
-          Text('Notes: $notes'),
+          Text("key_254".tr(args: [notes])),
           const SizedBox(height: 10),
-          Text('Emergency Contact: $emergencyContact'),
+          Text("key_255".tr(args: [emergencyContact])),
           if (child['is_checked_in'] == true)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Chip(
                 avatar: const Icon(Icons.check_circle, color: Colors.green),
-                label: const Text("Currently Checked In"),
+                label: Text("key_256".tr()),
               ),
             ),
         ],

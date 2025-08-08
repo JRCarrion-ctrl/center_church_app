@@ -1,43 +1,44 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class FAQPage extends StatelessWidget {
-  const FAQPage({super.key});
+  FAQPage({super.key});
 
-  final List<FAQItem> faqs = const [
+  final List<FAQItem> faqs = [
     FAQItem(
-      question: 'How do I join a group?',
+      question: "faq_q1".tr(),
       answer:
-          'Navigate to the Groups page. You will see a list of open groups you can join or request access to. Tap on the group you want, and follow the prompt.',
+          "faq_a1".tr(),
     ),
     FAQItem(
-      question: 'What is the difference between main announcements and group announcements?',
+      question: "faq_q2".tr(),
       answer:
-          'Main announcements appear on the Home screen for everyone, while group announcements are specific to the groups you’ve joined. You’ll see those in their respective group chats.',
+          "faq_a1".tr(),
     ),
     FAQItem(
-      question: 'Can I watch past livestreams?',
+      question: "faq_q3".tr(),
       answer:
-          'Yes! Tap "More Livestreams" on the Home page to view past services and Bible studies. Bible studies may require access approval if you’re not in A/V ministry.',
+          "faq_a3".tr(),
     ),
     FAQItem(
-      question: 'How do I submit a prayer request?',
+      question: "faq_q4".tr(),
       answer:
-          'On the Prayer page, tap the "+" button to submit a prayer request. You can include your name or remain anonymous. Requests expire after 7 days.',
+          "faq_a4".tr(),
     ),
     FAQItem(
-      question: 'How do I change the app’s language or theme?',
+      question: "faq_q5".tr(),
       answer:
-          'Go to Settings from the More tab. From there, you can select a preferred language and choose between Light, Dark, or System theme modes.',
+          "faq_a5".tr(),
     ),
     FAQItem(
-      question: 'What are roles and permissions?',
+      question: "faq_q6".tr(),
       answer:
-          'Roles like Member, Group Admin, Leader, or Owner determine what features you can access. You can view your role in your Profile, and any extra permissions in the Permissions page.',
+          "faq_a6".tr(),
     ),
     FAQItem(
-      question: 'Is my data secure?',
+      question: "faq_q7".tr(),
       answer:
-          'Yes. We use Supabase for secure authentication, encrypted storage, and role-based access. Only verified users with the right permissions can see sensitive information.',
+          "faq_a7".tr(),
     ),
   ];
 
@@ -45,7 +46,7 @@ class FAQPage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('FAQ'),
+        title: Text("key_289".tr()),
         centerTitle: true,
         elevation: 0,
       ),

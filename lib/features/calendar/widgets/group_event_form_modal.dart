@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../models/group_event.dart';
 import '../event_service.dart';
@@ -73,7 +73,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     if (_selectedDate == null || _selectedTime == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Pick date & time')),
+          SnackBar(content: Text("key_042".tr())),
         );
       }
       return;
@@ -108,7 +108,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error saving group event: $e')),
+          SnackBar(content: Text("key_043".tr())),
         );
       }
     } finally {
@@ -129,23 +129,23 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.existing == null ? 'Add Group Event' : 'Edit Group Event',
+                  widget.existing == null ? "key_041a".tr() : "key_041b".tr(),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: InputDecoration(labelText: "key_041c".tr()),
                   validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _descController,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration: InputDecoration(labelText: "key_041d".tr()),
                   maxLines: 2,
                 ),
                 TextFormField(
                   controller: _locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: InputDecoration(labelText: "key_041e".tr()),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -155,7 +155,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                         onPressed: _pickDate,
                         child: Text(
                           _selectedDate == null
-                              ? 'Pick Date'
+                              ? "key_041f".tr()
                               : DateFormat.yMMMd().format(_selectedDate!),
                         ),
                       ),
@@ -166,7 +166,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                         onPressed: _pickTime,
                         child: Text(
                           _selectedTime == null
-                              ? 'Pick Time'
+                              ? "key_041g".tr()
                               : _selectedTime!.format(context),
                         ),
                       ),
@@ -178,7 +178,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                   onPressed: _saving ? null : _save,
                   child: _saving
                       ? const CircularProgressIndicator()
-                      : Text(widget.existing == null ? 'Create' : 'Update'),
+                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
                 const SizedBox(height: 8),
               ],

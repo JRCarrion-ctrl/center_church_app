@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../app_state.dart';
 
 class MainApp extends StatelessWidget {
   final Widget child;
 
-  static const tabs = [
-    _TabItem(path: '/groups', icon: Icons.group, label: 'Groups'),
-    _TabItem(path: '/calendar', icon: Icons.calendar_today, label: 'Calendar'),
-    _TabItem(path: '/', icon: Icons.home, label: 'Home'),
-    _TabItem(path: '/prayer', icon: Icons.book, label: 'Prayer'),
-    _TabItem(path: '/more', icon: Icons.more_horiz, label: 'More'),
+  static final tabs = [
+    _TabItem(path: '/groups', icon: Icons.group, label: "main_1".tr()),
+    _TabItem(path: '/calendar', icon: Icons.calendar_today, label: "main_2".tr()),
+    _TabItem(path: '/', icon: Icons.home, label: "main_3".tr()),
+    _TabItem(path: '/prayer', icon: Icons.book, label: "main_4".tr()),
+    _TabItem(path: '/more', icon: Icons.more_horiz, label: "main_5".tr()),
   ];
 
   const MainApp({super.key, required this.child});
@@ -43,7 +44,7 @@ class MainApp extends StatelessWidget {
               padding: const EdgeInsets.only(left: 16.0),
               child: Center(
                 child: Text(
-                  'CCF App',
+                  'CCFrederick',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,

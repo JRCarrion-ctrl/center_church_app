@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class DirectoryPage extends StatefulWidget {
   const DirectoryPage({super.key});
@@ -27,7 +28,7 @@ class _DirectoryPageState extends State<DirectoryPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Directory'),
+        title: Text("key_257".tr()),
         leading: BackButton(
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -46,7 +47,7 @@ class _DirectoryPageState extends State<DirectoryPage> {
           final users = snapshot.data ?? [];
 
           if (users.isEmpty) {
-            return const Center(child: Text('No users in the directory.'));
+            return Center(child: Text("key_259".tr()));
           }
 
           return ListView.separated(

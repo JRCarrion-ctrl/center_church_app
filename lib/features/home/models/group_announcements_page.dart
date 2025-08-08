@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class GroupAnnouncementsPage extends StatefulWidget {
   const GroupAnnouncementsPage({super.key});
@@ -68,11 +69,11 @@ class _GroupAnnouncementsPageState extends State<GroupAnnouncementsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Group Announcements')),
+      appBar: AppBar(title: Text("key_194".tr())),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _announcements.isEmpty
-              ? const Center(child: Text('No group announcements available.'))
+              ? Center(child: Text("key_195".tr()))
               : ListView.separated(
                   padding: const EdgeInsets.all(16),
                   itemCount: _announcements.length,

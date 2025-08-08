@@ -7,6 +7,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'dart:typed_data';
 import 'package:logger/logger.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../media_cache_service.dart';
 
@@ -88,14 +89,14 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
           isReturnImagePathOfIOS: true,
         );
         _logger.i('Image saved result: $result');
-        messenger.showSnackBar(const SnackBar(content: Text('Image saved to gallery')));
+        messenger.showSnackBar(SnackBar(content: Text("key_118".tr())));
       } else {
         final result = await ImageGallerySaverPlus.saveFile(
           file.path,
           isReturnPathOfIOS: true,
         );
         _logger.i('File saved result: $result');
-        messenger.showSnackBar(const SnackBar(content: Text('File saved')));
+        messenger.showSnackBar(SnackBar(content: Text("key_119".tr())));
       }
     } catch (e) {
       _logger.e('Save failed: $e');
@@ -106,11 +107,11 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Group Media')),
+      appBar: AppBar(title: Text("key_121".tr())),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _mediaUrls.isEmpty
-              ? const Center(child: Text('No shared media found.'))
+              ? Center(child: Text("key_122".tr()))
               : GridView.builder(
                   padding: const EdgeInsets.all(12),
                   gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -197,7 +198,7 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                                           ElevatedButton.icon(
                                             onPressed: () async => await _downloadFile(file),
                                             icon: const Icon(Icons.download),
-                                            label: const Text('Download'),
+                                            label: Text("key_123".tr()),
                                           ),
                                           ElevatedButton.icon(
                                             onPressed: () async {
@@ -209,7 +210,7 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                                               );
                                             },
                                             icon: const Icon(Icons.share),
-                                            label: const Text('Share'),
+                                            label: Text("key_124".tr()),
                                           ),
                                         ],
                                       ),

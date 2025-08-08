@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ResetPasswordPage extends StatefulWidget {
   const ResetPasswordPage({super.key});
@@ -20,17 +21,17 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
     final confirm = _confirmController.text.trim();
 
     if (password.isEmpty || confirm.isEmpty) {
-      setState(() => _message = 'Please fill out both fields.');
+      setState(() => _message = "key_024a".tr());
       return;
     }
 
     if (password.length < 8) {
-      setState(() => _message = 'Password must be at least 8 characters.');
+      setState(() => _message = "key_024b".tr());
       return;
     }
 
     if (password != confirm) {
-      setState(() => _message = 'Passwords do not match.');
+      setState(() => _message = "key_024c".tr());
       return;
     }
 
@@ -43,12 +44,12 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
 
       if (mounted) {
         setState(() {
-          _message = 'Password updated successfully!';
+          _message = "key_024d".tr();
           _showBackToLogin = true;
         });
       }
     } catch (e) {
-      setState(() => _message = 'Failed to update password: $e');
+      setState(() => _message = "key_024e".tr());
     } finally {
       setState(() => _loading = false);
     }
@@ -64,32 +65,32 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Set New Password')),
+      appBar: AppBar(title: Text("key_024".tr())),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           children: [
-            const Text(
-              'Enter your new password',
+            Text(
+              "key_024f".tr(),
               style: TextStyle(fontSize: 18),
             ),
             const SizedBox(height: 24),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'New Password'),
+              decoration: InputDecoration(labelText: "key_024g".tr()),
             ),
             TextField(
               controller: _confirmController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm Password'),
+              decoration: InputDecoration(labelText: "key_024h".tr()),
             ),
             const SizedBox(height: 24),
             if (_message != null)
               Text(
                 _message!,
                 style: TextStyle(
-                  color: _message!.toLowerCase().contains('success')
+                  color: _message!.toLowerCase().contains("key_024i".tr())
                       ? Colors.green
                       : Colors.red,
                 ),
@@ -100,12 +101,12 @@ class _ResetPasswordPageState extends State<ResetPasswordPage> {
             else ...[
               ElevatedButton(
                 onPressed: _updatePassword,
-                child: const Text('Update Password'),
+                child: Text("key_025".tr()),
               ),
               if (_showBackToLogin)
                 TextButton(
                   onPressed: () => Navigator.of(context).pushReplacementNamed('/auth'),
-                  child: const Text('Back to Login'),
+                  child: Text("key_026".tr()),
                 ),
             ],
           ],

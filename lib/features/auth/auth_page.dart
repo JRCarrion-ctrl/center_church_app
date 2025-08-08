@@ -3,6 +3,7 @@ import 'package:ccf_app/app_state.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../features.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 enum AuthMode { login, register, forgotPassword }
 
@@ -54,11 +55,11 @@ class _AuthPageState extends State<AuthPage> {
             LoginForm(onLoginSuccess: _handleAuthSuccess),
             TextButton(
               onPressed: () => _setAuthMode(AuthMode.forgotPassword),
-              child: const Text("Forgot password?"),
+              child: Text("key_004".tr()),
             ),
             TextButton(
               onPressed: () => _setAuthMode(AuthMode.register),
-              child: const Text("Don't have an account? Sign Up"),
+              child: Text("key_005".tr()),
             ),
           ],
         );
@@ -69,7 +70,7 @@ class _AuthPageState extends State<AuthPage> {
             RegisterForm(onRegisterSuccess: _handleAuthSuccess),
             TextButton(
               onPressed: () => _setAuthMode(AuthMode.login),
-              child: const Text("Have an account? Log In"),
+              child: Text("key_006".tr()),
             ),
           ],
         );
@@ -80,7 +81,7 @@ class _AuthPageState extends State<AuthPage> {
             ForgotPasswordForm(onResetEmailSent: _handleResetEmailSent),
             TextButton(
               onPressed: () => _setAuthMode(AuthMode.login),
-              child: const Text("Back to Login"),
+              child: Text("key_007".tr()),
             ),
           ],
         );
@@ -91,7 +92,7 @@ class _AuthPageState extends State<AuthPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Account'),
+        title: Text("key_008".tr()),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
           onPressed: () {

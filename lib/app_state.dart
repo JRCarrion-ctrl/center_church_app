@@ -6,6 +6,7 @@ import 'package:logger/logger.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'features/auth/profile.dart';
 import 'features/auth/profile_service.dart';
@@ -21,7 +22,6 @@ class AppState extends ChangeNotifier {
 
   bool _initialized = false;
   bool _isLoading = true;
-  bool _hasSeenLanding = false;
   String? _timezone;
 
   // UI State
@@ -46,7 +46,6 @@ class AppState extends ChangeNotifier {
   // Getters
   bool get isInitialized => _initialized && !_isLoading;
   bool get isLoading => _isLoading;
-  bool get hasSeenLanding => _hasSeenLanding;
   int get selectedIndex => _selectedIndex;
   int get previousTabIndex => _previousTabIndex;
   int get currentTabIndex => _currentTabIndex;
@@ -154,11 +153,11 @@ class AppState extends ChangeNotifier {
         _setProfile(profile);
         await _cacheProfile(profile);
         await loadUserGroups();
-        OneSignal.login(user.id);
+        await updateOneSignalUser(); // centralized OneSignal sync
       } else {
         _setProfile(null);
         await _cacheProfile(null);
-        OneSignal.logout();
+        await updateOneSignalUser(); // will call logout
       }
     } catch (e) {
       debugPrint('Failed to restore session: $e');
@@ -216,22 +215,12 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void markLandingSeen() {
-    _hasSeenLanding = true;
-    notifyListeners();
-  }
-
-  Future<void> resetLandingSeen() async {
-    _hasSeenLanding = false;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hasSeenLanding', false);
-    notifyListeners();
-  }
-
-  void setLanguageCode(String code) async {
+  void setLanguageCode(BuildContext context, String code) async {
     _languageCode = code;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('language_code', code);
+    if (!context.mounted) return;
+    await context.setLocale(Locale(code));
     notifyListeners();
   }
 
@@ -283,19 +272,43 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void updateOneSignalUser() {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      OneSignal.login(userId);
-    } else {
-      OneSignal.logout();
+  Future<void> updateOneSignalUser() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+
+      if (user != null) {
+        OneSignal.login(user.id);
+
+        // Store player ID in Supabase for server-side targeting
+        final device = OneSignal.User.pushSubscription.id;
+        final playerId = device;
+        if (playerId != null) {
+          await Supabase.instance.client
+              .from('profiles')
+              .update({'onesignal_id': playerId})
+              .eq('id', user.id);
+        }
+
+        // Tag user role for role-based pushes
+        if (_profile?.role != null) {
+          await OneSignal.User.addTags({'role': _profile!.role});
+        }
+
+        // Tag group memberships for group-targeted pushes
+        for (final group in _userGroups) {
+          await OneSignal.User.addTags({'group_${group.id}': 'member'});
+        }
+      } else {
+        OneSignal.logout();
+      }
+    } catch (e, st) {
+      _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);
     }
   }
 
   void resetAppState() {
     _themeMode = ThemeMode.system;
     _languageCode = 'en';
-    _hasSeenLanding = false;
     _showCountdown = true;
     _showGroupAnnouncements = true;
     _fontScale = 1.0;

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class AppAnnouncementFormModal extends StatefulWidget {
   final Map<String, dynamic>? existing;
@@ -58,7 +59,7 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
     if (userId == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('You must be logged in to post announcements.')),
+          SnackBar(content: Text("key_190".tr())),
         );
       }
       setState(() => saving = false);
@@ -112,22 +113,22 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                isEditing ? 'Edit Announcement' : 'New Announcement',
+                isEditing ? "key_154".tr() : "key_155".tr(),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
 
               TextFormField(
                 controller: _title,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(labelText: "key_156".tr()),
                 validator: (value) =>
-                    value == null || value.isEmpty ? 'Title is required' : null,
+                    value == null || value.isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 12),
 
               TextFormField(
                 controller: _body,
-                decoration: const InputDecoration(labelText: 'Body (optional)'),
+                decoration: InputDecoration(labelText: "key_157".tr()),
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
@@ -137,12 +138,12 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
                 leading: const Icon(Icons.schedule),
                 title: Text(
                   _scheduled == null
-                      ? 'Will publish immediately unless a time is picked'
+                      ? "key_190a".tr()
                       : 'Scheduled: ${_scheduled!.toLocal()}',
                 ),
                 trailing: TextButton(
                   onPressed: _pickDateTime,
-                  child: const Text('Pick Time'),
+                  child: Text("key_192".tr()),
                 ),
               ),
               const SizedBox(height: 20),
@@ -154,13 +155,13 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: saving ? null : _submit,
-                            child: Text(isEditing ? 'Update' : 'Create'),
+                            child: Text(isEditing ? "key_041i".tr() : "key_041h".tr()),
                           ),
                         ),
                         const SizedBox(width: 12),
                         TextButton(
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Cancel'),
+                          child: Text("key_193".tr()),
                         ),
                       ],
                     ),

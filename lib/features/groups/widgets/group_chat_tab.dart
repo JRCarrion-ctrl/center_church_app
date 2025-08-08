@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../models/group_message.dart';
 import '../group_chat_service.dart';
@@ -176,7 +177,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         if (widget.isAdmin || isSender)
           ListTile(
             leading: const Icon(Icons.delete),
-            title: const Text('Delete Message'),
+            title: Text("key_162".tr()),
             onTap: () async {
               Navigator.pop(context);
               await _chatService.deleteMessage(message.id);
@@ -185,7 +186,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         if (widget.isAdmin && message.id != _highlightMessageId)
           ListTile(
             leading: const Icon(Icons.push_pin_outlined),
-            title: const Text('Pin Message'),
+            title: Text("key_163".tr()),
             onTap: () async {
               Navigator.pop(context);
               await _pinService.pinMessage(widget.groupId, message.id);
@@ -195,7 +196,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         if (!isSender)
           ListTile(
             leading: const Icon(Icons.report),
-            title: const Text('Report Message'),
+            title: Text("key_164".tr()),
             onTap: () async {
               Navigator.pop(context);
               await _chatService.reportMessage(message.id);
@@ -203,7 +204,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
           ),
         ListTile(
           leading: const Icon(Icons.emoji_emotions),
-          title: const Text('React to Message'),
+          title: Text("key_165".tr()),
           onTap: () {
             Navigator.pop(context);
             _showReactionPicker(context, message);
@@ -212,7 +213,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         if (widget.isAdmin && message.id == _highlightMessageId)
           ListTile(
             leading: const Icon(Icons.remove_circle_outline),
-            title: const Text('Unpin Message'),
+            title: Text("key_166".tr()),
             onTap: () async {
               Navigator.pop(context);
               await _pinService.unpinMessage(widget.groupId);

@@ -1,8 +1,8 @@
 // File: lib/features/groups/widgets/event_form_modal.dart
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../../calendar/models/group_event.dart';
 import '../../calendar/event_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// Modal bottom sheet for creating or editing a GroupEvent
 class EventFormModal extends StatefulWidget {
@@ -71,7 +71,7 @@ class _EventFormModalState extends State<EventFormModal> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Please pick date and time')));
+          .showSnackBar(SnackBar(content: Text("key_160".tr())));
       return;
     }
 
@@ -121,23 +121,23 @@ class _EventFormModalState extends State<EventFormModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.existing == null ? 'Add Event' : 'Edit Event',
+                  widget.existing == null ? "key_161".tr() : "key_161a".tr(),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: InputDecoration(labelText: "key_156".tr()),
                   validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _descController,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration: InputDecoration(labelText: "key_068c".tr()),
                   maxLines: 2,
                 ),
                 TextFormField(
                   controller: _locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: InputDecoration(labelText: "key_041e".tr()),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -147,7 +147,7 @@ class _EventFormModalState extends State<EventFormModal> {
                         onPressed: _pickDate,
                         child: Text(
                           _selectedDate == null
-                              ? 'Pick Date'
+                              ? "key_041f".tr()
                               : DateFormat.yMMMd().format(_selectedDate!),
                         ),
                       ),
@@ -158,7 +158,7 @@ class _EventFormModalState extends State<EventFormModal> {
                         onPressed: _pickTime,
                         child: Text(
                           _selectedTime == null
-                              ? 'Pick Time'
+                              ? "key_041g".tr()
                               : _selectedTime!.format(context),
                         ),
                       ),
@@ -170,7 +170,7 @@ class _EventFormModalState extends State<EventFormModal> {
                   onPressed: _saving ? null : _save,
                   child: _saving
                       ? const CircularProgressIndicator()
-                      : Text(widget.existing == null ? 'Create' : 'Update'),
+                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
                 const SizedBox(height: 8),
               ],

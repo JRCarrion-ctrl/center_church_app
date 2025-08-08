@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class NotFoundPage extends StatelessWidget {
   const NotFoundPage({super.key});
@@ -6,9 +7,9 @@ class NotFoundPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Page Not Found')),
-      body: const Center(
-        child: Text('Oops! That page doesn’t exist.'),
+      appBar: AppBar(title: Text("key_001".tr())),
+      body: Center(
+        child: Text("key_002".tr()),
       ),
     );
   }

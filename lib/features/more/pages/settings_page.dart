@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../../app_state.dart';
 import '../../../shared/user_roles.dart';
@@ -72,12 +73,12 @@ class _SettingsPageState extends State<SettingsPage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Update Available'),
-        content: Text('A new version ($version) is available.'),
+        title: Text("key_315".tr()),
+        content: Text("key_316".tr(args: [version])),
         actions: [
-          TextButton(child: const Text('Later'), onPressed: () => Navigator.pop(context)),
+          TextButton(child: Text("key_317".tr()), onPressed: () => Navigator.pop(context)),
           TextButton(
-            child: const Text('Update Now'),
+            child: Text("key_318".tr()),
             onPressed: () {
               Navigator.pop(context);
               launchUrl(Uri.parse(url));
@@ -105,15 +106,15 @@ class _SettingsPageState extends State<SettingsPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("key_318a".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               for (final lang in ['en', 'es'])
                 RadioListTile<String>(
-                  title: Text(lang == 'en' ? 'English' : 'Spanish'),
+                  title: Text(lang == 'en' ? "key_347".tr() : "key_348".tr()),
                   value: lang,
                   groupValue: selected,
                   onChanged: (val) {
                     if (val != null) {
-                      appState.setLanguageCode(val);
+                      appState.setLanguageCode(context, lang);
                       setModalState(() => selected = val);
                       Navigator.pop(context);
                     }
@@ -129,10 +130,10 @@ class _SettingsPageState extends State<SettingsPage> {
   void _showFontSizeModal() {
     final appState = Provider.of<AppState>(context, listen: false);
     final options = {
-      'Small': 0.85,
-      'Default': 1.0,
-      'Large': 1.15,
-      'Extra Large': 1.3,
+      "key_318b".tr(): 0.85,
+      "key_318c".tr(): 1.0,
+      "key_318d".tr(): 1.15,
+      "key_318e".tr(): 1.3,
     };
     double selected = appState.fontScale;
 
@@ -175,43 +176,43 @@ class _SettingsPageState extends State<SettingsPage> {
     final themeMode = appState.themeMode;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings'), centerTitle: true, elevation: 0),
+      appBar: AppBar(title: Text("key_319".tr()), centerTitle: true, elevation: 0),
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         children: [
-          _settingsCard('General', [
-            _tile('Language', onTap: _showLanguageSheet),
-            _tile('Notifications', onTap: () => context.push('/settings/notifications')),
-            _tile('Calendar', onTap: () => CalendarSettingsModal.show(context)),
-            _tile('Data & Delete Account', onTap: () => context.push('/data-and-delete')),
+          _settingsCard("set_1".tr(), [
+            _tile("set_1a".tr(), onTap: _showLanguageSheet),
+            _tile("set_1b".tr(), onTap: () => context.push('/settings/notifications')),
+            _tile("set_1c".tr(), onTap: () => CalendarSettingsModal.show(context)),
+            _tile("set_1d".tr(), onTap: () => context.push('/data-and-delete')),
           ]),
 
-          _settingsCard('App Info', [
-            _disabledTile('Version: $appVersion'),
-            _tile('Check for Updates', onTap: () => _checkForUpdates(context)),
-            _tile('Contact Support', onTap: () => context.push('/contact-support')),
-            _tile('View Terms and Conditions', onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
-            _tile('Privacy Policy', onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
+          _settingsCard("set_2".tr(), [
+            _disabledTile("set_2a".tr(args: [appVersion])),
+            _tile("set_2b".tr(), onTap: () => _checkForUpdates(context)),
+            _tile("set_2c".tr(), onTap: () => context.push('/contact-support')),
+            _tile("set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
+            _tile("set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
           ]),
 
-          _settingsCard('Theme', [
-            _radioTile('System Default', ThemeMode.system, themeMode),
-            _radioTile('Light Mode', ThemeMode.light, themeMode),
-            _radioTile('Dark Mode', ThemeMode.dark, themeMode),
+          _settingsCard("set_3".tr(), [
+            _radioTile("set_3a".tr(), ThemeMode.system, themeMode),
+            _radioTile("set_3b".tr(), ThemeMode.light, themeMode),
+            _radioTile("set_3c".tr(), ThemeMode.dark, themeMode),
           ]),
 
-          _settingsCard('Announcements', [
-            _switchTile('Show Countdown', appState.showCountdown, appState.setShowCountdown),
-            _switchTile('Show Group Announcements in Home', appState.showGroupAnnouncements, appState.setShowGroupAnnouncements),
+          _settingsCard("set_4".tr(), [
+            _switchTile("set_4a".tr(), appState.showCountdown, appState.setShowCountdown),
+            _switchTile("set_4b".tr(), appState.showGroupAnnouncements, appState.setShowGroupAnnouncements),
           ]),
 
-          _settingsCard('Accessibility', [
-            _tile('Font Size', onTap: _showFontSizeModal),
+          _settingsCard("set_5".tr(), [
+            _tile("set_5a".tr(), onTap: _showFontSizeModal),
           ]),
 
-          _settingsCard('Media & Background', [
+          _settingsCard("set_6".tr(), [
             _switchTile(
-              'Auto Refresh / Background Sync',
+              "set_6a".tr(),
               _autoRefresh,
               (val) async {
                 final prefs = await SharedPreferences.getInstance();
@@ -219,11 +220,11 @@ class _SettingsPageState extends State<SettingsPage> {
                 await prefs.setBool('auto_refresh_enabled', val);
               },
             ),
-            _tile('Media and Storage Settings', onTap: () => context.push('/media-settings')),
+            _tile("set_6b".tr(), onTap: () => context.push('/media-settings')),
           ]),
 
-          if (appState.userRole == UserRole.owner) _settingsCard('Developer Tools', [
-            _tile('Debug Panel', onTap: () => context.push('/debug-panel')),
+          if (appState.userRole == UserRole.owner) _settingsCard("set_7".tr(), [
+            _tile("set_7a".tr(), onTap: () => context.push('/debug-panel')),
           ]),
         ],
       ),

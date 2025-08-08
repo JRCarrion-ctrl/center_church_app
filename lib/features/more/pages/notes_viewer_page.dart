@@ -5,6 +5,7 @@ import 'package:dio/dio.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:logger/logger.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class NotesViewerPage extends StatefulWidget {
   final String url;
@@ -75,7 +76,7 @@ class _NotesViewerPageState extends State<NotesViewerPage> {
     final isDocx = filename.toLowerCase().endsWith('.docx');
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Study Notes')),
+      appBar: AppBar(title: Text("key_291".tr())),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -84,7 +85,7 @@ class _NotesViewerPageState extends State<NotesViewerPage> {
                   ? SfPdfViewer.file(_localFile!)
                   : isDocx
                       ? WebViewWidget(controller: _webViewController)
-                      : Center(child: Text('Unsupported file type: $filename')),
+                      : Center(child: Text("key_292".tr(args: [filename]))),
     );
   }
 }

@@ -5,6 +5,7 @@ import 'package:youtube_player_flutter/youtube_player_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:easy_localization/easy_localization.dart';
 
 class LivestreamPreview extends StatefulWidget {
   const LivestreamPreview({super.key});
@@ -113,7 +114,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
 
         final videoId = snapshot.data;
         if (videoId == null || videoId.isEmpty) {
-          return const Center(child: Text('No livestream available.'));
+          return Center(child: Text("key_179".tr()));
         }
 
         _ytController ??= YoutubePlayerController(
@@ -129,8 +130,8 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
               children: [
                 Row(
                   children: [
-                    const Text(
-                      'Livestream',
+                    Text(
+                      "key_179a".tr(),
                       style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(width: 8),
@@ -159,7 +160,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
                       }
                     },
                     icon: const Icon(Icons.open_in_new),
-                    label: const Text('More Livestreams'),
+                    label: Text("key_180".tr()),
                   ),
                 ),
               ],

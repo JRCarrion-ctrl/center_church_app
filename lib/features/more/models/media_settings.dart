@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../../app_state.dart';
 import '../../groups/media_cache_service.dart';
@@ -59,11 +60,11 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Clear Cached Media?'),
-        content: const Text('This will delete all downloaded images and videos.'),
+        title: Text("key_218".tr()),
+        content: Text("key_219".tr()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Clear')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("key_220".tr())),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: Text("key_221".tr())),
         ],
       ),
     );
@@ -74,7 +75,7 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
       if (!mounted) return;
       setState(() => _clearingCache = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Media cache cleared.')),
+        SnackBar(content: Text("key_222".tr())),
       );
     }
   }
@@ -90,27 +91,27 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Media & Storage')),
+      appBar: AppBar(title: Text("key_223".tr())),
       body: ListView(
         children: [
           SwitchListTile(
-            title: const Text('Auto-download Images'),
+            title: Text("key_224".tr()),
             value: _autoDownloadImages,
             onChanged: _clearingCache ? null : (val) => _updatePreference(_imageKey, val),
           ),
           SwitchListTile(
-            title: const Text('Auto-download Videos'),
+            title: Text("key_225".tr()),
             value: _autoDownloadVideos,
             onChanged: _clearingCache ? null : (val) => _updatePreference(_videoKey, val),
           ),
           SwitchListTile(
-            title: const Text('Wi-Fi Only'),
-            subtitle: const Text('Download media only on Wi-Fi'),
+            title: Text("key_226".tr()),
+            subtitle: Text("key_227".tr()),
             value: appState.wifiOnlyMediaDownload,
             onChanged: _clearingCache ? null : _updateWifiPreference,
           ),
           ListTile(
-            title: const Text('Clear Cached Media'),
+            title: Text("key_228".tr()),
             trailing: _clearingCache
                 ? const SizedBox(
                     width: 20,

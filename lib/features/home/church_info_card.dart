@@ -1,6 +1,7 @@
 // File: lib/features/home/church_info_card.dart
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ChurchInfoCard extends StatelessWidget {
   const ChurchInfoCard({super.key});
@@ -46,8 +47,8 @@ class ChurchInfoCard extends StatelessWidget {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   elevation: 4,
                 ),
-                child: const Text(
-                  'Learn More About Our Church',
+                child: Text(
+                  "key_178a".tr(),
                   style: TextStyle(fontSize: 16),
                 ),
               ),

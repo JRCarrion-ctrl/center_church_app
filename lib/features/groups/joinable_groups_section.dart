@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
 import 'package:ccf_app/features/groups/pages/group_join_page.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class JoinableGroupsSection extends StatefulWidget {
   const JoinableGroupsSection({super.key});
@@ -58,11 +59,11 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Groups You Can Join', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text("key_059d".tr(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         TextField(
-          decoration: const InputDecoration(
-            hintText: 'Search groups...',
+          decoration: InputDecoration(
+            hintText: "key_063".tr(),
             prefixIcon: Icon(Icons.search),
             border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
           ),
@@ -78,7 +79,7 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
             child: Center(child: CircularProgressIndicator()),
           )
         else if (filteredGroups.isEmpty)
-          const Text('No open groups available at the moment.')
+          Text("key_064".tr())
         else
           GridView.builder(
             shrinkWrap: true,

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logger/logger.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../more/models/invite_modal.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 const defaultRelationships = [
   'Parent', 'Child', 'Sibling', 'Spouse', 'Cousin', 'Uncle', 'Aunt',
@@ -131,16 +131,16 @@ class _FamilyPageState extends State<FamilyPage> {
 
     if (widget.familyId == null) {
       return Scaffold(
-        appBar: AppBar(title: const Text("Your Family")),
+        appBar: AppBar(title: Text("key_275".tr())),
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text("You are not in a family yet."),
+              Text("key_276".tr()),
               const SizedBox(height: 16),
-              ElevatedButton(onPressed: _createFamily, child: const Text("Create Family")),
+              ElevatedButton(onPressed: _createFamily, child: Text("key_277".tr())),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _showJoinFamilyDialog, child: const Text("Join Family")),
+              ElevatedButton(onPressed: _showJoinFamilyDialog, child: Text("key_278".tr())),
             ],
           ),
         ),
@@ -157,11 +157,10 @@ class _FamilyPageState extends State<FamilyPage> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Your Family"),
+        title: Text("key_279".tr()),
         leading: BackButton(onPressed: () => context.go('/more')),
         actions: [
           IconButton(icon: const Icon(Icons.child_care), onPressed: _addChild),
-          IconButton(icon: const Icon(Icons.person_add), onPressed: _inviteUser),
         ],
       ),
       body: RefreshIndicator(
@@ -174,7 +173,7 @@ class _FamilyPageState extends State<FamilyPage> {
                 child: Align(
                   alignment: Alignment.centerLeft,
                   child: Text(
-                    'Family Code: $familyCode',
+                    "key_279a".tr(args: [familyCode ?? '']),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -183,9 +182,9 @@ class _FamilyPageState extends State<FamilyPage> {
               child: ListView(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 children: [
-                  if (self.isNotEmpty) _buildSection("You", self),
-                  if (children.isNotEmpty) _buildSection("Children", children),
-                  if (adults.isNotEmpty) _buildSection("Family Members", adults),
+                  if (self.isNotEmpty) _buildSection("key_280a".tr(), self),
+                  if (children.isNotEmpty) _buildSection("key_280b".tr(), children),
+                  if (adults.isNotEmpty) _buildSection("key_280c".tr(), adults),
                   const SizedBox(height: 100),
                 ],
               ),
@@ -195,7 +194,7 @@ class _FamilyPageState extends State<FamilyPage> {
               child: ElevatedButton.icon(
                 onPressed: _leaveFamily,
                 icon: const Icon(Icons.logout),
-                label: const Text('Leave Family'),
+                label: Text("key_280".tr()),
                 style: ElevatedButton.styleFrom(
                   foregroundColor: Colors.red,
                   backgroundColor: Colors.red.shade100,
@@ -240,7 +239,7 @@ class _FamilyPageState extends State<FamilyPage> {
           if (!isChild && userId != null && memberUserId != userId)
             DropdownButton<String>(
               value: relationship.isEmpty ? null : relationship,
-              hint: const Text('Set Relationship'),
+              hint: Text("key_281".tr()),
               items: defaultRelationships
                   .map((r) => DropdownMenuItem(value: r, child: Text(r)))
                   .toList(),
@@ -257,18 +256,6 @@ class _FamilyPageState extends State<FamilyPage> {
           context.push('/profile/${user['id']}');
         }
       },
-    );
-  }
-
-  void _inviteUser() {
-    if (widget.familyId == null) return;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => InviteExistingUserModal(
-        familyId: widget.familyId!,
-        invitedBy: currentUserId,
-      ),
     );
   }
 
@@ -317,11 +304,11 @@ class _FamilyPageState extends State<FamilyPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Leave Family'),
-        content: const Text('Are you sure you want to leave this family?'),
+        title: Text("key_282".tr()),
+        content: Text("key_283".tr()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Leave')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("key_284".tr())),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text("key_285".tr())),
         ],
       ),
     );
@@ -341,21 +328,21 @@ class _FamilyPageState extends State<FamilyPage> {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Join Family'),
+        title: Text("key_286".tr()),
         content: TextField(
           controller: controller,
           maxLength: 6,
           textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'Enter Family Code'),
+          decoration: InputDecoration(hintText: "key_286a".tr()),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+          TextButton(onPressed: () => Navigator.pop(context), child: Text("key_287".tr())),
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
               _joinFamilyByCode(controller.text);
             },
-            child: const Text('Join Family'),
+            child: Text("key_288".tr()),
           ),
         ],
       ),

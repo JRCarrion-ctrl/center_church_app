@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class MorePage extends StatefulWidget {
   const MorePage({super.key});
@@ -34,11 +35,11 @@ class _MorePageState extends State<MorePage> {
 
         final List<Map<String, dynamic>> moreItems = [
           {
-            'title': 'Profile',
+            'title': "key_196a".tr(),
             'onTap': () => context.push('/more/profile'),
           },
           {
-            'title': 'Family',
+            'title': "key_196b".tr(),
             'onTap': () async {
               final userId = Supabase.instance.client.auth.currentUser?.id;
               if (userId == null) return;
@@ -56,38 +57,38 @@ class _MorePageState extends State<MorePage> {
             }
           },
           {
-            'title': 'Directory',
+            'title': "key_196c".tr(),
             'onTap': () => context.push('/more/directory'),
           },
           if (isNurseryStaff)
             {
-              'title': 'Nursery Staff',
+              'title': "key_196d".tr(),
               'onTap': () => context.push('/nursery'),
             },
           {
-            'title': 'Bible Studies',
+            'title': "key_196e".tr(),
             'onTap': () => context.push('/more/study'),
           },
           if (isAdmin)
             {
-              'title': 'Bible Study Requests',
+              'title': "key_196f".tr(),
               'onTap': () => context.push('/more/study/requests'),
             },
           {
-            'title': 'Settings',
+            'title': "key_196g".tr(),
             'onTap': () => context.push('/more/settings'),
           },
           {
-            'title': 'How To Use',
+            'title': "key_196h".tr(),
             'onTap': () => context.push('/more/how_to'),
           },
           {
-            'title': 'FAQ',
+            'title': "key_196i".tr(),
             'onTap': () => context.push('/more/faq'),
           },
           if (isAdmin)
             {
-              'title': 'Permissions',
+              'title': "key_196j".tr(),
               'onTap': null,
             },
         ];

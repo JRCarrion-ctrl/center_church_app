@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
 import '../models/group_announcement.dart';
 import '../widgets/announcement_form_modal.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ManageAnnouncementsPage extends StatefulWidget {
   final String groupId;
@@ -72,11 +73,11 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Announcement'),
-        content: const Text('Are you sure you want to delete this announcement?'),
+        title: Text("key_126".tr()),
+        content: Text("key_127".tr()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: Text("key_128".tr())),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text("key_129".tr())),
         ],
       ),
     );
@@ -102,10 +103,10 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
       child: SegmentedButton<String>(
-        segments: const [
-          ButtonSegment(value: 'all', label: Text('All')),
-          ButtonSegment(value: 'published', label: Text('Published')),
-          ButtonSegment(value: 'scheduled', label: Text('Scheduled')),
+        segments: [
+          ButtonSegment(value: 'all', label: Text("key_130".tr())),
+          ButtonSegment(value: 'published', label: Text("key_131".tr())),
+          ButtonSegment(value: 'scheduled', label: Text("key_132".tr())),
         ],
         selected: {filter},
         onSelectionChanged: (v) => setState(() => filter = v.first),
@@ -128,7 +129,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
               Text(a.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
             if (a.publishedAt != null)
               Text(
-                '${isPublished ? 'Published' : 'Scheduled'}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
+                '${isPublished ? "key_131".tr() : "key_132".tr()}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
                 style: TextStyle(
                   fontSize: 12,
                   color: isPublished ? Colors.green[700] : Colors.orange[700],
@@ -153,7 +154,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Manage Announcements')),
+      appBar: AppBar(title: Text("key_133".tr())),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
@@ -163,7 +164,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
                   _buildFilterButtons(),
                   Expanded(
                     child: filteredAnnouncements.isEmpty
-                        ? const Center(child: Text('No announcements found.'))
+                        ? Center(child: Text("key_134".tr()))
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.only(bottom: 80),
@@ -178,7 +179,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         icon: const Icon(Icons.add),
-        label: const Text('Add'),
+        label: Text("key_135".tr()),
       ),
     );
   }

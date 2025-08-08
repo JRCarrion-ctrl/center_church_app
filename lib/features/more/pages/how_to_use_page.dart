@@ -1,48 +1,49 @@
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class HowToUsePage extends StatelessWidget {
-  const HowToUsePage({super.key});
+  HowToUsePage({super.key});
 
-  final List<HowToSection> sections = const [
+  final List<HowToSection> sections = [
     HowToSection(
-      title: 'Home Tab',
+      title: "how_q1".tr(),
       content:
-          'The Home tab shows a welcome message, countdown to the next service, announcements, the latest livestream, church info, and quick links (Giving, YouTube, etc.). Tap "More Livestreams" to browse past services or Bible studies.',
+          "how_a1".tr(),
     ),
     HowToSection(
-      title: 'Groups Tab',
+      title: "how_q2".tr(),
       content:
-          'Join or request to join open groups. Tap a group to enter its chat, view the calendar, media, and announcements. Group admins can manage members and post announcements.',
+          "how_a2".tr(),
     ),
     HowToSection(
-      title: 'Calendar Tab',
+      title: "how_q3".tr(),
       content:
-          'Shows events from your groups. Tap the calendar icon in the top right to choose which group calendars sync to your view. Tap an event to see details or mark attendance.',
+          "how_a3".tr(),
     ),
     HowToSection(
-      title: 'Prayer Tab',
+      title: "how_q4".tr(),
       content:
-          'View and submit prayer requests. You can choose to submit anonymously or with your name. Requests expire after 7 days. You can view and remove your own requests from your profile.',
+          "how_a4".tr(),
     ),
     HowToSection(
-      title: 'Bible Study Access',
+      title: "how_q5".tr(),
       content:
-          'Bible studies are restricted. When you tap one, you can request access and leave a note. Supervisors in the A/V ministry can approve or deny requests.',
+          "how_a5".tr(),
     ),
     HowToSection(
-      title: 'Nursery & Check-In',
+      title: "how_q6".tr(),
       content:
-          'If you have children added under your Family profile, you can check them in by showing their QR code. Nursery staff scan it and can message you while your child is checked in.',
+          "how_a6".tr(),
     ),
     HowToSection(
-      title: 'Roles & Permissions',
+      title: "how_q7".tr(),
       content:
-          'Your role (User, Member, Admin, Leader, Supervisor, Owner) determines what you can access. You can view your role on your Profile page and any special permissions in the More tab.',
+          "how_a7".tr(),
     ),
     HowToSection(
-      title: 'Settings & Customization',
+      title: "how_q8".tr(),
       content:
-          'Go to the Settings page from the More tab to change your theme, notification preferences, language, accessibility options, and more.',
+          "how_a8".tr(),
     ),
   ];
 
@@ -50,7 +51,7 @@ class HowToUsePage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('How to Use'),
+        title: Text("key_290".tr()),
         centerTitle: true,
         elevation: 0,
       ),

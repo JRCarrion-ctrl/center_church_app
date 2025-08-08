@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:uuid/uuid.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class AddChildProfilePage extends StatefulWidget {
   final String familyId;
@@ -147,7 +148,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Add Child Profile')),
+      appBar: AppBar(title: Text("key_238".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -165,23 +166,23 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Child Name'),
-                validator: (value) => value == null || value.trim().isEmpty ? 'Name is required' : null,
+                decoration: InputDecoration(labelText: "key_238a".tr()),
+                validator: (value) => value == null || value.trim().isEmpty ? "key_238b".tr() : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _allergiesController,
-                decoration: const InputDecoration(labelText: 'Allergies (optional)'),
+                decoration: InputDecoration(labelText: "key_238c".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Notes (optional)'),
+                decoration: InputDecoration(labelText: "key_238d".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _emergencyContactController,
-                decoration: const InputDecoration(labelText: 'Emergency Contact [Name, Phone Number]'),
+                decoration: InputDecoration(labelText: "key_238e".tr()),
               ),
               const SizedBox(height: 12),
               ListTile(
@@ -202,7 +203,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _isSaving ? null : _submit,
-                child: _isSaving ? const CircularProgressIndicator() : const Text('Add Child'),
+                child: _isSaving ? const CircularProgressIndicator() : Text("key_239".tr()),
               ),
             ],
           ),

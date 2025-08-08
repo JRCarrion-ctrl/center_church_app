@@ -9,6 +9,7 @@ import '../media_cache_service.dart';
 import '../models/group_message.dart';
 import 'package:flutter_link_previewer/flutter_link_previewer.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 extension FileExtension on String {
   bool get isImage => ['png', 'jpg', 'jpeg', 'webp', 'heic'].contains(toLowerCase());
@@ -180,7 +181,7 @@ class _MessageContentViewState extends State<MessageContentView> {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               } else if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Could not launch link')),
+                  SnackBar(content: Text("key_173".tr())),
                 );
               }
             },
@@ -194,10 +195,10 @@ class _MessageContentViewState extends State<MessageContentView> {
         child: Image.asset('assets/image_placeholder.png', height: 200, fit: BoxFit.cover),
       );
 
-  Widget _buildErrorFileView() => const Column(
+  Widget _buildErrorFileView() => Column(
         children: [
           Icon(Icons.broken_image, size: 48, color: Colors.grey),
-          Text('Failed to load file', style: TextStyle(fontSize: 12)),
+          Text("key_173a".tr(), style: TextStyle(fontSize: 12)),
         ],
       );
 
@@ -243,7 +244,7 @@ class _MessageContentViewState extends State<MessageContentView> {
             await launchUrl(Uri.file(file.path));
           } catch (e) {
             debugPrint('Error opening file: \$e\n\$s');
-            messenger.showSnackBar(const SnackBar(content: Text('Failed to open file')));
+            messenger.showSnackBar(SnackBar(content: Text("key_174".tr())));
           }
         },
         child: ClipRRect(
@@ -308,10 +309,10 @@ class _MessageContentViewState extends State<MessageContentView> {
                     ),
                   );
                 },
-                errorBuilder: (context, error, stackTrace) => const Column(
+                errorBuilder: (context, error, stackTrace) => Column(
                   children: [
                     Icon(Icons.broken_image, size: 48, color: Colors.grey),
-                    Text('Failed to load GIF', style: TextStyle(fontSize: 12)),
+                    Text("key_174a".tr(), style: TextStyle(fontSize: 12)),
                   ],
                 ),
               ),

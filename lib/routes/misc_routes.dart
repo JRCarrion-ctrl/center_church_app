@@ -54,14 +54,14 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/faq',
     pageBuilder: (_, _) => buildSlidePage(
-      const FAQPage(),
+      FAQPage(),
       direction: SlideDirection.right,
     ),
   ),
   GoRoute(
     path: '/more/how_to',
     pageBuilder: (_, _) => buildSlidePage(
-      const HowToUsePage(),
+      HowToUsePage(),
       direction: SlideDirection.right,
     ),
   ),

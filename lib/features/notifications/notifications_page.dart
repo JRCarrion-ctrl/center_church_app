@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -13,13 +14,13 @@ class NotificationsPage extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           leading: const BackButton(),
-          title: const Text('Notifications'),
+          title: Text("key_324".tr()),
           actions: [
             Builder(
               builder: (context) {
                 return IconButton(
                   icon: const Icon(Icons.done_all),
-                  tooltip: 'Mark all as read',
+                  tooltip: "key_324a".tr(),
                   onPressed: () async {
                     final tabIndex = DefaultTabController.of(context).index;
                     final isApp = tabIndex == 0;
@@ -29,7 +30,7 @@ class NotificationsPage extends StatelessWidget {
 
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Marked all as read')),
+                        SnackBar(content: Text("key_325".tr())),
                       );
                     }
                   },
@@ -145,7 +146,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
     }
 
     if (notifications.isEmpty) {
-      return const Center(child: Text('No notifications yet.'));
+      return Center(child: Text("key_326".tr()));
     }
 
     return RefreshIndicator(
@@ -167,11 +168,11 @@ class _NotificationsTabState extends State<_NotificationsTab> {
               return await showDialog<bool>(
                 context: context,
                 builder: (context) => AlertDialog(
-                  title: const Text('Delete Notification?'),
-                  content: const Text('This will remove the notification from your feed.'),
+                  title: Text("key_327".tr()),
+                  content: Text("key_328".tr()),
                   actions: [
-                    TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancel')),
-                    TextButton(onPressed: () => Navigator.of(context).pop(true), child: const Text('Delete')),
+                    TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text("key_329".tr())),
+                    TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text("key_330".tr())),
                   ],
                 ),
               );

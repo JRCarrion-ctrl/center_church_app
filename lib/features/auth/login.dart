@@ -4,6 +4,7 @@ import 'auth_service.dart';
 import '../../app_state.dart';
 import 'profile_service.dart';
 import 'profile.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class LoginForm extends StatefulWidget {
   final void Function(Profile? profile)? onLoginSuccess;
@@ -25,12 +26,12 @@ class _LoginFormState extends State<LoginForm> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Error"),
+        title: Text("key_012".tr()),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+            child: Text("key_011".tr()),
           ),
         ],
       ),
@@ -42,7 +43,7 @@ class _LoginFormState extends State<LoginForm> {
     final password = _passwordController.text.trim();
 
     if (email.isEmpty || password.isEmpty) {
-      _showErrorDialog('Email and password are required.');
+      _showErrorDialog("key_016".tr());
       return;
     }
 
@@ -55,10 +56,21 @@ class _LoginFormState extends State<LoginForm> {
       if (user != null) {
         final profile = await ProfileService().getProfile(user.id);
         if (!mounted) return;
+
+        // Update global state so other widgets see the login
+        context.read<AppState>().setProfile(profile);
+
+        // Optional: also load user groups if needed
+        await context.read<AppState>().loadUserGroups();
+
         widget.onLoginSuccess?.call(profile);
+
+        // Close the login screen
+        if (!mounted) return;
+        Navigator.of(context).pop();
       }
     } catch (e) {
-      _showErrorDialog('Login failed.\n${e.toString()}');
+      _showErrorDialog("key_021a".tr());
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -78,8 +90,8 @@ class _LoginFormState extends State<LoginForm> {
       child: SingleChildScrollView(
         child: Column(
           children: [
-            const Text(
-              "Login",
+            Text(
+              "key_017".tr(),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -87,20 +99,20 @@ class _LoginFormState extends State<LoginForm> {
               controller: _emailController,
               autofillHints: const [AutofillHints.email],
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(labelText: 'Email'),
+              decoration: InputDecoration(labelText: "key_023a".tr()),
             ),
             TextField(
               controller: _passwordController,
               autofillHints: const [AutofillHints.password],
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Password'),
+              decoration: InputDecoration(labelText: "key_023c".tr()),
             ),
             const SizedBox(height: 20),
             _isLoading
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
                     onPressed: _login,
-                    child: const Text('Login'),
+                    child: Text("key_017".tr()),
                   ),
           ],
         ),

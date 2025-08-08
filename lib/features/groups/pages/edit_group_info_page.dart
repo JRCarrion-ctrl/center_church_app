@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../models/group.dart';
 import '../../../shared/widgets/primary_button.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class EditGroupInfoPage extends StatefulWidget {
   final Group group;
@@ -65,7 +66,7 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Group Info')),
+      appBar: AppBar(title: Text("key_068".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Form(
@@ -74,20 +75,20 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Group Name'),
-                validator: (value) => value == null || value.isEmpty ? 'Name is required' : null,
+                decoration: InputDecoration(labelText: "key_068a".tr()),
+                validator: (value) => value == null || value.isEmpty ? "key_068b".tr() : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _descriptionController,
-                decoration: const InputDecoration(labelText: 'Description'),
+                decoration: InputDecoration(labelText: "key_068c".tr()),
                 maxLines: 4,
               ),
               const Spacer(),
               if (_saving) const CircularProgressIndicator(),
               if (!_saving)
                 PrimaryButton(
-                  title: 'Save Changes',
+                  title: "key_068d".tr(),
                   onTap: _saveChanges,
                 ),
             ],

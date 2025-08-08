@@ -10,7 +10,7 @@ import 'package:logger/logger.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:intl/intl.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../../app_state.dart';
 
@@ -42,13 +42,31 @@ class _ProfilePageState extends State<ProfilePage> {
   @override
   void initState() {
     super.initState();
+    _kickOutIfLoggedOut();
+  }
+
+  Future<void> _kickOutIfLoggedOut() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      // Defer navigation until after first frame to avoid context issues
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        context.go('/landing');
+      });
+      return;
+    }
+    // Only load data if authenticated
     _loadAll();
   }
 
   Future<void> _loadAll() async {
     setState(() => isLoading = true);
     final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    if (userId == null) {
+      // Shouldn’t happen because of the gate, but don’t hang the spinner
+      if (mounted) setState(() => isLoading = false);
+      return;
+    }
 
     try {
       final familiesData = await supabase
@@ -118,7 +136,7 @@ class _ProfilePageState extends State<ProfilePage> {
     } catch (e) {
       _logger.e('Error in _loadAll', error: e, stackTrace: StackTrace.current);
       if (!mounted) return;
-      _showSnackbar('Failed to load profile data.');
+      _showSnackbar("key_294a".tr());
       setState(() => isLoading = false);
     }
   }
@@ -157,7 +175,7 @@ class _ProfilePageState extends State<ProfilePage> {
       );
 
       if (response.status != 200) {
-        _showSnackbar('Failed to get upload URL');
+        _showSnackbar("key_294b".tr());
         return;
       }
       final data = response.data;
@@ -165,7 +183,7 @@ class _ProfilePageState extends State<ProfilePage> {
       final finalUrl = data['finalUrl'];
 
       if (uploadUrl == null || finalUrl == null) {
-        _showSnackbar('Invalid upload URL');
+        _showSnackbar("key_294c".tr());
         return;
       }
 
@@ -177,7 +195,7 @@ class _ProfilePageState extends State<ProfilePage> {
         headers: {'Content-Type': 'image/jpeg'},
       );
       if (uploadResp.statusCode != 200) {
-        _showSnackbar('Photo upload failed');
+        _showSnackbar("key_294d".tr());
         return;
       }
 
@@ -186,10 +204,10 @@ class _ProfilePageState extends State<ProfilePage> {
       CachedNetworkImage.evictFromCache(photoUrl!);
       await supabase.from('profiles').update({'photo_url': cacheBustedUrl}).eq('id', userId);
       setState(() => photoUrl = cacheBustedUrl);
-      _showSnackbar('Profile photo updated!');
+      _showSnackbar("key_294e".tr());
     } catch (e, st) {
       _logger.e('Error uploading photo', error: e, stackTrace: st);
-      _showSnackbar('Error uploading photo.');
+      _showSnackbar("key_294f".tr());
     }
   }
 
@@ -202,17 +220,17 @@ class _ProfilePageState extends State<ProfilePage> {
     final newValue = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Edit $label'),
+        title: Text("key_295".tr(args: [label])),
         content: TextField(
           controller: controller,
-          decoration: InputDecoration(hintText: 'Enter new $label'),
+          decoration: InputDecoration(hintText: "key_295a".tr(args: [label])),
           maxLines: label.toLowerCase() == 'bio' ? 3 : 1,
         ),
         actions: [
-          TextButton(onPressed: () => context.pop(), child: const Text('Cancel')),
+          TextButton(onPressed: () => context.pop(), child: Text("key_296".tr())),
           TextButton(
             onPressed: () => context.pop(controller.text.trim()),
-            child: const Text('Save'),
+            child: Text("key_297".tr()),
           ),
         ],
       ),
@@ -226,7 +244,6 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId != null) {
       await supabase.from('profiles').update({key: value}).eq('id', userId);
     }
-    _showSnackbar('$key updated!');
   }
 
   Future<void> _toggleVisibility(bool value) async {
@@ -235,9 +252,6 @@ class _ProfilePageState extends State<ProfilePage> {
       await supabase.from('profiles').update({'visible_in_directory': value}).eq('id', userId);
     }
     setState(() => visible = value);
-    _showSnackbar(
-      value ? 'You are now visible in the directory.' : 'You are now hidden from the directory.'
-    );
   }
 
   Future<void> _changePassword() async {
@@ -248,35 +262,35 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Change Password'),
+        title: Text("key_298".tr()),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
               controller: currentPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Current Password'),
+              decoration: InputDecoration(labelText: "key_298a".tr()),
             ),
             TextField(
               controller: newPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'New Password'),
+              decoration: InputDecoration(labelText: "key_298b".tr()),
             ),
             TextField(
               controller: confirmPasswordController,
               obscureText: true,
-              decoration: const InputDecoration(labelText: 'Confirm New Password'),
+              decoration: InputDecoration(labelText: "key_298c".tr()),
             ),
           ],
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text("key_299".tr()),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Update'),
+            child: Text("key_300".tr()),
           ),
         ],
       ),
@@ -289,7 +303,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirmPassword = confirmPasswordController.text.trim();
 
     if (newPassword != confirmPassword) {
-      _showSnackbar('New passwords do not match.');
+      _showSnackbar("key_300a".tr());
       return;
     }
 
@@ -303,13 +317,13 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final updateRes = await supabase.auth.updateUser(UserAttributes(password: newPassword));
       if (updateRes.user != null) {
-        _showSnackbar('Password updated successfully.');
+        _showSnackbar("key_300b".tr());
       } else {
         throw Exception('Password update failed.');
       }
     } catch (e) {
       _logger.e('Failed to update password', error: e);
-      _showSnackbar('Failed to update password.');
+      _showSnackbar("key_300c".tr());
     }
   }
 
@@ -317,17 +331,14 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _removePrayerRequest(String id) async {
     await supabase.from('prayer_requests').delete().eq('id', id);
     setState(() => prayerRequests.removeWhere((r) => r['id'] == id));
-    _showSnackbar('Prayer request removed.');
   }
 
   Future<void> _logout() async {
     final appState = Provider.of<AppState>(context, listen: false);
     await supabase.auth.signOut();
     await appState.signOut();
-    await appState.resetLandingSeen();
 
     if (mounted) {
-      _showSnackbar('Logged out successfully');
       context.go('/landing');
     }
   }
@@ -336,13 +347,13 @@ class _ProfilePageState extends State<ProfilePage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text('This will permanently delete your account. This cannot be undone. Are you sure?'),
+        title: Text("key_301".tr()),
+        content: Text("key_302".tr()),
         actions: [
-          TextButton(onPressed: () => context.pop(false), child: const Text('Cancel')),
+          TextButton(onPressed: () => context.pop(false), child: Text("key_303".tr())),
           TextButton(
             onPressed: () => context.pop(true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text("key_302a".tr(), style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -355,14 +366,13 @@ class _ProfilePageState extends State<ProfilePage> {
         'user_id': userId,
       });
       if (response.status != 200) {
-        _showSnackbar('Account deletion failed.');
+        _showSnackbar("key_207".tr());
         return;
       }
     }
     await supabase.auth.signOut();
     if (mounted) {
       context.go('/landing');
-      _showSnackbar('Account deleted.');
     }
   }
 
@@ -373,13 +383,23 @@ class _ProfilePageState extends State<ProfilePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Defensive fallback: if somehow here without a user, nudge to login
+    if (supabase.auth.currentUser == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text("key_304".tr())),
+        body: Center(
+          child: ElevatedButton(
+            onPressed: () => context.go('/landing'),
+            child: Text("key_017".tr()), // "Login"
+          ),
+        ),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
-        leading: BackButton(
-          onPressed: () => Navigator.of(context).pop(),
-        ),
+        title: Text("key_304".tr()),
+        leading: BackButton(onPressed: () => Navigator.of(context).pop()),
       ),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
@@ -408,7 +428,7 @@ class _ProfilePageState extends State<ProfilePage> {
                           ),
                           TextButton(
                             onPressed: _editPhoto,
-                            child: const Text('Edit Photo'),
+                            child: Text("key_305".tr()),
                           ),
                           const SizedBox(height: 8),
                           Row(
@@ -418,7 +438,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               IconButton(
                                 icon: const Icon(Icons.edit),
                                 onPressed: () => _editField(
-                                  label: 'Display Name',
+                                  label: "key_305a".tr(),
                                   initialValue: displayName ?? '',
                                   onSaved: (v) async {
                                     await _updateProfileField('display_name', v);
@@ -436,7 +456,7 @@ class _ProfilePageState extends State<ProfilePage> {
                               IconButton(
                                 icon: const Icon(Icons.edit),
                                 onPressed: () => _editField(
-                                  label: 'Bio',
+                                  label: "key_305b".tr(),
                                   initialValue: bio ?? '',
                                   onSaved: (v) async {
                                     await _updateProfileField('bio', v);
@@ -455,7 +475,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 IconButton(
                                   icon: const Icon(Icons.edit),
                                   onPressed: () => _editField(
-                                    label: 'Phone Number',
+                                    label: "key_305c".tr(),
                                     initialValue: phone ?? '',
                                     onSaved: (v) async {
                                       await _updateProfileField('phone', v);
@@ -471,21 +491,21 @@ class _ProfilePageState extends State<ProfilePage> {
                     const SizedBox(height: 16),
 
                     SwitchListTile(
-                      title: const Text('Visible in Directory?'),
+                      title: Text("key_306".tr()),
                       value: visible ?? true,
                       onChanged: _toggleVisibility,
                     ),
                     ListTile(
                       leading: const Icon(Icons.lock),
-                      title: const Text('Change Password'),
+                      title: Text("key_307".tr()),
                       onTap: _changePassword,
                     ),
                     const Divider(),
 
                     // Groups section
                     SectionCard(
-                      title: 'My Groups',
-                      emptyText: 'No groups.',
+                      title: "key_307a".tr(),
+                      emptyText: "key_307b".tr(),
                       children: groups.map((group) {
                         final g = group['groups'] ?? {};
                         return ListTile(
@@ -503,8 +523,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     // Family section
                     SectionCard(
-                      title: 'My Family',
-                      emptyText: 'No family members.',
+                      title: "key_307c".tr(),
+                      emptyText: "key_307d".tr(),
                       children: family.map((member) {
                         final isChild = member['is_child'] == true;
                         final childProfile = member['child'];
@@ -534,8 +554,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     // Prayer Requests section
                     SectionCard(
-                      title: 'My Prayer Requests',
-                      emptyText: 'No prayer requests.',
+                      title: "key_307e".tr(),
+                      emptyText: "key_307f".tr(),
                       children: prayerRequests.map((req) {
                         return ListTile(
                           leading: Icon(Icons.favorite),
@@ -551,8 +571,8 @@ class _ProfilePageState extends State<ProfilePage> {
 
                     // Event RSVPs section
                     SectionCard(
-                      title: 'My Event RSVPs',
-                      emptyText: 'No upcoming or past RSVPs.',
+                      title: "key_307g".tr(),
+                      emptyText: "key_307h".tr(),
                       children: eventRsvps.map((e) {
                         final isAppEvent = e['source'] == 'app';
                         final event = isAppEvent ? e['app_events'] : e['group_events'];
@@ -565,7 +585,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         return ListTile(
                           leading: Icon(isAppEvent ? Icons.public : Icons.group),
                           title: Text(title),
-                          subtitle: Text('Attending: ${e['attending_count']} • $formattedDate'),
+                          subtitle: Text("key_309".tr(args: [e['attending_count'].toString(),formattedDate,])),
                         );
 
                       }).toList(),
@@ -576,12 +596,12 @@ class _ProfilePageState extends State<ProfilePage> {
                     ElevatedButton(
                       onPressed: _logout,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-                      child: const Text('Logout'),
+                      child: Text("key_310".tr()),
                     ),
                     TextButton(
                       style: TextButton.styleFrom(foregroundColor: Colors.red),
                       onPressed: _deleteAccount,
-                      child: const Text('Delete My Account'),
+                      child: Text("key_311".tr()),
                     ),
                   ],
                 ),

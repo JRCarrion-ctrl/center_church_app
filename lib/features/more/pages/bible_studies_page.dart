@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +6,7 @@ import 'package:open_filex/open_filex.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:dio/dio.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class BibleStudiesPage extends StatefulWidget {
   const BibleStudiesPage({super.key});
@@ -71,19 +71,16 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
       builder: (context) {
         final controller = TextEditingController();
         return AlertDialog(
-          title: const Text('Request Access'),
+          title: Text("key_240".tr()),
           content: TextField(
             controller: controller,
             maxLines: 3,
-            decoration: const InputDecoration(
-              hintText: 'Why do you need access?',
-            ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            TextButton(onPressed: () => Navigator.pop(context), child: Text("key_241".tr())),
             ElevatedButton(
               onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: const Text('Submit'),
+              child: Text("key_242".tr()),
             ),
           ],
         );
@@ -101,7 +98,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
     _loadPage();
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Request submitted')),
+      SnackBar(content: Text("key_243".tr())),
     );
   }
 
@@ -135,7 +132,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
     } else {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Failed to open notes')),
+        SnackBar(content: Text("key_244".tr())),
       );
     }
   }
@@ -144,7 +141,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Bible Studies'),
+        title: Text("key_245".tr()),
         actions: [
           if (userRole == 'owner')
             IconButton(
@@ -182,7 +179,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
                                     launchUrl(Uri.parse(url));
                                   }
                                 },
-                                child: const Text('Watch'),
+                                child: Text("key_246".tr()),
                               ),
                               if (study['notes_url'] != null &&
                                   study['notes_url'].toString().isNotEmpty)
@@ -193,7 +190,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
                                       context.push('/notes_viewer', extra: url);
                                     }
                                   },
-                                  child: const Text('Notes'),
+                                  child: Text("key_247".tr()),
                                 ),
                               if (userRole == 'owner')
                                 IconButton(
@@ -209,7 +206,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
                             ? const Text('Pending', style: TextStyle(color: Colors.orange))
                             : TextButton(
                                 onPressed: () => _submitAccessRequest(study['id']),
-                                child: const Text('Request Access'),
+                                child: Text("key_248".tr()),
                               ),
                   ),
                 );

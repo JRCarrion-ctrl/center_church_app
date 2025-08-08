@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../app_state.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class CalendarSettingsModal {
   static Future<void> show(BuildContext context) async {
@@ -28,8 +29,8 @@ class CalendarSettingsModal {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Select Calendars to Show',
+                    Text(
+                      "key_197a".tr(),
                       style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
@@ -47,7 +48,7 @@ class CalendarSettingsModal {
                             });
                           },
                         ),
-                        const Text('Select All'),
+                        Text("key_197".tr()),
                       ],
                     ),
                     Expanded(
@@ -77,7 +78,7 @@ class CalendarSettingsModal {
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        child: const Text('Save'),
+                        child: Text("key_198".tr()),
                         onPressed: () {
                           appState.setVisibleCalendarGroupIds(selectedGroupIds);
                          Navigator.of(context).pop();

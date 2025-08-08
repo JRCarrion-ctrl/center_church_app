@@ -10,6 +10,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 
 import '../group_service.dart';
@@ -73,11 +74,11 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Leave Group'),
-        content: const Text('Are you sure you want to leave this group?'),
+        title: Text("key_078".tr()),
+        content: Text("key_079".tr()),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Leave')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_080".tr())),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_081".tr())),
         ],
       ),
     );
@@ -87,7 +88,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       await GroupService().leaveGroup(widget.groupId);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You left the group')),
+        SnackBar(content: Text("key_082".tr())),
       );
       context.go('/groups'); // Or wherever you want to redirect
     } catch (e) {
@@ -112,7 +113,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
       await _loadGroup();
       setState(() => isEditing = false);
       messenger.showSnackBar(
-        const SnackBar(content: Text('Group info updated')),
+        SnackBar(content: Text("key_084".tr())),
       );
     } catch (e) {
       messenger.showSnackBar(
@@ -132,11 +133,11 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
   @override
   Widget build(BuildContext context) {
     if (isLoading) return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    if (group == null) return Scaffold(body: Center(child: Text('Group not found')));
+    if (group == null) return Scaffold(body: Center(child: Text("key_086".tr())));
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Group Info'),
+        title: Text("key_087".tr()),
         actions: [
           if (widget.isAdmin && !isEditing)
             IconButton(
@@ -155,19 +156,19 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         children: [
           _buildGroupHeader(context),
           const SizedBox(height: 24),
-          _buildSectionHeader('Pinned Messages'),
+          _buildSectionHeader("key_112a".tr()),
           _buildPinnedMessages(context),
           const SizedBox(height: 24),
-          _buildSectionHeader('Events'),
+          _buildSectionHeader("key_112b".tr()),
           _buildGroupEvents(context),
           const SizedBox(height: 24),
-          _buildSectionHeader('Announcements'),
+          _buildSectionHeader("key_112c".tr()),
           _buildGroupAnnouncements(context),
           const SizedBox(height: 24),
-          _buildSectionHeader('Media'),
+          _buildSectionHeader("key_112d".tr()),
           _buildGroupMedia(context),
           const SizedBox(height: 24),
-          _buildSectionHeader('Members'),
+          _buildSectionHeader("key_112e".tr()),
           _buildGroupMembers(context),
           if (!widget.isAdmin)
             Padding(
@@ -175,7 +176,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               child: TextButton.icon(
                 onPressed: _leaveGroup,
                 icon: const Icon(Icons.exit_to_app),
-                label: const Text('Leave Group'),
+                label: Text("key_088".tr()),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),
@@ -190,11 +191,11 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   final confirmed = await showDialog<bool>(
                     context: context,
                     builder: (ctx) => AlertDialog(
-                      title: const Text('Delete Group'),
-                      content: const Text('Are you sure you want to delete this group? This action cannot be undone.'),
+                      title: Text("key_089".tr()),
+                      content: Text("key_090".tr()),
                       actions: [
-                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete')),
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_091".tr())),
+                        TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_092".tr())),
                       ],
                     ),
                   );
@@ -205,7 +206,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     if (mounted) {
                       if (!mounted) return;
                       messenger.showSnackBar(
-                        const SnackBar(content: Text('Group deleted successfully')),
+                        SnackBar(content: Text("key_093".tr())),
                       );
                       if (context.mounted) {
                       context.go('/groups');
@@ -219,7 +220,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   }
                 },
                 icon: const Icon(Icons.delete),
-                label: const Text('Delete Group'),
+                label: Text("key_095".tr()),
                 style: TextButton.styleFrom(
                   foregroundColor: Colors.red,
                 ),
@@ -257,7 +258,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         if (isEditing && widget.isAdmin)
           TextFormField(
             controller: _nameController,
-            decoration: const InputDecoration(labelText: 'Group Name'),
+            decoration: InputDecoration(labelText: "key_068a".tr()),
           )
         else
           Text(group?.name ?? '', style: const TextStyle(fontSize: 20)),
@@ -266,7 +267,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           TextFormField(
             controller: _descController,
             maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Description'),
+            decoration: InputDecoration(labelText: "key_068c".tr()),
           )
         else
           Text(group?.description ?? ''),
@@ -289,10 +290,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
           );
         }
         if (!snapshot.hasData || snapshot.data == null) {
-          return const Card(
+          return Card(
             child: Padding(
               padding: EdgeInsets.all(12),
-              child: Text('No pinned messages.'),
+              child: Text("key_096".tr()),
             ),
           );
         }
@@ -349,10 +350,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column (
-              children: [const Text('No upcoming events.'),
+              children: [Text("key_097".tr()),
                 if (widget.isAdmin)
                   TextButton.icon(
-                    label: const Text('Create An Event'),
+                    label: Text("key_098".tr()),
                     onPressed: () => context.push('/groups/${widget.groupId}/events'),
                   ),])
             ),
@@ -390,7 +391,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   children: [
                     TextButton(
                       onPressed: () => context.push('/groups/${widget.groupId}/events'),
-                      child: const Text('View All Events'),
+                      child: Text("key_099".tr()),
                     ),
                   ],
                 )
@@ -428,10 +429,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Column (
-              children: [const Text('No Announcements Yet.'),
+              children: [Text("key_100".tr()),
                 if (widget.isAdmin)
                   TextButton.icon(
-                    label: const Text('Create An Announcement'),
+                    label: Text("key_101".tr()),
                     onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
                   ),])
             ),
@@ -479,7 +480,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   children: [
                     TextButton(
                       onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
-                      child: const Text('View All'),
+                      child: Text("key_102".tr()),
                     ),
                   ],
                 ),
@@ -513,10 +514,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         }
         final images = snapshot.data ?? [];
         if (images.isEmpty) {
-          return const Card(
+          return Card(
             child: Padding(
               padding: EdgeInsets.all(12),
-              child: Text('No recent group media.'),
+              child: Text("key_103".tr()),
             ),
           );
         }
@@ -551,7 +552,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   children: [
                     TextButton(
                       onPressed: () => context.push('/groups/${widget.groupId}/media'),
-                      child: const Text('View All'),
+                      child: Text("key_104".tr()),
                     ),
                   ],
                 )
@@ -578,10 +579,10 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         }
         final members = snapshot.data ?? [];
         if (members.isEmpty) {
-          return const Card(
+          return Card(
             child: Padding(
               padding: EdgeInsets.all(12),
-              child: Text('No members in this group.'),
+              child: Text("key_105".tr()),
             ),
           );
         }
@@ -606,7 +607,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                     child: TextButton.icon(
                       onPressed: _openInviteModal,
                       icon: const Icon(Icons.person_add),
-                      label: const Text('Invite Member'),
+                      label: Text("key_106".tr()),
                     ),
                   ),
                 const SizedBox(height: 8),
@@ -615,7 +616,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                   children: [
                     TextButton(
                       onPressed: () => context.push('/groups/${widget.groupId}/members'),
-                      child: const Text('View All'),
+                      child: Text("key_107".tr()),
                     ),
                   ],
                 ),
@@ -638,7 +639,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             children: [
               ListTile(
                 leading: const Icon(Icons.photo_camera),
-                title: const Text('Take Photo'),
+                title: Text("key_108".tr()),
                 onTap: () async {
                   Navigator.pop(context);
                   final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
@@ -651,7 +652,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.photo_library),
-                title: const Text('Pick from Gallery'),
+                title: Text("key_109".tr()),
                 onTap: () async {
                   Navigator.pop(context);
                   final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
@@ -664,7 +665,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
               ),
               ListTile(
                 leading: const Icon(Icons.insert_drive_file),
-                title: const Text('Pick File'),
+                title: Text("key_110".tr()),
                 onTap: () async {
                   Navigator.pop(context);
                   final result = await FilePicker.platform.pickFiles(type: FileType.image);
@@ -726,9 +727,9 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
         photoUrl: publicUrl,
       );
       await _loadGroup();
-      messenger.showSnackBar(const SnackBar(content: Text('Group photo updated')));
+      messenger.showSnackBar(SnackBar(content: Text("key_111".tr())));
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to upload photo: $e')));
+      messenger.showSnackBar(SnackBar(content: Text("key_112".tr())));
     }
     setState(() => isLoading = false);
   }

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../group_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
@@ -25,7 +26,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Group Members')),
+      appBar: AppBar(title: Text("key_144".tr())),
       body: SingleChildScrollView(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         child: Column(
@@ -42,12 +43,12 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 }
 
                 final members = snapshot.data ?? [];
-                if (members.isEmpty) return const Text('No members found.');
+                if (members.isEmpty) return Text("key_146".tr());
 
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Current Members', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("key_145".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     ...members.map((m) => _buildMemberTile(m)),
                   ],
@@ -68,7 +69,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Pending Requests', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("key_146a".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     ...pending.map((m) => _buildPendingTile(m)),
                   ],
@@ -120,13 +121,13 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         if (myLevel <= targetLevel || myLevel < 2) return;
 
         final actions = <PopupMenuEntry<String>>[];
-        actions.add(const PopupMenuItem(value: 'remove', child: Text('Remove from Group')));
+        actions.add(PopupMenuItem(value: 'remove', child: Text("key_147".tr())));
 
-        if (myRole == 'leader') {
+        if (myRole == 'leader' || myRole == 'supervisor' || myRole == 'owner') {
           if (targetRole == 'member') {
-            actions.add(const PopupMenuItem(value: 'promote', child: Text('Promote to Admin')));
+            actions.add(PopupMenuItem(value: 'promote', child: Text("key_148".tr())));
           } else if (targetRole == 'admin') {
-            actions.add(const PopupMenuItem(value: 'demote', child: Text('Demote to Member')));
+            actions.add(PopupMenuItem(value: 'demote', child: Text("key_149".tr())));
           }
         }
 
@@ -143,11 +144,11 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
           final confirm = await showDialog<bool>(
             context: context,
             builder: (ctx) => AlertDialog(
-              title: const Text('Remove Member'),
+              title: Text("key_150".tr()),
               content: Text('Are you sure you want to remove ${member['display_name']}?'),
               actions: [
-                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+                TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_152".tr())),
+                TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_153".tr())),
               ],
             ),
           );

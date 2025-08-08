@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class BibleStudyRequestsPage extends StatefulWidget {
   const BibleStudyRequestsPage({super.key});
@@ -58,20 +59,20 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
     if (!context.mounted) return;
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(approve ? 'Request approved' : 'Request denied'),
+      content: Text(approve ? "key_249a".tr() : "key_249b".tr()),
     ));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Bible Study Access Requests')),
+      appBar: AppBar(title: Text("key_249".tr())),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : error != null
               ? Center(child: Text(error!))
               : requests.isEmpty
-                  ? const Center(child: Text('No pending requests'))
+                  ? Center(child: Text("key_250".tr()))
                   : ListView.builder(
                       itemCount: requests.length,
                       itemBuilder: (context, index) {
@@ -84,7 +85,6 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
                           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                           child: ListTile(
                             title: Text('${user?['display_name'] ?? 'Unknown'} → ${study?['title'] ?? 'Untitled'}'),
-                            subtitle: Text(req['reason'] ?? 'No reason provided'),
                             trailing: status == 'pending'
                                 ? Wrap(
                                     spacing: 8,

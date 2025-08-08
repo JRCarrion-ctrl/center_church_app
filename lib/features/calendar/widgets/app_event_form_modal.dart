@@ -1,9 +1,9 @@
 // File: lib/features/calendar/widgets/app_event_form_modal.dart
 
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import '../models/app_event.dart';
 import '../event_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 /// Modal bottom sheet for creating or editing an AppEvent
 class AppEventFormModal extends StatefulWidget {
@@ -70,7 +70,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
       if (mounted){ ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Pick date & time')));}
+          .showSnackBar(SnackBar(content: Text("key_040".tr())));}
       return;
     }
 
@@ -98,7 +98,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       Navigator.of(context).pop();
     } catch (e) {
       if (mounted){ ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Error saving app event: $e')));}
+          .showSnackBar(SnackBar(content: Text("key_041".tr())));}
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -117,23 +117,23 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  widget.existing == null ? 'Add App Event' : 'Edit App Event',
+                  widget.existing == null ? "key_041a".tr() : "key_041b".tr(),
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 16),
                 TextFormField(
                   controller: _titleController,
-                  decoration: const InputDecoration(labelText: 'Title'),
+                  decoration: InputDecoration(labelText: "key_041c".tr()),
                   validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                 ),
                 TextFormField(
                   controller: _descController,
-                  decoration: const InputDecoration(labelText: 'Description'),
+                  decoration: InputDecoration(labelText: "key_041d".tr()),
                   maxLines: 2,
                 ),
                 TextFormField(
                   controller: _locationController,
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: InputDecoration(labelText: "key_041e".tr()),
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -143,7 +143,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                         onPressed: _pickDate,
                         child: Text(
                           _selectedDate == null
-                              ? 'Pick Date'
+                              ? "key_041f".tr()
                               : DateFormat.yMMMd().format(_selectedDate!),
                         ),
                       ),
@@ -154,7 +154,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                         onPressed: _pickTime,
                         child: Text(
                           _selectedTime == null
-                              ? 'Pick Time'
+                              ? "key_041g".tr()
                               : _selectedTime!.format(context),
                         ),
                       ),
@@ -166,7 +166,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                   onPressed: _saving ? null : _save,
                   child: _saving
                       ? const CircularProgressIndicator()
-                      : Text(widget.existing == null ? 'Create' : 'Update'),
+                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
                 const SizedBox(height: 8),
               ],

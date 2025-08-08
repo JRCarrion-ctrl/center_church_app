@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:logger/logger.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class PublicProfile extends StatefulWidget {
   final String userId;
@@ -62,7 +63,7 @@ class _PublicProfileState extends State<PublicProfile> {
       return Scaffold(body: Center(child: Text(errorMessage!)));
     }
     if (profile == null) {
-      return const Scaffold(body: Center(child: Text('Profile not found')));
+      return Scaffold(body: Center(child: Text("key_312".tr())));
     }
 
     final name = profile!['display_name'] ?? '';

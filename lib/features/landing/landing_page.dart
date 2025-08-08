@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app_state.dart';
 import '../../shared/widgets/widgets.dart';
 import '../../features/auth/profile.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class LandingPage extends StatefulWidget {
   final VoidCallback? onContinue;
@@ -114,28 +115,28 @@ class _LandingPageState extends State<LandingPage> {
     return Column(
       children: [
         SecondaryButton(
-          title: "How to Use",
+          title: "landing_01".tr(),
           onTap: () => context.push('/more/how_to'),
           fontSize: fontSize,
           padding: padding,
         ),
         SizedBox(height: padding * 1.4),
         SecondaryButton(
-          title: "Church Information",
+          title: "landing_02".tr(),
           onTap: () => launchUrl(Uri.parse('https://www.centrocristianofrederick.com/')),
           fontSize: fontSize,
           padding: padding,
         ),
         SizedBox(height: padding * 1.4),
         SecondaryButton(
-          title: "Select Language",
+          title: "landing_03".tr(),
           onTap: _showLanguageSelector,
           fontSize: fontSize,
           padding: padding,
         ),
         SizedBox(height: padding * 3.3),
         PrimaryButton(
-          title: "Home",
+          title: "landing_04".tr(),
           onTap: _goToHome,
           fontSize: fontSize,
           padding: padding,
@@ -146,8 +147,8 @@ class _LandingPageState extends State<LandingPage> {
 
   Widget _buildAuthStatus(Profile? profile) {
     final statusText = profile != null
-        ? 'Logged in as: ${profile.displayName}'
-        : 'Not Currently Logged In: Login/Signup';
+        ? "landing_05".tr(args: [profile.displayName])
+        : "landing_06".tr();
 
     return Positioned(
       bottom: 30,
@@ -188,15 +189,15 @@ class _LandingPageState extends State<LandingPage> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text('Select Language', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              Text("landing_07".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               for (final lang in ['en', 'es'])
                 RadioListTile<String>(
-                  title: Text(lang == 'en' ? 'English' : 'Spanish'),
+                  title: Text(lang == 'en' ? "landing_08".tr() : "landing_09".tr()),
                   value: lang,
                   groupValue: selected,
                   onChanged: (val) {
                     if (val != null) {
-                      appState.setLanguageCode(val);
+                      appState.setLanguageCode(context, lang);
                       setModalState(() => selected = val);
                       Navigator.pop(context);
                     }
@@ -211,7 +212,6 @@ class _LandingPageState extends State<LandingPage> {
 
   void _goToHome() {
     final appState = Provider.of<AppState>(context, listen: false);
-    appState.markLandingSeen();
     appState.updateTabIndex(2); // Home
     context.go('/');
   }

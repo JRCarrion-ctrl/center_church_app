@@ -21,15 +21,11 @@ void main() async {
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
   OneSignal.initialize("a75771e7-9bd5-4497-adf3-18b7c8901bcb");
 
-  final prefs = await SharedPreferences.getInstance();
-  final langCode = prefs.getString('language_code') ?? 'en';
-
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('en'), Locale('es')],
       path: 'assets/translations',
       fallbackLocale: const Locale('en'),
-      startLocale: Locale(langCode),
       child: const CCFAppBoot(),
     ),
   );
@@ -83,10 +79,8 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       if (uri == null) return;
 
       if (uri.host == 'login-callback') {
-        final response = await Supabase.instance.client.auth.getSessionFromUrl(uri);
-        final session = response.session;
-        OneSignal.login(session.user.id);
         await appState.restoreSession();
+        await appState.updateOneSignalUser();
         _router.go('/');
       } else if (uri.host == 'reset') {
         _router.go('/reset-password'); // 👈 Route to your new password screen
@@ -116,6 +110,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZoemNicWdlaGxwZW1ka3ZtenZ5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTA4ODY3NjgsImV4cCI6MjA2NjQ2Mjc2OH0.rPIiZ3RHcG3b3zTF-9TwB0fu-puByMXTeN5yRe5M0H0',
     );
 
+    // Init OneSignal early
     final userId = Supabase.instance.client.auth.currentUser?.id;
     if (userId != null) {
       OneSignal.login(userId);
@@ -133,6 +128,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
 
     setState(() => _ready = true);
   }
+
 
   @override
   Widget build(BuildContext context) {

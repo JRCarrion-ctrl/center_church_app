@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/intl.dart';
 import 'models/app_announcement_form_modal.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ManageAppAnnouncementsPage extends StatefulWidget {
   const ManageAppAnnouncementsPage({super.key});
@@ -47,14 +47,14 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
       await _loadAnnouncements();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Announcement deleted.')),
+          SnackBar(content: Text("key_181".tr())),
         );
       }
     } catch (e) {
       debugPrint('Deletion error: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e')),
+          SnackBar(content: Text("key_182".tr())),
         );
       }
     }
@@ -75,13 +75,13 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Manage App Announcements')),
+      appBar: AppBar(title: Text("key_183".tr())),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadAnnouncements,
               child: announcements.isEmpty
-                  ? const Center(child: Text('No app announcements yet.'))
+                  ? Center(child: Text("key_184".tr()))
                   : ListView.builder(
                       padding: const EdgeInsets.all(16),
                       itemCount: announcements.length,
@@ -121,9 +121,9 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
                                   await _deleteAnnouncement(id);
                                 }
                               },
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                PopupMenuItem(value: 'delete', child: Text('Delete')),
+                              itemBuilder: (_) => [
+                                PopupMenuItem(value: 'edit', child: Text("key_185".tr())),
+                                PopupMenuItem(value: 'delete', child: Text("key_186".tr())),
                               ],
                             ),
                           ),
@@ -134,7 +134,7 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openForm(),
         icon: const Icon(Icons.add),
-        label: const Text('Add'),
+        label: Text("key_187".tr()),
       ),
     );
   }

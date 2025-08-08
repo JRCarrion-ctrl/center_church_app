@@ -3,6 +3,7 @@ import 'package:ccf_app/core/time_service.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
@@ -126,18 +127,18 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Group Events')),
+      appBar: AppBar(title: Text("key_070".tr())),
       floatingActionButton: _isAdmin
           ? FloatingActionButton(
               onPressed: () => _openFormModal(),
-              tooltip: 'Add Group Event',
+              tooltip: "key_070a".tr(),
               child: const Icon(Icons.add),
             )
           : null,
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _events.isEmpty
-              ? const Center(child: Text('No upcoming events.'))
+              ? Center(child: Text("key_071".tr()))
               : RefreshIndicator(
                   onRefresh: _loadEvents,
                   child: ListView.builder(
@@ -173,16 +174,16 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
                                       final confirm = await showDialog<bool>(
                                         context: context,
                                         builder: (ctx) => AlertDialog(
-                                          title: const Text('Delete Event'),
-                                          content: const Text('Are you sure you want to delete this event?'),
+                                          title: Text("key_072".tr()),
+                                          content: Text("key_073".tr()),
                                           actions: [
                                             TextButton(
                                               onPressed: () => Navigator.pop(ctx, false),
-                                              child: const Text('Cancel'),
+                                              child: Text("key_074".tr()),
                                             ),
                                             TextButton(
                                               onPressed: () => Navigator.pop(ctx, true),
-                                              child: const Text('Delete'),
+                                              child: Text("key_075".tr()),
                                             ),
                                           ],
                                         ),
@@ -193,9 +194,9 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
                                       }
                                     }
                                   },
-                                  itemBuilder: (_) => const [
-                                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                                  itemBuilder: (_) => [
+                                    PopupMenuItem(value: 'edit', child: Text("key_076".tr())),
+                                    PopupMenuItem(value: 'delete', child: Text("key_077".tr())),
                                   ],
                                 ),
                             ],

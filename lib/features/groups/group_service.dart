@@ -10,13 +10,35 @@ import 'dart:convert';
 
 final log = Logger();
 
+class GroupArchivedException implements Exception {
+  final String groupId;
+  const GroupArchivedException(this.groupId);
+  @override
+  String toString() => 'Group $groupId is archived';
+}
+
 class GroupService {
   final supabase = Supabase.instance.client;
+
+  // ---------- Helpers ----------
+
+  Future<void> _assertGroupActive(String groupId) async {
+    final row = await supabase
+        .from('groups')
+        .select('archived')
+        .eq('id', groupId)
+        .maybeSingle();
+    if (row == null) throw Exception('Group not found');
+    if (row['archived'] == true) throw GroupArchivedException(groupId);
+  }
+
+  // ---------- Reads ----------
 
   Future<Group?> getGroupById(String groupId) async {
     final data = await supabase
         .from('groups')
-        .select()
+        .select(
+            'id,name,description,photo_url,visibility,temporary,archived,pinned_message_id,created_at')
         .eq('id', groupId)
         .maybeSingle();
 
@@ -24,7 +46,6 @@ class GroupService {
       debugPrint('Group not found for id: $groupId');
       return null;
     }
-
     return Group.fromMap(data);
   }
 
@@ -38,7 +59,10 @@ class GroupService {
         .maybeSingle();
 
     final role = result?['role'] as String?;
-    return role == 'admin' || role == 'leader' || role == 'supervisor' || role == 'owner';
+    return role == 'admin' ||
+        role == 'leader' ||
+        role == 'supervisor' ||
+        role == 'owner';
   }
 
   Future<bool> isUserGroupOwner(String groupId, String userId) async {
@@ -55,7 +79,7 @@ class GroupService {
   }
 
   Future<List<GroupModel>> getUserGroups(String userId) async {
-    final List<Map<String, dynamic>> memberships = await supabase
+    final memberships = await supabase
         .from('group_memberships')
         .select('group_id')
         .eq('user_id', userId)
@@ -65,19 +89,21 @@ class GroupService {
 
     final groupIds = memberships.map((e) => e['group_id']).toList();
 
-    final List<Map<String, dynamic>> groups = await supabase
+    final groups = await supabase
         .from('groups')
         .select()
-        .inFilter('id', groupIds);
+        .inFilter('id', groupIds)
+        .eq('archived', false);
 
     return groups.map((e) => GroupModel.fromMap(e)).toList();
   }
 
   Future<List<GroupModel>> getJoinableGroups() async {
-    final List<Map<String, dynamic>> groups = await supabase
+    final groups = await supabase
         .from('groups')
         .select()
-        .inFilter('visibility', ['public', 'request']);
+        .inFilter('visibility', ['public', 'request'])
+        .eq('archived', false);
 
     return groups.map((e) => GroupModel.fromMap(e)).toList();
   }
@@ -97,7 +123,8 @@ class GroupService {
     final groups = await supabase
         .from('groups')
         .select()
-        .inFilter('id', groupIds);
+        .inFilter('id', groupIds)
+        .eq('archived', false);
 
     return groups.map((e) => GroupModel.fromMap(e)).toList();
   }
@@ -116,38 +143,22 @@ class GroupService {
     final groups = await supabase
         .from('groups')
         .select()
-        .inFilter('id', groupIds);
+        .inFilter('id', groupIds)
+        .eq('archived', false);
 
     return groups.map((e) => GroupModel.fromMap(e)).toList();
-  }
-
-  Future<void> updateGroup({
-    required String groupId,
-    String? name,
-    String? description,
-    String? photoUrl,
-  }) async {
-    final updates = <String, dynamic>{};
-    if (name != null) updates['name'] = name;
-    if (description != null) updates['description'] = description;
-    if (photoUrl != null) updates['photo_url'] = photoUrl;
-
-    if (updates.isEmpty) return; // Nothing to update
-
-    await supabase
-        .from('groups')
-        .update(updates)
-        .eq('id', groupId);
   }
 
   Future<Map<String, dynamic>?> getPinnedMessage(String groupId) async {
     final group = await supabase
         .from('groups')
-        .select('pinned_message_id')
+        .select('pinned_message_id, archived')
         .eq('id', groupId)
         .maybeSingle();
 
-    final pinnedId = group?['pinned_message_id'];
+    if (group == null) return null;
+
+    final pinnedId = group['pinned_message_id'];
     if (pinnedId == null) return null;
 
     final result = await supabase
@@ -158,7 +169,6 @@ class GroupService {
 
     if (result == null) return null;
 
-    // Get sender display name
     final profile = await supabase
         .from('profiles')
         .select('display_name')
@@ -173,11 +183,12 @@ class GroupService {
   }
 
   Future<List<Map<String, dynamic>>> getGroupEvents(String groupId) async {
+    await _assertGroupActive(groupId);
     final events = await supabase
         .from('group_events')
         .select('id,title,event_date,location,image_url')
         .eq('group_id', groupId)
-        .gte('event_date', DateTime.now().toUtc().toIso8601String()) // only upcoming
+        .gte('event_date', DateTime.now().toUtc().toIso8601String()) // upcoming only
         .order('event_date', ascending: true)
         .limit(3);
 
@@ -185,18 +196,21 @@ class GroupService {
   }
 
   Future<List<Map<String, dynamic>>> getGroupAnnouncements(String groupId) async {
+    await _assertGroupActive(groupId);
     final announcements = await supabase
         .from('group_announcements')
         .select('id,title,body,image_url,published_at,created_at')
         .eq('group_id', groupId)
-        .lte('published_at', DateTime.now().toUtc().toIso8601String()) // only published
+        .lte('published_at', DateTime.now().toUtc().toIso8601String()) // published only
         .order('published_at', ascending: false)
         .limit(3);
 
     return List<Map<String, dynamic>>.from(announcements);
   }
 
-  Future<List<Map<String, dynamic>>> getRecentGroupMedia(String groupId, {int limit = 6}) async {
+  Future<List<Map<String, dynamic>>> getRecentGroupMedia(String groupId,
+      {int limit = 6}) async {
+    await _assertGroupActive(groupId);
     final mediaMessages = await supabase
         .from('group_messages')
         .select('id,file_url,created_at')
@@ -205,11 +219,13 @@ class GroupService {
         .order('created_at', ascending: false)
         .limit(limit);
 
-    // Only return rows that are actual image files (e.g., jpg, png, webp, etc.)
-    final imageExtensions = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'];
+    // Handle signed URLs with query params
+    const imageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'gif', 'heic'};
     final images = mediaMessages.where((msg) {
-      if (msg['file_url'] == null) return false;
-      final ext = msg['file_url'].toString().split('.').last.toLowerCase();
+      final url = (msg['file_url'] as String?)?.toLowerCase();
+      if (url == null) return false;
+      final path = url.split('?').first; // strip query
+      final ext = path.split('.').last;
       return imageExtensions.contains(ext);
     }).toList();
 
@@ -226,15 +242,36 @@ class GroupService {
     return List<Map<String, dynamic>>.from(data);
   }
 
+  // ---------- Mutations ----------
+
+  Future<void> updateGroup({
+    required String groupId,
+    String? name,
+    String? description,
+    String? photoUrl,
+  }) async {
+    await _assertGroupActive(groupId);
+
+    final updates = <String, dynamic>{};
+    if (name != null) updates['name'] = name;
+    if (description != null) updates['description'] = description;
+    if (photoUrl != null) updates['photo_url'] = photoUrl;
+
+    if (updates.isEmpty) return;
+
+    await supabase.from('groups').update(updates).eq('id', groupId);
+  }
+
   Future<void> joinGroup(String groupId) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    await _assertGroupActive(groupId);
+
+    final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw Exception('User not logged in');
 
     final group = await getGroupById(groupId);
     if (group == null) throw Exception('Group not found');
 
     if (group.visibility == 'public') {
-      // For public groups, auto-approve into group_memberships
       await supabase.from('group_memberships').insert({
         'group_id': groupId,
         'user_id': userId,
@@ -243,7 +280,6 @@ class GroupService {
         'joined_at': DateTime.now().toUtc().toIso8601String(),
       });
     } else if (group.visibility == 'request') {
-      // For request groups, log request in group_requests table
       final existing = await supabase
           .from('group_requests')
           .select('id')
@@ -265,23 +301,23 @@ class GroupService {
   }
 
   Future<void> leaveGroup(String groupId) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = supabase.auth.currentUser?.id;
     if (userId == null) throw Exception('Not logged in');
 
-    await Supabase.instance.client
-      .from('group_memberships')
-      .delete()
-      .eq('user_id', userId)
-      .eq('group_id', groupId);
+    await supabase
+        .from('group_memberships')
+        .delete()
+        .eq('user_id', userId)
+        .eq('group_id', groupId);
   }
 
   Future<void> deleteGroup(String groupId) async {
+    // (Server enforces permission / archive status via RLS/Edge)
     final url = Uri.parse(
       'https://vhzcbqgehlpemdkvmzvy.supabase.co/functions/v1/clever-responder',
     );
 
-    final session = Supabase.instance.client.auth.currentSession;
-    final accessToken = session?.accessToken;
+    final accessToken = supabase.auth.currentSession?.accessToken;
     final headers = <String, String>{
       'Content-Type': 'application/json',
       if (accessToken != null) 'Authorization': 'Bearer $accessToken',
@@ -298,11 +334,10 @@ class GroupService {
     }
   }
 
-
   Future<String> getMyGroupRole(String groupId) async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
+    final userId = supabase.auth.currentUser?.id;
     if (userId == null) return 'none';
-    final res = await Supabase.instance.client
+    final res = await supabase
         .from('group_memberships')
         .select('role')
         .eq('user_id', userId)
@@ -312,23 +347,25 @@ class GroupService {
   }
 
   Future<void> removeMember(String groupId, String userId) async {
+    await _assertGroupActive(groupId);
     await supabase.rpc('remove_group_member', params: {
       'p_group_id': groupId,
       'p_user_id': userId,
     });
   }
 
+  Future<void> setMemberRole(
+      String groupId, String userId, String newRole) async {
+    await _assertGroupActive(groupId);
 
-  Future<void> setMemberRole(String groupId, String userId, String newRole) async {
-    final client = Supabase.instance.client;
-    final actingUserId = client.auth.currentUser?.id;
+    final actingUserId = supabase.auth.currentUser?.id;
     if (actingUserId == null) {
       log.e('Role update failed: not authenticated');
       throw Exception('Not authenticated');
     }
 
     try {
-      await client.rpc(
+      await supabase.rpc(
         'promote_user_to_role',
         params: {
           'p_group_id': groupId,
@@ -336,7 +373,6 @@ class GroupService {
           'p_new_role': newRole,
         },
       );
-
       log.i('Role updated to "$newRole" for $userId in $groupId by $actingUserId');
     } on PostgrestException catch (e) {
       log.e('RPC failed: ${e.message}');
@@ -348,50 +384,53 @@ class GroupService {
   }
 
   Future<List<Map<String, dynamic>>> getPendingMembers(String groupId) async {
-    final res = await Supabase.instance.client
-      .from('group_memberships')
-      .select('user_id, role, status, profiles(display_name, email)')
-      .eq('group_id', groupId)
-      .eq('status', 'pending')
-      .order('joined_at');
+    final res = await supabase
+        .from('group_memberships')
+        .select('user_id, role, status, profiles(display_name, email)')
+        .eq('group_id', groupId)
+        .eq('status', 'pending')
+        .order('joined_at');
 
     return (res as List)
         .map((e) => {
-          'user_id': e['user_id'],
-          'role': e['role'],
-          'status': e['status'],
-          'display_name': e['profiles']['display_name'],
-          'email': e['profiles']['email'],
-        })
+              'user_id': e['user_id'],
+              'role': e['role'],
+              'status': e['status'],
+              'display_name': e['profiles']['display_name'],
+              'email': e['profiles']['email'],
+            })
         .toList();
   }
 
-  Future<List<Map<String, dynamic>>> getGroupJoinRequests(String groupId) async {
-    final res = await Supabase.instance.client
-      .from('group_requests')
-      .select('user_id, created_at, profiles(display_name, email, photo_url)')
-      .eq('group_id', groupId)
-      .order('created_at');
+  Future<List<Map<String, dynamic>>> getGroupJoinRequests(
+      String groupId) async {
+    final res = await supabase
+        .from('group_requests')
+        .select('user_id, created_at, profiles(display_name, email, photo_url)')
+        .eq('group_id', groupId)
+        .order('created_at');
 
-    return (res as List).map((e) => {
-      'user_id': e['user_id'],
-      'display_name': e['profiles']['display_name'],
-      'photo_url': e['profiles']['photo_url'],
-      'email': e['profiles']['email'],
-      'created_at': e['created_at'],
-    }).toList();
+    return (res as List)
+        .map((e) => {
+              'user_id': e['user_id'],
+              'display_name': e['profiles']['display_name'],
+              'photo_url': e['profiles']['photo_url'],
+              'email': e['profiles']['email'],
+              'created_at': e['created_at'],
+            })
+        .toList();
   }
 
-
   Future<void> approveMemberRequest(String groupId, String userId) async {
+    await _assertGroupActive(groupId);
     await supabase.rpc('approve_group_member_request', params: {
       'p_group_id': groupId,
       'p_user_id': userId,
     });
   }
 
-
   Future<void> denyMemberRequest(String groupId, String userId) async {
+    await _assertGroupActive(groupId);
     await supabase.rpc('deny_group_member_request', params: {
       'p_group_id': groupId,
       'p_user_id': userId,

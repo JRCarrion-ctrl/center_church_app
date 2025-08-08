@@ -5,6 +5,7 @@ import 'models/group.dart';
 import 'group_service.dart';
 import 'widgets/group_chat_tab.dart';
 import 'pages/group_info_page.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class GroupPage extends StatefulWidget {
   final String groupId;
@@ -52,8 +53,8 @@ class _GroupPageState extends State<GroupPage> {
         final group = _group;
 
         if (group == null || snapshot.hasError) {
-          return const Scaffold(
-            body: Center(child: Text('Failed to load group.')),
+          return Scaffold(
+            body: Center(child: Text("key_051".tr())),
           );
         }
 

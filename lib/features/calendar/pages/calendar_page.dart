@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../../../app_state.dart';
 import '../event_service.dart';
@@ -114,7 +115,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                 return const Center(child: CircularProgressIndicator());
               }
               if (snap.hasError) {
-                return Center(child: Text('Error: ${snap.error}'));
+                return Center(child: Text("key_035".tr()));
               }
 
               final appEvents = snap.data!.appEvents;
@@ -131,9 +132,9 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                   },
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
-                    children: const [
+                    children: [
                       SizedBox(height: 200),
-                      Center(child: Text('No upcoming events.')),
+                      Center(child: Text("key_036".tr())),
                     ],
                   ),
                 );
@@ -142,12 +143,12 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
               final List<Widget> items = [];
 
               if (appEvents.isNotEmpty) {
-                items.add(_sectionHeader('App-Wide Events'));
+                items.add(_sectionHeader("key_036a".tr()));
                 items.addAll(appEvents.map(_buildAppEventCard));
               }
 
               if (groupEvents.isNotEmpty) {
-                items.add(_sectionHeader('Your Group Events'));
+                items.add(_sectionHeader("key_036b".tr()));
                 items.addAll(groupEvents.map(_buildGroupEventCard));
               }
 
@@ -182,7 +183,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
       floatingActionButton: _canManageApp
           ? FloatingActionButton(
               onPressed: () => _openAppForm(),
-              tooltip: 'Add App Event',
+              tooltip: "key_036c".tr(),
               child: const Icon(Icons.add),
             )
           : null,
@@ -200,7 +201,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
         child: ListTile(
           onTap: user == null
               ? () => ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please log in to view event details.')),
+                  SnackBar(content: Text("key_037".tr())),
                 )
               : () => context.push('/app-event/${e.id}', extra: e),
           trailing: _canManageApp
@@ -213,9 +214,9 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                       setState(() => _calendarFuture = _loadAllEvents());
                     }
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'edit', child: Text('Edit')),
-                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(value: 'edit', child: Text("key_038".tr())),
+                    PopupMenuItem(value: 'delete', child: Text("key_039".tr())),
                   ],
                 )
               : null,

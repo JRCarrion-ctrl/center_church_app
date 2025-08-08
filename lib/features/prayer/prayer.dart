@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class PrayerPage extends StatefulWidget {
   const PrayerPage({super.key});
@@ -73,16 +74,16 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Close Prayer Request'),
-        content: const Text('Are you sure you want to close this prayer request?'),
+        title: Text("key_332".tr()),
+        content: Text("key_333".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text("key_334".tr()),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Close'),
+            child: Text("key_335".tr()),
           ),
         ],
       ),
@@ -101,7 +102,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Prayer request closed')),
+          SnackBar(content: Text("key_330".tr())),
         );
       }
     } catch (e) {
@@ -125,7 +126,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         final userId = Supabase.instance.client.auth.currentUser?.id;
         if (userId == null) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Not logged in')),
+            SnackBar(content: Text("key_338".tr())),
           );
           return;
         }
@@ -140,7 +141,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
           if (mounted) {
             navigator.pop();
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Prayer request submitted')),
+              SnackBar(content: Text("key_339".tr())),
             );
             _loadPrayerRequests();
           }
@@ -182,7 +183,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _prayerRequests.isEmpty
-              ? const Center(child: Text('No prayer requests yet.'))
+              ? Center(child: Text("key_341".tr()))
               : RefreshIndicator(
                   onRefresh: _loadPrayerRequests,
                   child: ListView.builder(
@@ -199,7 +200,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         child: ListTile(
                           title: Text(item['request'] ?? ''),
-                          subtitle: Text('From: $name'),
+                          subtitle: Text("key_342".tr(args: [name])),
                           trailing: (_userRole == 'supervisor' || _userRole == 'owner')
                             ? IconButton(
                                 icon: const Icon(Icons.close),
@@ -214,7 +215,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                 ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showPrayerRequestForm,
-        tooltip: 'Submit Prayer Request',
+        tooltip: "key_342a".tr(),
         child: const Icon(Icons.add),
       ),
     );
@@ -249,25 +250,25 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text(
-              'Submit Prayer Request',
+            Text(
+              "key_342a".tr(),
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             TextFormField(
-              decoration: const InputDecoration(labelText: 'Your request'),
+              decoration: InputDecoration(labelText: "key_342b".tr()),
               maxLines: 3,
-              validator: (val) => val == null || val.isEmpty ? 'Required' : null,
+              validator: (val) => val == null || val.isEmpty ? "key_047d".tr() : null,
               onChanged: (val) => _request = val,
             ),
             SwitchListTile(
-              title: const Text('Include my name'),
+              title: Text("key_343".tr()),
               value: _includeName,
               onChanged: (val) => setState(() => _includeName = val),
             ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
               icon: const Icon(Icons.send),
-              label: const Text('Submit'),
+              label: Text("key_344".tr()),
               onPressed: () {
                 if (_formKey.currentState?.validate() ?? false) {
                   widget.onSubmit(_request, _includeName);

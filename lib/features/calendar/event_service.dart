@@ -55,7 +55,7 @@ class EventService {
         await _supabase.from('app_events').update(data).eq('id', event.id);
       }
     } on PostgrestException catch (error) {
-      throw Exception('Error saving app event: ${error.message}');
+      throw Exception('Error saving event: ${error.message}');
     }
   }
 
@@ -63,7 +63,7 @@ class EventService {
     try {
       await _supabase.from('app_events').delete().eq('id', eventId);
     } on PostgrestException catch (error) {
-      throw Exception('Error deleting app event: ${error.message}');
+      throw Exception('Error deleting event: ${error.message}');
     }
   }
 

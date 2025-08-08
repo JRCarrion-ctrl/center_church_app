@@ -3,6 +3,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class EditBibleStudyPage extends StatefulWidget {
   final Map<String, dynamic>? study; // if null, this is a new entry
@@ -60,7 +61,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     if (title.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a title before uploading.')),
+        SnackBar(content: Text("key_260".tr())),
       );
       return;
     }
@@ -76,7 +77,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       setState(() => _notesUrl.text = publicUrl);
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('File uploaded!')),
+        SnackBar(content: Text("key_261".tr())),
       );
     } catch (e) {
       if (!mounted) return;
@@ -110,13 +111,13 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       if (mounted) {
         Navigator.pop(context, true);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.study == null ? 'Bible study added' : 'Updated')),
+          SnackBar(content: Text(widget.study == null ? "key_262".tr() : "key_262a".tr())),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to save')),
+          SnackBar(content: Text("key_263".tr())),
         );
       }
     } finally {
@@ -136,7 +137,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.study == null ? 'Add Bible Study' : 'Edit Bible Study'),
+        title: Text(widget.study == null ? "key_264".tr() : "key_264a".tr()),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -146,8 +147,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
             children: [
               TextFormField(
                 controller: _title,
-                decoration: const InputDecoration(labelText: 'Title'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: "key_156".tr()),
+                validator: (v) => v == null || v.trim().isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 16),
               ListTile(
@@ -168,24 +169,24 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
               const SizedBox(height: 16),
               TextFormField(
                 controller: _youtubeUrl,
-                decoration: const InputDecoration(labelText: 'YouTube URL'),
-                validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: "key_264b".tr()),
+                validator: (v) => v == null || v.trim().isEmpty ? "key_264c".tr() : null,
               ),
               const SizedBox(height: 16),
               TextButton.icon(
                 icon: const Icon(Icons.upload_file),
-                label: const Text('Upload Notes (.docx or PDF)'),
+                label: Text("key_265".tr()),
                 onPressed: isSaving ? null : _pickAndUploadFile,
               ),
               const SizedBox(height: 8),
               TextFormField(
                 controller: _notesUrl,
-                decoration: const InputDecoration(labelText: 'Notes URL (.docx or PDF)'),
+                decoration: InputDecoration(labelText: "key_265a".tr()),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: isSaving ? null : _save,
-                child: Text(widget.study == null ? 'Add' : 'Update'),
+                child: Text(widget.study == null ? "key_187".tr() : "key_041i".tr()),
               ),
             ],
           ),

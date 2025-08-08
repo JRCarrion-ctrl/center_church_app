@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 import 'package:http/http.dart' as http;
 import 'package:go_router/go_router.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class EditChildProfilePage extends StatefulWidget {
   final Map<String, dynamic> child;
@@ -98,16 +99,16 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Child Profile'),
-        content: const Text('Are you sure you want to delete this profile? This cannot be undone.'),
+        title: Text("key_267".tr()),
+        content: Text("key_268".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: Text("key_269".tr()),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
+            child: Text("key_270".tr(), style: TextStyle(color: Colors.red)),
           ),
         ],
       ),
@@ -132,7 +133,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -155,7 +156,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit Child Profile')),
+      appBar: AppBar(title: Text("key_271".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -176,40 +177,40 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
               ElevatedButton.icon(
                 onPressed: _pickPhoto,
                 icon: const Icon(Icons.photo),
-                label: const Text('Select Photo'),
+                label: Text("key_272".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Name'),
-                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: "key_238a".tr()),
+                validator: (v) => v == null || v.isEmpty ? "key_238b".tr() : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _birthdayController,
                 readOnly: true,
                 onTap: _selectBirthday,
-                decoration: const InputDecoration(labelText: 'Birthday'),
+                decoration: InputDecoration(labelText: "key_271a".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _allergiesController,
-                decoration: const InputDecoration(labelText: 'Allergies'),
+                decoration: InputDecoration(labelText: "key_238c".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Notes'),
+                decoration: InputDecoration(labelText: "key_238d".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _emergencyContactController,
-                decoration: const InputDecoration(labelText: 'Emergency Contact'),
+                decoration: InputDecoration(labelText: "key_238e".tr()),
               ),
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _saving ? null : _save,
-                child: _saving ? const CircularProgressIndicator() : const Text('Save Changes'),
+                child: _saving ? const CircularProgressIndicator() : Text("key_273".tr()),
               ),
               const SizedBox(height: 12),
               ElevatedButton(
@@ -218,7 +219,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
                   foregroundColor: Colors.white,
                 ),
                 onPressed: _saving ? null : _confirmDelete,
-                child: const Text('Delete Profile'),
+                child: Text("key_274".tr()),
               )
             ],
           ),

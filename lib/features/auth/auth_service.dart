@@ -7,32 +7,32 @@ class AuthService {
 
   AuthService(this.appState) : _client = Supabase.instance.client;
 
-  /// Sign In
   Future<AuthResponse> signIn(String email, String password) async {
     final response = await _client.auth.signInWithPassword(
       email: email.trim(),
       password: password.trim(),
     );
-
-    appState.updateOneSignalUser();
+    await appState.updateOneSignalUser();
     return response;
   }
 
-  /// Sign Up
   Future<AuthResponse> signUp(String email, String password) async {
+    // Send a confirmation email that also logs the user in after verification
     final response = await _client.auth.signUp(
       email: email.trim(),
       password: password.trim(),
+      emailRedirectTo: 'ccf_app://login-callback', // deep link handled in main.dart
     );
 
-    appState.updateOneSignalUser();
+    // We don't call updateOneSignalUser() yet because user may not be confirmed/logged in
+    // Instead, OneSignal will be updated in main.dart once the deep link is opened
+
     return response;
   }
 
-  /// Sign Out
   Future<void> signOut() async {
     await _client.auth.signOut();
-    appState.updateOneSignalUser();
+    await appState.updateOneSignalUser();
   }
 
   /// Get Current User Email

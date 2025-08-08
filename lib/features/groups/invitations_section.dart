@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class InvitationsSection extends StatefulWidget {
   const InvitationsSection({super.key});
@@ -89,8 +90,8 @@ class InvitationsSectionState extends State<InvitationsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Invitations',
+        Text(
+          "key_059a".tr(),
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
@@ -149,7 +150,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
                               });
                             },
                             icon: const Icon(Icons.check),
-                            label: const Text('Accept'),
+                            label: Text("key_059b".tr()),
                           ),
                           OutlinedButton.icon(
                             onPressed: () async {
@@ -160,7 +161,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
                               });
                             },
                             icon: const Icon(Icons.close),
-                            label: const Text('Decline'),
+                            label: Text("key_059c".tr()),
                           ),
                         ],
                       ),

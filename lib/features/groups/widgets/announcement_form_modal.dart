@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/core/time_service.dart';
 import '../models/group_announcement.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class AnnouncementFormModal extends StatefulWidget {
   final String groupId;
@@ -110,22 +111,22 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                isEditing ? 'Edit Announcement' : 'New Announcement',
+                isEditing ? "key_154".tr() : "key_155".tr(),
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
 
               TextFormField(
                 controller: _title,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(labelText: "key_156".tr()),
                 validator: (value) =>
-                    value == null || value.isEmpty ? 'Title is required' : null,
+                    value == null || value.isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 12),
 
               TextFormField(
                 controller: _body,
-                decoration: const InputDecoration(labelText: 'Body (optional)'),
+                decoration: InputDecoration(labelText: "key_157".tr()),
                 maxLines: 2,
               ),
               const SizedBox(height: 12),
@@ -140,7 +141,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                 ),
                 trailing: TextButton(
                   onPressed: _pickDateTime,
-                  child: const Text('Pick Time'),
+                  child: Text("key_158".tr()),
                 ),
               ),
               const SizedBox(height: 20),
@@ -153,13 +154,13 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: _submit,
-                        child: Text(isEditing ? 'Update' : 'Create'),
+                        child: Text(isEditing ? "key_041i".tr() : "key_141h".tr()),
                       ),
                     ),
                     const SizedBox(width: 12),
                     TextButton(
                       onPressed: () => Navigator.of(context).pop(),
-                      child: const Text('Cancel'),
+                      child: Text("key_159".tr()),
                     ),
                   ],
                 )

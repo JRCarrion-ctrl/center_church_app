@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class InviteUserModal extends StatefulWidget {
   final String groupId;
@@ -71,7 +72,7 @@ class _InviteUserModalState extends State<InviteUserModal> {
     });
     await _searchUsers(_searchController.text);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Invitation sent')),
+      SnackBar(content: Text("key_171".tr())),
     );
   }
 
@@ -85,7 +86,7 @@ class _InviteUserModalState extends State<InviteUserModal> {
         .eq('status', 'pending');
     await _searchUsers(_searchController.text);
     messenger.showSnackBar(
-      const SnackBar(content: Text('Invitation canceled')),
+      SnackBar(content: Text("key_172".tr())),
     );
   }
 
@@ -96,11 +97,11 @@ class _InviteUserModalState extends State<InviteUserModal> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Text('Invite Member', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          Text("key_172a".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           TextField(
             controller: _searchController,
-            decoration: const InputDecoration(labelText: 'Search by email'),
+            decoration: InputDecoration(labelText: "key_172b".tr()),
             onChanged: _searchUsers,
           ),
           const SizedBox(height: 12),

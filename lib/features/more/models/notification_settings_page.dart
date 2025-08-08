@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class NotificationSettingsPage extends StatefulWidget {
   const NotificationSettingsPage({super.key});
@@ -90,6 +91,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
           'muted': muted,
         });
 
+    // Update OneSignal tag
+    if (muted) {
+      await OneSignal.User.addTags({'group_$groupId': 'muted'});
+    } else {
+      await OneSignal.User.addTags({'group_$groupId': 'member'});
+    }
+
     setState(() {
       if (muted) {
         mutedGroupIds.add(groupId);
@@ -102,17 +110,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notification Settings')),
+      appBar: AppBar(title: Text("key_229".tr())),
       body: loading
         ? const Center(child: CircularProgressIndicator())
         : ListView(
             padding: const EdgeInsets.only(bottom: 24),
             children: [
               SwitchListTile(
-                title: const Text('Mute All Notifications'),
+                title: Text("key_230".tr()),
                 value: globalMute,
                 onChanged: savingGlobalMute ? null : _toggleGlobalMute,
-                subtitle: const Text('Disables all in-app and push notifications'),
+                subtitle: Text("key_231".tr()),
               ),
               const Divider(),
               ...groups.map((group) {
@@ -125,13 +133,13 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                   onChanged: globalMute
                       ? null
                       : (val) => _toggleMute(groupId, !val),
-                  subtitle: const Text('Enable notifications'),
+                  subtitle: Text("key_232".tr()),
                 );
               }),
               const Divider(),
               ListTile(
-                title: const Text('Re-enable Push Notifications'),
-                subtitle: const Text('If you previously denied them'),
+                title: Text("key_233".tr()),
+                subtitle: Text("key_234".tr()),
                 trailing: const Icon(Icons.settings),
                 onTap: () async {
                   final accepted = await OneSignal.Notifications.requestPermission(true);
@@ -139,14 +147,14 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
                     showDialog(
                       context: context,
                       builder: (_) => AlertDialog(
-                        title: const Text("Notification Permission Denied"),
-                        content: const Text(
-                          "Please enable push notifications from your device's settings.",
+                        title: Text("key_235".tr()),
+                        content: Text(
+                          "key_235a".tr(),
                         ),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context),
-                            child: const Text("OK"),
+                            child: Text("key_236".tr()),
                           )
                         ],
                       ),

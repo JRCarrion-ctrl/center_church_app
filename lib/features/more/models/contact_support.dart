@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
 import '../../../app_state.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ContactSupportPage extends StatefulWidget {
   const ContactSupportPage({super.key});
@@ -36,7 +37,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
       if (response.status == 200) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Support request submitted.')),
+          SnackBar(content: Text("key_199".tr())),
         );
         Navigator.of(context).pop();
       } else {
@@ -65,7 +66,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     final email = appState.profile?.email ?? 'your email';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Contact Support')),
+      appBar: AppBar(title: Text("key_201".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -73,19 +74,19 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Signed in as: $email'),
+              Text("key_202".tr(args: [email])),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _subjectController,
-                decoration: const InputDecoration(labelText: 'Subject'),
-                validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+                decoration: InputDecoration(labelText: "key_202a".tr()),
+                validator: (val) => val == null || val.trim().isEmpty ? "key_202b".tr() : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _messageController,
-                decoration: const InputDecoration(labelText: 'Message'),
+                decoration: InputDecoration(labelText: "key_202c".tr()),
                 maxLines: 5,
-                validator: (val) => val == null || val.trim().isEmpty ? 'Required' : null,
+                validator: (val) => val == null || val.trim().isEmpty ? "key_202b".tr() : null,
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -94,7 +95,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
                   onPressed: _isSubmitting ? null : _submitSupportRequest,
                   child: _isSubmitting
                       ? const CircularProgressIndicator()
-                      : const Text('Send'),
+                      : Text("key_203".tr()),
                 ),
               )
             ],

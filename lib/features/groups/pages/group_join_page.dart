@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../group_service.dart';
 import '../models/group.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 Future<void> showGroupJoinModal(BuildContext context, String groupId) async {
   showModalBottomSheet(
@@ -73,9 +74,9 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
     }
 
     if (group == null) {
-      return const Padding(
+      return Padding(
         padding: EdgeInsets.all(32),
-        child: Center(child: Text('Group not found')),
+        child: Center(child: Text("key_114".tr())),
       );
     }
 
@@ -109,14 +110,14 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
                 onPressed: isJoining ? null : _joinGroup,
                 child: isJoining
                     ? const CircularProgressIndicator(color: Colors.white)
-                    : Text(isPublicGroup ? 'Join Group' : 'Request to Join'),
+                    : Text(isPublicGroup ? "key_114a".tr() : "key_114b".tr()),
               ),
             )
           else
-            const Text('This group is invite only.'),
+            Text("key_115".tr()),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
+            child: Text("key_116".tr()),
           ),
         ],
       ),

@@ -4,6 +4,7 @@ import '../../app_state.dart';
 import 'package:provider/provider.dart';
 import 'profile_service.dart';
 import 'profile.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class RegisterForm extends StatefulWidget {
   final void Function(Profile?)? onRegisterSuccess;
@@ -48,34 +49,34 @@ class _RegisterFormState extends State<RegisterForm> {
     bool hasError = false;
 
     if (email.isEmpty) {
-      _emailError = 'Email is required.';
+      _emailError = "key_018a".tr();
       hasError = true;
     } else if (!isValidEmail(email)) {
-      _emailError = 'Please enter a valid email address.';
+      _emailError = "key_018b".tr();
       hasError = true;
     }
 
     if (displayName.isEmpty) {
-      _displayNameError = 'Display name is required.';
+      _displayNameError = "key_018c".tr();
       hasError = true;
     } else if (displayName.length < 3) {
-      _displayNameError = 'Must be at least 3 characters.';
+      _displayNameError = "key_018d".tr();
       hasError = true;
     } else if (displayName.length > 20) {
-      _displayNameError = 'Must not exceed 20 characters.';
+      _displayNameError = "key_018e".tr();
       hasError = true;
     } else if (!RegExp(r'^[a-zA-Z0-9_ ]+$').hasMatch(displayName)) {
-      _displayNameError = 'Only letters, numbers, spaces, and underscores are allowed.';
+      _displayNameError = "key_018f".tr();
       hasError = true;
     }
 
     if (password.length < 8) {
-      _passwordError = 'Password must be at least 8 characters.';
+      _passwordError = "key_018g".tr();
       hasError = true;
     }
 
     if (password != confirmPassword) {
-      _confirmError = 'Passwords do not match.';
+      _confirmError = "key_018h".tr();
       hasError = true;
     }
 
@@ -105,9 +106,9 @@ class _RegisterFormState extends State<RegisterForm> {
         showDialog(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text("Confirm Your Email"),
-            content: const Text(
-              "Your account was created.\n\nCheck your inbox to confirm your email. Once confirmed, you’ll be automatically signed in.",
+            title: Text("key_018".tr()),
+            content: Text(
+              "key_018i".tr(),
             ),
             actions: [
               TextButton(
@@ -115,7 +116,7 @@ class _RegisterFormState extends State<RegisterForm> {
                   Navigator.of(context).pop();
                   widget.onRegisterSuccess?.call(null);
                 },
-                child: const Text("OK"),
+                child: Text("key_019".tr()),
               ),
             ],
           ),
@@ -126,12 +127,12 @@ class _RegisterFormState extends State<RegisterForm> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Registration Error"),
-          content: Text("Failed to register:\n${e.toString()}"),
+          title: Text("key_020".tr()),
+          content: Text("key_021".tr()),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(),
-              child: const Text("OK"),
+              child: Text("key_022".tr()),
             ),
           ],
         ),
@@ -157,30 +158,30 @@ class _RegisterFormState extends State<RegisterForm> {
       child: SingleChildScrollView(
         child: Column(
           children: [
-            const Text("Register", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            Text("key_023".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
               controller: _emailController,
               autofillHints: const [AutofillHints.email],
               keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(labelText: 'Email', errorText: _emailError),
+              decoration: InputDecoration(labelText: "key_023a".tr(), errorText: _emailError),
             ),
             TextField(
               controller: _displayNameController,
               autofillHints: const [AutofillHints.name],
               keyboardType: TextInputType.text,
-              decoration: InputDecoration(labelText: 'Display Name', errorText: _displayNameError),
+              decoration: InputDecoration(labelText: "key_023b".tr(), errorText: _displayNameError),
             ),
             TextField(
               controller: _passwordController,
               autofillHints: const [AutofillHints.password],
               obscureText: true,
-              decoration: InputDecoration(labelText: 'Password', errorText: _passwordError),
+              decoration: InputDecoration(labelText: "key_023c".tr(), errorText: _passwordError),
             ),
             TextField(
               controller: _confirmController,
               autofillHints: const [AutofillHints.newPassword],
-              decoration: InputDecoration(labelText: 'Confirm Password', errorText: _confirmError),
+              decoration: InputDecoration(labelText: "key_023d".tr(), errorText: _confirmError),
               obscureText: true,
             ),
             const SizedBox(height: 16),
@@ -188,7 +189,7 @@ class _RegisterFormState extends State<RegisterForm> {
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
                     onPressed: _register,
-                    child: const Text('Register'),
+                    child: Text("key_023".tr()),
                   ),
           ],
         ),

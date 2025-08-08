@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class MagicLinkPage extends StatefulWidget {
   const MagicLinkPage({super.key});
@@ -28,7 +29,7 @@ class _MagicLinkPageState extends State<MagicLinkPage> {
       );
 
       setState(() {
-        _message = 'Magic link sent! Check your email.';
+        _message = "key_344a".tr();
       });
     } catch (e) {
       setState(() {
@@ -42,7 +43,7 @@ class _MagicLinkPageState extends State<MagicLinkPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Login with Magic Link')),
+      appBar: AppBar(title: Text("key_345".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -56,7 +57,7 @@ class _MagicLinkPageState extends State<MagicLinkPage> {
               onPressed: _loading ? null : _sendMagicLink,
               child: _loading
                   ? const CircularProgressIndicator()
-                  : const Text('Send Magic Link'),
+                  : Text("key_346".tr()),
             ),
             if (_message != null) ...[
               const SizedBox(height: 16),

@@ -2,8 +2,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ViewChildProfilePage extends StatefulWidget {
   final String childId;
@@ -100,21 +100,21 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
             const SizedBox(height: 20),
             Text(name, style: Theme.of(context).textTheme.headlineSmall),
             if (formattedBirthday != null)
-              Text('Birthday: $formattedBirthday'),
+              Text("key_320".tr(args: [formattedBirthday])),
             const SizedBox(height: 24),
             ListTile(
               leading: const Icon(Icons.local_hospital),
-              title: const Text('Allergies'),
+              title: Text("key_321".tr()),
               subtitle: Text(allergies),
             ),
             ListTile(
               leading: const Icon(Icons.local_hospital),
-              title: const Text('Notes'),
+              title: Text("key_322".tr()),
               subtitle: Text(notes),
             ),
             ListTile(
               leading: const Icon(Icons.contact_phone),
-              title: const Text('Emergency Contact'),
+              title: Text("key_323".tr()),
               subtitle: Text(emergency),
             ),
             if (qrUrl != null && qrUrl.isNotEmpty)
@@ -123,8 +123,8 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    const Text(
-                      'Check-in QR Code',
+                    Text(
+                      "key_323a".tr(),
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),

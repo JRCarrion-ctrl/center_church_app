@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class QuickLinksFooter extends StatelessWidget {
   const QuickLinksFooter({super.key});
@@ -23,15 +24,15 @@ class QuickLinksFooter extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            const Text(
-              'Quick Links',
+            Text(
+              "key_187a".tr(),
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Card(
               color: colorScheme.surfaceContainerHighest,
               child: ListTile(
-                title: const Text('Give'),
+                title: Text("key_188".tr()),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => context.push('/give'),
               ),
@@ -63,7 +64,7 @@ class QuickLinksFooter extends StatelessWidget {
 
     if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
       messenger.showSnackBar(
-        SnackBar(content: Text('Could not open $url')),
+        SnackBar(content: Text("key_189".tr(args: [url]))),
       );
     }
   }

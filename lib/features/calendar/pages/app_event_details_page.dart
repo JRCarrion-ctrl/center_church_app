@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import '../event_service.dart';
 import '../models/app_event.dart';
@@ -60,14 +61,14 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('RSVP saved')),
+          SnackBar(content: Text("key_027".tr())),
         );
         _loadRSVPs();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text("key_028".tr())),
         );
       }
     } finally {
@@ -81,14 +82,14 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       await _eventService.removeAppEventRSVP(widget.event.id);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('RSVP removed')),
+          SnackBar(content: Text("key_029".tr())),
         );
         _loadRSVPs();
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
+          SnackBar(content: Text("key_030".tr())),
         );
       }
     } finally {
@@ -103,7 +104,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       description: event.description,
       startDate: event.eventDate,
       endDate: event.eventDate.add(Duration(hours: 1)), // Adjust duration if needed
-      location: event.location ?? 'Center Church',
+      location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
 
     Add2Calendar.addEvent2Cal(calendarEvent);
@@ -153,15 +154,15 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
           ElevatedButton.icon(
             onPressed: () => addEventToCalendar(e),
             icon: Icon(Icons.event),
-            label: Text('Add to Calendar'),
+            label: Text("key_031".tr()),
           ),
           const Divider(height: 32),
-          Text('Are you attending?', 
+          Text("key_031a".tr(), 
             style: Theme.of(context).textTheme.titleMedium
           ),
           Row(
             children: [
-              const Text('Count:'),
+              Text("key_032".tr()),
               const SizedBox(width: 8),
               DropdownButton<int>(
                 value: _attendingCount,
@@ -173,13 +174,13 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
               const Spacer(),
               ElevatedButton(
                 onPressed: _saving ? null : _submitRSVP,
-                child: _saving ? const CircularProgressIndicator() : const Text('Submit RSVP'),
+                child: _saving ? const CircularProgressIndicator() : Text("key_033".tr()),
               ),
               if (hasRSVP)
                 TextButton(
                   onPressed: _saving ? null : _removeRSVP,
-                  child: const Text(
-                    'Remove RSVP',
+                  child: Text(
+                    "key_033a".tr(),
                     style: TextStyle(color: Colors.red),
                   ),
                 ),
@@ -187,7 +188,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
           ),
           const Divider(height: 32),
           if (_isSupervisor && _rsvps.isNotEmpty) ...[
-            Text('RSVP Summary:', style: Theme.of(context).textTheme.titleMedium),
+            Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {
               final profile = rsvp['profiles'] ?? {};

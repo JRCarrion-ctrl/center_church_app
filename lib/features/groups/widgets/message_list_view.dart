@@ -6,6 +6,7 @@ import '../../../features/groups/group_chat_service.dart';
 import 'message_content_view.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class MessageListView extends StatefulWidget {
   final String groupId;
@@ -164,7 +165,7 @@ class _MessageListViewState extends State<MessageListView> {
   Widget _buildContent(GroupMessage msg, bool isMe) {
     if (msg.deleted) {
       return Text(
-        '[Deleted Message]',
+        "key_174b".tr(),
         style: TextStyle(
           color: const Color.fromARGB(255, 135, 59, 0),
         ),

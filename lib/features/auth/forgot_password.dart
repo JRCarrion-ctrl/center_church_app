@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class ForgotPasswordForm extends StatefulWidget {
   final VoidCallback? onResetEmailSent;
@@ -41,15 +42,15 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Email Sent"),
-        content: const Text("Check your email for the password reset link."),
+        title: Text("key_009".tr()),
+        content: Text("key_010".tr()),
         actions: [
           TextButton(
             onPressed: () {
               Navigator.pop(context);
               widget.onResetEmailSent?.call();
             },
-            child: const Text("OK"),
+            child: Text("key_011".tr()),
           ),
         ],
       ),
@@ -62,12 +63,12 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text("Error"),
+        title: Text("key_012".tr()),
         content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text("OK"),
+            child: Text("key_011".tr()),
           ),
         ],
       ),
@@ -87,7 +88,7 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
       child: SingleChildScrollView(
         child: Column(
           children: [
-            const Text("Reset Password",
+            Text("key_013".tr(),
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 16),
             TextField(
@@ -101,7 +102,7 @@ class _ForgotPasswordFormState extends State<ForgotPasswordForm> {
                 ? const CircularProgressIndicator()
                 : ElevatedButton(
                     onPressed: _resetPassword,
-                    child: const Text("Send Reset Link"),
+                    child: Text("key_014".tr()),
                   ),
           ],
         ),

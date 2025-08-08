@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class AnnouncementsSection extends StatefulWidget {
   const AnnouncementsSection({super.key});
@@ -136,10 +137,10 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Column(
                   children: [
-                    const Text('No announcements available.'),
+                    Text("key_175".tr()),
                     if (Supabase.instance.client.auth.currentUser == null)
-                      const Text(
-                        'Log in to view group announcements.',
+                      Text(
+                        "key_175a".tr(),
                         style: TextStyle(color: Colors.grey),
                       ),
                   ],
@@ -155,13 +156,13 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
-                    'Group Announcements',
+                  Text(
+                    "key_175b".tr(),
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   TextButton(
                     onPressed: () => GoRouter.of(context).push('/group-announcements'),
-                    child: const Text('View All'),
+                    child: Text("key_176".tr()),
                   ),
                 ],
               ),
@@ -178,14 +179,14 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        const Text(
-          'Announcements',
+        Text(
+          "key_112c".tr(),
           style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         if (isAdmin)
           TextButton(
             onPressed: () => GoRouter.of(context).push('/manage-app-announcements'),
-            child: const Text('Manage'),
+            child: Text("key_177".tr()),
           ),
       ],
     );
@@ -238,7 +239,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: const Text('Close'),
+                            child: Text("key_178".tr()),
                           ),
                         ],
                       ),

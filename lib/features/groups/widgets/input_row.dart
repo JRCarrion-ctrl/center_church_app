@@ -8,6 +8,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:logger/logger.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 final _logger = Logger();
 
@@ -116,7 +117,7 @@ class _InputRowState extends State<InputRow> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera),
-              title: const Text('Take Photo'),
+              title: Text("key_167".tr()),
               onTap: () async {
                 Navigator.pop(context);
                 final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
@@ -129,7 +130,7 @@ class _InputRowState extends State<InputRow> {
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: const Text('Photo Library'),
+              title: Text("key_168".tr()),
               onTap: () async {
                 Navigator.pop(context);
                 final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
@@ -142,7 +143,7 @@ class _InputRowState extends State<InputRow> {
             ),
             ListTile(
               leading: const Icon(Icons.insert_drive_file),
-              title: const Text('Browse Files'),
+              title: Text("key_169".tr()),
               onTap: () async {
                 Navigator.pop(context);
                 final result = await FilePicker.platform.pickFiles();
@@ -350,7 +351,7 @@ class _KlipyGifPickerState extends State<_KlipyGifPicker> {
           if (loading)
             const CircularProgressIndicator()
           else if (gifs.isEmpty)
-            const Text('No GIFs yet. Try searching.')
+            Text("key_170".tr())
           else
             SizedBox(
               height: 300,

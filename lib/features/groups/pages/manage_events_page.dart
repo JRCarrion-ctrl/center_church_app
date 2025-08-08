@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:ccf_app/routes/router_observer.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import '../../calendar/event_service.dart';
@@ -82,7 +83,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('RSVP removed')),
+          SnackBar(content: Text("key_136".tr())),
         );
         _loadRSVPs();
       }
@@ -115,7 +116,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('RSVP saved')),
+          SnackBar(content: Text("key_138".tr())),
         );
         _loadRSVPs();
       }
@@ -136,7 +137,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
       description: event.description,
       startDate: event.eventDate,
       endDate: event.eventDate.add(const Duration(hours: 1)),
-      location: event.location ?? 'Center Church',
+      location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
 
     Add2Calendar.addEvent2Cal(calendarEvent);
@@ -186,13 +187,13 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
           ElevatedButton.icon(
             onPressed: () => addEventToCalendar(e),
             icon: const Icon(Icons.event),
-            label: const Text('Add to Calendar'),
+            label: Text("key_140".tr()),
           ),
           const Divider(height: 32),
-          Text('Are you attending?', style: Theme.of(context).textTheme.titleMedium),
+          Text("key_140a".tr(), style: Theme.of(context).textTheme.titleMedium),
           Row(
             children: [
-              const Text('Count:'),
+              Text("key_141".tr()),
               const SizedBox(width: 8),
               DropdownButton<int>(
                 value: _attendingCount,
@@ -206,13 +207,13 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
                 onPressed: _saving ? null : _submitRSVP,
                 child: _saving
                     ? const CircularProgressIndicator()
-                    : const Text('Submit RSVP'),
+                    : Text("key_142".tr()),
               ),
               if (hasRSVP)
                 TextButton(
                   onPressed: _saving ? null : _removeRSVP,
-                  child: const Text(
-                    'Remove RSVP',
+                  child: Text(
+                    "key_143".tr(),
                     style: TextStyle(color: Colors.red),
                   ),
                 ),
@@ -220,7 +221,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
           ),
           const Divider(height: 32),
           if (_isSupervisor && _rsvps.isNotEmpty) ...[
-            Text('RSVP Summary:', style: Theme.of(context).textTheme.titleMedium),
+            Text("key_143a".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {
               final profile = rsvp['profiles'] ?? {};

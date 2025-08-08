@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../shared/widgets/primary_button.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class GivePage extends StatefulWidget {
   const GivePage({super.key});
@@ -96,12 +96,12 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Thank you!'),
-        content: const Text('Your donation has been received.'),
+        title: Text("key_044".tr()),
+        content: Text("key_045".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
+            child: Text("key_046".tr()),
           ),
         ],
       ),
@@ -134,12 +134,12 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Give'),
+        title: Text("key_047".tr()),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [
-            Tab(text: 'Give'),
-            Tab(text: 'History'),
+          tabs: [
+            Tab(text: "key_047".tr()),
+            Tab(text: "key_047a".tr()),
           ],
         ),
       ),
@@ -164,7 +164,7 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
             children: [
               DropdownButtonFormField<String>(
                 value: _selectedFund,
-                decoration: const InputDecoration(labelText: 'Fund'),
+                decoration: InputDecoration(labelText: "key_047b".tr()),
                 items: mockFunds
                     .map((f) => DropdownMenuItem(value: f, child: Text(f)))
                     .toList(),
@@ -174,13 +174,13 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
               TextFormField(
                 controller: _amountController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Amount (USD)'),
+                decoration: InputDecoration(labelText: "key_047c".tr()),
                 validator: (value) =>
-                    (value == null || value.isEmpty) ? 'Required' : null,
+                    (value == null || value.isEmpty) ? "key_047d".tr() : null,
               ),
               const SizedBox(height: 16),
               SwitchListTile(
-                title: const Text('Make this a recurring gift'),
+                title: Text("key_048".tr()),
                 value: _isRecurring,
                 onChanged: (val) => setState(() => _isRecurring = val),
               ),
@@ -188,9 +188,9 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
               TextFormField(
                 controller: _cardNumberController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Card Number'),
+                decoration: InputDecoration(labelText: "key_048a".tr()),
                 validator: (value) =>
-                    (value == null || value.length < 12) ? 'Invalid' : null,
+                    (value == null || value.length < 12) ? "key_048b".tr() : null,
               ),
               Row(
                 children: [
@@ -199,7 +199,7 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
                       controller: _expiryController,
                       decoration: const InputDecoration(labelText: 'MM/YY'),
                       validator: (value) =>
-                          (value == null || value.length < 4) ? 'Invalid' : null,
+                          (value == null || value.length < 4) ? "key_048b".tr() : null,
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -208,14 +208,14 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
                       controller: _cvcController,
                       decoration: const InputDecoration(labelText: 'CVC'),
                       validator: (value) =>
-                          (value == null || value.length < 3) ? 'Invalid' : null,
+                          (value == null || value.length < 3) ? "key_048b".tr() : null,
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 32),
               PrimaryButton(
-                title: _isSubmitting ? 'Submitting...' : 'Give Now',
+                title: _isSubmitting ? "key_048c".tr() : "key_048d".tr(),
                 onTap: _isSubmitting ? () {} : _submitDonation,
               ),
             ],
@@ -227,7 +227,7 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
 
   Widget _buildDonationHistory() {
     if (_history.isEmpty) {
-      return const Center(child: Text('No donations yet.'));
+      return Center(child: Text("key_049".tr()));
     }
     return ListView.builder(
       padding: const EdgeInsets.all(16),

@@ -1,39 +1,40 @@
+// lib/features/groups/models/group_model.dart
 class GroupModel {
   final String id;
   final String name;
   final String? description;
   final String? photoUrl;
-  final List<String> memberIds;
-  final bool isJoinable;
+  final String visibility;      // 'public' | 'request' | 'invite_only'
+  final bool archived;          // <- new
+  final bool temporary;         // <- optional but useful for nursery DMs
 
   GroupModel({
     required this.id,
     required this.name,
     this.description,
     this.photoUrl,
-    this.memberIds = const [],
-    this.isJoinable = false,
+    this.visibility = 'public',
+    this.archived = false,
+    this.temporary = false,
   });
 
-  factory GroupModel.fromMap(Map<String, dynamic> map) {
-    return GroupModel(
-      id: map['id'] ?? '',
-      name: map['name'] ?? '',
-      description: map['description'],
-      photoUrl: map['photo_url'],
-      memberIds: List<String>.from(map['member_ids'] ?? []),
-      isJoinable: map['is_joinable'] ?? false,
-    );
-  }
+  factory GroupModel.fromMap(Map<String, dynamic> m) => GroupModel(
+        id: m['id'] as String,
+        name: m['name'] as String,
+        description: m['description'] as String?,
+        photoUrl: m['photo_url'] as String?,
+        visibility: (m['visibility'] as String?) ?? 'public',
+        archived: (m['archived'] as bool?) ?? false,
+        temporary: (m['temporary'] as bool?) ?? false,
+      );
 
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'name': name,
-      'description': description,
-      'photo_url': photoUrl,
-      'member_ids': memberIds,
-      'is_joinable': isJoinable,
-    };
-  }
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'photo_url': photoUrl,
+        'visibility': visibility,
+        'archived': archived,
+        'temporary': temporary,
+      };
 }

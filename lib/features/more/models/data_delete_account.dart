@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../app_state.dart';
+import 'package:easy_localization/easy_localization.dart';
 
 class DataAndDeleteAccountPage extends StatelessWidget {
   const DataAndDeleteAccountPage({super.key});
@@ -13,14 +14,14 @@ class DataAndDeleteAccountPage extends StatelessWidget {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Delete Account'),
-        content: const Text(
-          'Are you sure you want to delete your account? This action cannot be undone.'
+        title: Text("key_204".tr()),
+        content: Text(
+          "key_204a".tr()
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
+            child: Text("key_205".tr()),
           ),
           TextButton(
             onPressed: () async {
@@ -28,7 +29,7 @@ class DataAndDeleteAccountPage extends StatelessWidget {
               await _deleteAccount(context);
             },
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text("key_206".tr()),
           ),
         ],
       ),
@@ -50,7 +51,7 @@ class DataAndDeleteAccountPage extends StatelessWidget {
     } catch (e) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to delete account: $e')),
+        SnackBar(content: Text("key_207".tr())),
       );
     }
   }
@@ -60,7 +61,7 @@ class DataAndDeleteAccountPage extends StatelessWidget {
     await prefs.clear();
     if (!context.mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Local app data cleared.')),
+      SnackBar(content: Text("key_208".tr())),
     );
   }
 
@@ -72,37 +73,37 @@ class DataAndDeleteAccountPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Data & Delete Account')),
+      appBar: AppBar(title: Text("key_209".tr())),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'Manage your account data and deletion preferences.',
+          Text(
+            "key_209a".tr(),
             style: TextStyle(fontSize: 16),
           ),
           const SizedBox(height: 24),
           ListTile(
-            title: const Text('Delete My Account'),
-            subtitle: const Text('Permanently remove your account and all associated data.'),
+            title: Text("key_210".tr()),
+            subtitle: Text("key_211".tr()),
             trailing: const Icon(Icons.delete_forever, color: Colors.red),
             onTap: () => _showDeleteConfirmation(context),
           ),
           const Divider(),
           ListTile(
-            title: const Text('Clear Local App Data'),
-            subtitle: const Text('Reset app preferences and cached information.'),
+            title: Text("key_212".tr()),
+            subtitle: Text("key_213".tr()),
             trailing: const Icon(Icons.cleaning_services),
             onTap: () => _clearLocalData(context),
           ),
           ListTile(
-            title: const Text('Clear Cache'),
-            subtitle: const Text('Clear Local Cached Data'),
+            title: Text("key_214".tr()),
+            subtitle: Text("key_215".tr()),
             trailing: const Icon(Icons.cleaning_services),
             onTap: () async {
               await _clearCache();
               if (!context.mounted) return;
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Cache cleared.')),
+                SnackBar(content: Text("key_216".tr())),
               );
             },
           ),
