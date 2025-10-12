@@ -1,6 +1,7 @@
+// File: lib/features/more/data_and_delete_account_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:path_provider/path_provider.dart';
 import '../../../app_state.dart';
@@ -8,16 +9,13 @@ import 'package:easy_localization/easy_localization.dart';
 
 class DataAndDeleteAccountPage extends StatelessWidget {
   const DataAndDeleteAccountPage({super.key});
-  
 
   void _showDeleteConfirmation(BuildContext context) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
         title: Text("key_204".tr()),
-        content: Text(
-          "key_204a".tr()
-        ),
+        content: Text("key_204a".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -37,18 +35,35 @@ class DataAndDeleteAccountPage extends StatelessWidget {
   }
 
   Future<void> _deleteAccount(BuildContext context) async {
-    final client = Supabase.instance.client;
-    final appState = Provider.of<AppState>(context, listen: false);
+    final client = GraphQLProvider.of(context).value;
+    final appState = context.read<AppState>();
+
+    // Hasura Action (or Remote Schema) that performs the deletion
+    // Suggested response shape: { ok: Boolean!, message: String }
+    const m = r'''
+      mutation DeleteAccount {
+        delete_account {
+          ok
+          message
+        }
+      }
+    ''';
 
     try {
-      final user = client.auth.currentUser;
-      if (user == null) throw Exception('User not signed in');
+      final res = await client.mutate(
+        MutationOptions(document: gql(m)),
+      );
 
-      await Supabase.instance.client.functions.invoke('delete_account');
+      final ok = res.data?['delete_account']?['ok'] == true;
+      if (res.hasException || !ok) {
+        final msg = res.data?['delete_account']?['message'] ?? res.exception.toString();
+        throw Exception(msg);
+      }
+
       await appState.signOut();
       if (!context.mounted) return;
       Navigator.of(context).pushNamedAndRemoveUntil('/landing', (route) => false);
-    } catch (e) {
+    } catch (_) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("key_207".tr())),
@@ -77,10 +92,7 @@ class DataAndDeleteAccountPage extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          Text(
-            "key_209a".tr(),
-            style: TextStyle(fontSize: 16),
-          ),
+          Text("key_209a".tr(), style: const TextStyle(fontSize: 16)),
           const SizedBox(height: 24),
           ListTile(
             title: Text("key_210".tr()),
@@ -112,3 +124,4 @@ class DataAndDeleteAccountPage extends StatelessWidget {
     );
   }
 }
+// TODO: Backend work needed

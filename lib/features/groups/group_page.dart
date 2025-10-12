@@ -1,11 +1,12 @@
 // File: lib/features/groups/group_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+import '../../app_state.dart'; // adjust relative path if needed
 import 'models/group.dart';
-import 'group_service.dart';
 import 'widgets/group_chat_tab.dart';
 import 'pages/group_info_page.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class GroupPage extends StatefulWidget {
   final String groupId;
@@ -17,17 +18,28 @@ class GroupPage extends StatefulWidget {
 }
 
 class _GroupPageState extends State<GroupPage> {
-  late final Future<void> _initFuture = _initialize();
+  Future<void>? _initFuture;
 
   Group? _group;
   bool _isAdmin = false;
   bool _isOwner = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _initFuture = _initialize();
+  }
+
   Future<void> _initialize() async {
-    final group = await GroupService().getGroupById(widget.groupId);
-    final userId = Supabase.instance.client.auth.currentUser?.id ?? '';
-    final isAdmin = await GroupService().isUserGroupAdmin(widget.groupId, userId);
-    final isOwner = await GroupService().isUserGroupOwner(widget.groupId, userId);
+    // Prefer GroupService from AppState (so it reuses the same GraphQLClient),
+    // but fall back to constructing one from GraphProvider if needed.
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id ?? '';
+    final service = appState.groupService;
+
+    final group = await service.getGroupById(widget.groupId);
+    final isAdmin = userId.isEmpty ? false : await service.isUserGroupAdmin(widget.groupId, userId);
+    final isOwner = userId.isEmpty ? false : await service.isUserGroupOwner(widget.groupId, userId);
 
     if (!mounted) return;
     setState(() {
@@ -54,7 +66,7 @@ class _GroupPageState extends State<GroupPage> {
 
         if (group == null || snapshot.hasError) {
           return Scaffold(
-            body: Center(child: Text("key_051".tr())),
+            body: Center(child: Text("key_051".tr())), // "Group not found"
           );
         }
 

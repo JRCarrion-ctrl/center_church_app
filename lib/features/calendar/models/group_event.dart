@@ -24,7 +24,7 @@ class GroupEvent {
       groupId: map['group_id'],
       title: map['title'],
       description: map['description'],
-      imageUrl: map['image_url'],
+      imageUrl: map['image_url'] as String?,
       eventDate: DateTime.parse(map['event_date']).toUtc(),
       location: map['location'],
     );

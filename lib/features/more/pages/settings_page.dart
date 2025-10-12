@@ -4,13 +4,274 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
+import 'package:ccf_app/core/graph_provider.dart';
 import '../../../app_state.dart';
 import '../../../shared/user_roles.dart';
 import '../models/calendar_settings_modal.dart';
+
+// --- Helper Widgets for Settings UI ---
+
+/// Base structure for a settings group (replaces _settingsCard).
+class _SettingsCard extends StatelessWidget {
+  final String title;
+  final List<Widget> children;
+
+  const _SettingsCard({required this.title, required this.children});
+
+  @override
+  Widget build(BuildContext context) => Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+            ),
+            ...children,
+          ],
+        ),
+      );
+}
+
+/// A standard tappable settings tile (replaces _tile).
+class _TappableTile extends StatelessWidget {
+  final String title;
+  final VoidCallback? onTap;
+
+  const _TappableTile({required this.title, this.onTap});
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+        title: Text(title),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      );
+}
+
+/// A standard disabled settings tile (replaces _disabledTile).
+class _DisabledTile extends StatelessWidget {
+  final String title;
+
+  const _DisabledTile({required this.title});
+
+  @override
+  Widget build(BuildContext context) => ListTile(
+        title: Text(title),
+        enabled: false,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      );
+}
+
+/// A settings tile with a switch (replaces _switchTile).
+class _SwitchTile extends StatelessWidget {
+  final String title;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  const _SwitchTile({required this.title, required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) => SwitchListTile(
+        title: Text(title),
+        value: value,
+        onChanged: onChanged,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+      );
+}
+
+// --- Extracted Modals using RadioGroup Pattern ---
+
+/// Language Selection Modal
+class _LanguageSelectorModal extends StatefulWidget {
+  const _LanguageSelectorModal();
+
+  static void show(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => const _LanguageSelectorModal(),
+    );
+  }
+
+  @override
+  State<_LanguageSelectorModal> createState() => __LanguageSelectorModalState();
+}
+
+class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
+  late String _selectedLanguage;
+  late AppState appState;
+
+  @override
+  void initState() {
+    super.initState();
+    appState = Provider.of<AppState>(context, listen: false);
+    _selectedLanguage = appState.languageCode;
+  }
+  
+  void _handleLanguageChange(String? value) {
+    if (value != null) {
+      appState.setLanguageCode(context, value); 
+      setState(() => _selectedLanguage = value); 
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            "key_318a".tr(),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          
+          // Use RadioGroup for managing selection state (NON-DEPRECATED)
+          RadioGroup<String>(
+            groupValue: _selectedLanguage,
+            onChanged: _handleLanguageChange,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                ListTile(
+                  // Radio only needs value; state and handler come from RadioGroup
+                  leading: const Radio<String>(value: 'en'), 
+                  title: Text("key_347".tr()),
+                  contentPadding: EdgeInsets.zero,
+                ),
+                ListTile(
+                  leading: const Radio<String>(value: 'es'),
+                  title: Text("key_348".tr()),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Font Size Selection Modal
+class _FontSizeSelectorModal extends StatefulWidget {
+  const _FontSizeSelectorModal();
+
+  static void show(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => const _FontSizeSelectorModal(),
+    );
+  }
+
+  @override
+  State<_FontSizeSelectorModal> createState() => __FontSizeSelectorModalState();
+}
+
+class __FontSizeSelectorModalState extends State<_FontSizeSelectorModal> {
+  late double _selectedScale;
+  late AppState appState;
+  
+  final Map<String, double> _options = {
+    "key_318b".tr(): 0.85, 
+    "key_318c".tr(): 1.0,  
+    "key_318d".tr(): 1.15, 
+    "key_318e".tr(): 1.3,  
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    appState = Provider.of<AppState>(context, listen: false);
+    _selectedScale = appState.fontScale;
+  }
+
+  void _handleScaleChange(double? value) {
+    if (value != null) {
+      appState.setFontScale(value);
+      setState(() => _selectedScale = value);
+      Navigator.pop(context);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Use RadioGroup for managing selection state (NON-DEPRECATED)
+          RadioGroup<double>(
+            groupValue: _selectedScale,
+            onChanged: _handleScaleChange,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: _options.entries.map((entry) {
+                return ListTile(
+                  leading: Radio<double>(value: entry.value),
+                  title: Text(entry.key),
+                  contentPadding: EdgeInsets.zero,
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Theme Mode Selection Group (NON-DEPRECATED)
+class _ThemeModeRadioGroup extends StatelessWidget {
+  final ThemeMode currentThemeMode;
+  final ValueChanged<ThemeMode?> onChanged;
+
+  const _ThemeModeRadioGroup({
+    required this.currentThemeMode,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Use RadioGroup for managing selection state
+    return RadioGroup<ThemeMode>(
+      groupValue: currentThemeMode,
+      onChanged: onChanged,
+      child: Column(
+        children: [
+          ListTile(
+            leading: const Radio<ThemeMode>(value: ThemeMode.system),
+            title: Text("set_3a".tr()),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          ListTile(
+            leading: const Radio<ThemeMode>(value: ThemeMode.light),
+            title: Text("set_3b".tr()),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          ListTile(
+            leading: const Radio<ThemeMode>(value: ThemeMode.dark),
+            title: Text("set_3c".tr()),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+// --- Main Refactored SettingsPage ---
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -20,52 +281,106 @@ class SettingsPage extends StatefulWidget {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  String appVersion = '';
+  String _appVersion = ''; 
   bool _autoRefresh = true;
 
   @override
   void initState() {
     super.initState();
-    _loadAppVersion();
+    // Correctly call the two original asynchronous loading methods
+    _loadAppVersion(); 
     _loadAutoRefreshSetting();
   }
 
+  // Reloaded implementation of original methods
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
-    setState(() => appVersion = info.version);
+    if (!mounted) return;
+    setState(() => _appVersion = info.version);
   }
 
   Future<void> _loadAutoRefreshSetting() async {
     final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
     setState(() {
       _autoRefresh = prefs.getBool('auto_refresh_enabled') ?? true;
     });
   }
 
-  Future<void> _checkForUpdates(BuildContext context) async {
+  // Set Auto Refresh logic (extracted from the inline callback)
+  Future<void> _setAutoRefresh(bool val) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() => _autoRefresh = val);
+    await prefs.setBool('auto_refresh_enabled', val);
+  }
+  
+  // Theme Mode Setter
+  void _setThemeMode(ThemeMode? mode) {
+    if (mode != null) {
+      Provider.of<AppState>(context, listen: false).setThemeMode(mode);
+    }
+  }
+
+  // --- API/Update Check Logic (Kept as private methods in State for GraphQL access) ---
+
+  void _showSnackbar(String message) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _checkForUpdates() async {
     final info = await PackageInfo.fromPlatform();
     final currentVersion = info.version;
-    if (!context.mounted) return;
-    final platform = Theme.of(context).platform == TargetPlatform.iOS ? 'ios' : 'android';
 
-    final res = await Supabase.instance.client
-        .from('app_versions')
-        .select()
-        .eq('platform', platform)
-        .single();
+    if (!mounted) return;
+    final isIOS = Theme.of(context).platform == TargetPlatform.iOS;
+    final platform = isIOS ? 'ios' : 'android';
 
-    final latestVersion = res['latest_version'] as String?;
-    final updateUrl = res['update_url'] as String?;
+    const q = r'''
+      query AppVersions($platform: String!) {
+        app_versions(where: { platform: { _eq: $platform } }, limit: 1) {
+          latest_version
+          update_url
+        }
+      }
+    ''';
 
-    if (latestVersion == null || updateUrl == null) {
-      _showSnackbar('Unable to check for updates.');
-      return;
-    }
+    try {
+      final client = GraphProvider.of(context);
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          variables: {'platform': platform},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
 
-    if (latestVersion.compareTo(currentVersion) > 0) {
-      _showUpdateDialog(latestVersion, updateUrl);
-    } else {
-      _showSnackbar('You’re using the latest version.');
+      if (res.hasException) {
+        _showSnackbar('Unable to check for updates.'.tr());
+        return;
+      }
+
+      final rows = (res.data?['app_versions'] as List<dynamic>? ?? []);
+      if (rows.isEmpty) {
+        _showSnackbar('Unable to check for updates.'.tr());
+        return;
+      }
+
+      final latestVersion = rows.first['latest_version'] as String?;
+      final updateUrl = rows.first['update_url'] as String?;
+
+      if (latestVersion == null || updateUrl == null) {
+        _showSnackbar('Unable to check for updates.'.tr());
+        return;
+      }
+
+      if (latestVersion.compareTo(currentVersion) > 0) {
+        _showUpdateDialog(latestVersion, updateUrl);
+      } else {
+        _showSnackbar('You’re using the latest version.'.tr());
+      }
+    } catch (_) {
+      _showSnackbar('Unable to check for updates.'.tr());
     }
   }
 
@@ -89,86 +404,6 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  void _showSnackbar(String message) {
-    if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _showLanguageSheet() {
-    final appState = Provider.of<AppState>(context, listen: false);
-    String selected = appState.languageCode;
-
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text("key_318a".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-              for (final lang in ['en', 'es'])
-                RadioListTile<String>(
-                  title: Text(lang == 'en' ? "key_347".tr() : "key_348".tr()),
-                  value: lang,
-                  groupValue: selected,
-                  onChanged: (val) {
-                    if (val != null) {
-                      appState.setLanguageCode(context, lang);
-                      setModalState(() => selected = val);
-                      Navigator.pop(context);
-                    }
-                  },
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showFontSizeModal() {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final options = {
-      "key_318b".tr(): 0.85,
-      "key_318c".tr(): 1.0,
-      "key_318d".tr(): 1.15,
-      "key_318e".tr(): 1.3,
-    };
-    double selected = appState.fontScale;
-
-    showModalBottomSheet(
-      context: context,
-      builder: (_) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: options.entries.map((entry) {
-              return RadioListTile<double>(
-                title: Text(entry.key),
-                value: entry.value,
-                groupValue: selected,
-                onChanged: (value) {
-                  if (value != null) {
-                    appState.setFontScale(value);
-                    setModalState(() => selected = value);
-                    Navigator.pop(context);
-                  }
-                },
-              );
-            }).toList(),
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _setThemeMode(ThemeMode? mode) {
-    if (mode != null) {
-      Provider.of<AppState>(context, listen: false).setThemeMode(mode);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -180,93 +415,81 @@ class _SettingsPageState extends State<SettingsPage> {
       body: ListView(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         children: [
-          _settingsCard("set_1".tr(), [
-            _tile("set_1a".tr(), onTap: _showLanguageSheet),
-            _tile("set_1b".tr(), onTap: () => context.push('/settings/notifications')),
-            _tile("set_1c".tr(), onTap: () => CalendarSettingsModal.show(context)),
-            _tile("set_1d".tr(), onTap: () => context.push('/data-and-delete')),
-          ]),
+          // Group 1: General
+          _SettingsCard(
+            title: "set_1".tr(), 
+            children: [
+              _TappableTile(title: "set_1a".tr(), onTap: () => _LanguageSelectorModal.show(context)),
+              _TappableTile(title: "set_1b".tr(), onTap: () => context.push('/settings/notifications')),
+              _TappableTile(title: "set_1c".tr(), onTap: () => CalendarSettingsModal.show(context)),
+              _TappableTile(title: "set_1d".tr(), onTap: () => context.push('/data-and-delete')),
+            ],
+          ),
 
-          _settingsCard("set_2".tr(), [
-            _disabledTile("set_2a".tr(args: [appVersion])),
-            _tile("set_2b".tr(), onTap: () => _checkForUpdates(context)),
-            _tile("set_2c".tr(), onTap: () => context.push('/contact-support')),
-            _tile("set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
-            _tile("set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
-          ]),
+          // Group 2: About & Support
+          _SettingsCard(
+            title: "set_2".tr(),
+            children: [
+              _DisabledTile(title: "set_2a".tr(args: [_appVersion])), 
+              _TappableTile(title: "set_2b".tr(), onTap: _checkForUpdates),
+              _TappableTile(title: "set_2c".tr(), onTap: () => context.push('/contact-support')),
+              _TappableTile(title: "set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
+              _TappableTile(title: "set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
+            ],
+          ),
 
-          _settingsCard("set_3".tr(), [
-            _radioTile("set_3a".tr(), ThemeMode.system, themeMode),
-            _radioTile("set_3b".tr(), ThemeMode.light, themeMode),
-            _radioTile("set_3c".tr(), ThemeMode.dark, themeMode),
-          ]),
+          // Group 3: Appearance (Theme Mode)
+          _SettingsCard(
+            title: "set_3".tr(), 
+            children: [
+              _ThemeModeRadioGroup(
+                currentThemeMode: themeMode,
+                onChanged: _setThemeMode,
+              ),
+            ],
+          ),
 
-          _settingsCard("set_4".tr(), [
-            _switchTile("set_4a".tr(), appState.showCountdown, appState.setShowCountdown),
-            _switchTile("set_4b".tr(), appState.showGroupAnnouncements, appState.setShowGroupAnnouncements),
-          ]),
+          // Group 4: App Features
+          _SettingsCard(
+            title: "set_4".tr(), 
+            children: [
+              _SwitchTile(title: "set_4a".tr(), value: appState.showCountdown, onChanged: appState.setShowCountdown),
+              _SwitchTile(title: "set_4b".tr(), value: appState.showGroupAnnouncements, onChanged: appState.setShowGroupAnnouncements),
+            ],
+          ),
 
-          _settingsCard("set_5".tr(), [
-            _tile("set_5a".tr(), onTap: _showFontSizeModal),
-          ]),
+          // Group 5: Accessibility
+          _SettingsCard(
+            title: "set_5".tr(), 
+            children: [
+              _TappableTile(title: "set_5a".tr(), onTap: () => _FontSizeSelectorModal.show(context)),
+            ],
+          ),
 
-          _settingsCard("set_6".tr(), [
-            _switchTile(
-              "set_6a".tr(),
-              _autoRefresh,
-              (val) async {
-                final prefs = await SharedPreferences.getInstance();
-                setState(() => _autoRefresh = val);
-                await prefs.setBool('auto_refresh_enabled', val);
-              },
+          // Group 6: Advanced
+          _SettingsCard(
+            title: "set_6".tr(), 
+            children: [
+              // Uses _autoRefresh and _setAutoRefresh (now correctly implemented)
+              _SwitchTile(
+                title: "set_6a".tr(),
+                value: _autoRefresh,
+                onChanged: _setAutoRefresh,
+              ),
+              _TappableTile(title: "set_6b".tr(), onTap: () => context.push('/media-settings')),
+            ],
+          ),
+
+          // Group 7: Debug (Conditional)
+          if (appState.userRole == UserRole.owner)
+            _SettingsCard(
+              title: "set_7".tr(), 
+              children: [
+              _TappableTile(title: "set_7a".tr(), onTap: () => context.push('/debug-panel')),
+              ],
             ),
-            _tile("set_6b".tr(), onTap: () => context.push('/media-settings')),
-          ]),
-
-          if (appState.userRole == UserRole.owner) _settingsCard("set_7".tr(), [
-            _tile("set_7a".tr(), onTap: () => context.push('/debug-panel')),
-          ]),
         ],
       ),
     );
   }
-
-  Widget _settingsCard(String title, List<Widget> children) => Card(
-    margin: const EdgeInsets.only(bottom: 16),
-    elevation: 1,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-        ),
-        ...children,
-      ],
-    ),
-  );
-
-  Widget _tile(String title, {VoidCallback? onTap}) => ListTile(
-    title: Text(title),
-    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-    onTap: onTap,
-  );
-
-  Widget _disabledTile(String title) => ListTile(title: Text(title), enabled: false);
-
-  Widget _switchTile(String title, bool value, ValueChanged<bool> onChanged) => SwitchListTile(
-    title: Text(title),
-    value: value,
-    onChanged: onChanged,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-  );
-
-  Widget _radioTile(String title, ThemeMode value, ThemeMode groupValue) => RadioListTile<ThemeMode>(
-    title: Text(title),
-    value: value,
-    groupValue: groupValue,
-    onChanged: _setThemeMode,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-  );
 }

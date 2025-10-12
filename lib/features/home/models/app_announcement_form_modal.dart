@@ -1,6 +1,10 @@
+// File: lib/features/home/app_announcement_form_modal.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+import '../../../app_state.dart';
 
 class AppAnnouncementFormModal extends StatefulWidget {
   final Map<String, dynamic>? existing;
@@ -12,22 +16,41 @@ class AppAnnouncementFormModal extends StatefulWidget {
 }
 
 class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
-  final supabase = Supabase.instance.client;
   final _formKey = GlobalKey<FormState>();
   final _title = TextEditingController();
   final _body = TextEditingController();
   DateTime? _scheduled;
   bool saving = false;
 
+  GraphQLClient? _gql;
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
     final a = widget.existing;
     if (a != null) {
-      _title.text = a['title'] ?? '';
-      _body.text = a['body'] ?? '';
-      _scheduled = DateTime.tryParse(a['published_at'] ?? '')?.toLocal();
+      _title.text = (a['title'] ?? '') as String;
+      _body.text = (a['body'] ?? '') as String;
+      final published = a['published_at'];
+      if (published is String && published.isNotEmpty) {
+        _scheduled = DateTime.tryParse(published)?.toLocal();
+      }
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _gql ??= GraphQLProvider.of(context).value;
+    _userId ??= context.read<AppState>().profile?.id;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
   }
 
   Future<void> _pickDateTime() async {
@@ -53,39 +76,63 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    setState(() => saving = true);
 
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_190".tr())),
-        );
-      }
-      setState(() => saving = false);
+    if (_userId == null || _gql == null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_190".tr())));
       return;
     }
 
-    final data = {
+    setState(() => saving = true);
+
+    final payload = {
       'title': _title.text.trim(),
       'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
       'published_at': (_scheduled ?? DateTime.now()).toUtc().toIso8601String(),
     };
 
+    const insertMutation = r'''
+      mutation InsertAppAnnouncement($title: String!, $body: String, $published_at: timestamptz!, $created_by: String!) {
+        insert_app_announcements_one(object: {
+          title: $title,
+          body: $body,
+          published_at: $published_at,
+          created_by: $created_by
+        }) { id }
+      }
+    ''';
+
+    const updateMutation = r'''
+      mutation UpdateAppAnnouncement($id: uuid!, $title: String!, $body: String, $published_at: timestamptz!) {
+        update_app_announcements_by_pk(pk_columns: {id: $id}, _set: {
+          title: $title,
+          body: $body,
+          published_at: $published_at
+        }) { id }
+      }
+    ''';
+
     try {
       if (widget.existing != null) {
-        await supabase
-            .from('app_announcements')
-            .update(data)
-            .eq('id', widget.existing!['id']);
+        final vars = {
+          'id': widget.existing!['id'],
+          'title': payload['title'],
+          'body': payload['body'],
+          'published_at': payload['published_at'],
+        };
+        final res = await _gql!.mutate(MutationOptions(document: gql(updateMutation), variables: vars));
+        if (res.hasException) throw res.exception!;
       } else {
-        await supabase.from('app_announcements').insert({
-          ...data,
-          'created_by': userId,
-        });
+        final vars = {
+          'title': payload['title'],
+          'body': payload['body'],
+          'published_at': payload['published_at'],
+          'created_by': _userId,
+        };
+        final res = await _gql!.mutate(MutationOptions(document: gql(insertMutation), variables: vars));
+        if (res.hasException) throw res.exception!;
       }
 
-      if (mounted) Navigator.pop(context, data);
+      if (mounted) Navigator.pop(context, payload);
     } catch (e) {
       debugPrint('Error saving announcement: $e');
       if (mounted) {
@@ -139,7 +186,7 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
                 title: Text(
                   _scheduled == null
                       ? "key_190a".tr()
-                      : 'Scheduled: ${_scheduled!.toLocal()}',
+                      : 'Scheduled: ${DateFormat.yMMMd().add_jm().format(_scheduled!)}',
                 ),
                 trailing: TextButton(
                   onPressed: _pickDateTime,

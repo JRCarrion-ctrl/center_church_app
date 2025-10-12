@@ -1,17 +1,20 @@
+// File: lib/features/calendar/pages/group_event_details_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:ccf_app/routes/router_observer.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+// REMOVED: import 'package:graphql_flutter/graphql_flutter.dart'; // No longer needed in the widget
 
+import 'package:ccf_app/routes/router_observer.dart';
 import 'package:ccf_app/core/time_service.dart';
+import '../../../core/graph_provider.dart';
+import '../../../app_state.dart';
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
 
 class GroupEventDetailsPage extends StatefulWidget {
   final GroupEvent event;
-
   const GroupEventDetailsPage({super.key, required this.event});
 
   @override
@@ -19,25 +22,35 @@ class GroupEventDetailsPage extends StatefulWidget {
 }
 
 class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with RouteAware {
-  final _eventService = EventService();
+  // CORRECTED: Late initialization in didChangeDependencies
+  late EventService _eventService; 
   int _attendingCount = 1;
   bool _saving = false;
   bool _isSupervisor = false;
   List<Map<String, dynamic>> _rsvps = [];
 
-  @override
-  void initState() {
-    super.initState();
-    _checkRole();
-    _loadRSVPs();
-  }
+  // REMOVED: late GraphQLClient _gql;
+  bool _inited = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    
+    // Subscribe/Unsubscribe logic for RouteAware (Memory Leak Fix)
+    routeObserver.unsubscribe(this);
     final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      routeObserver.subscribe(this, route);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+    
+    if (!_inited) {
+      _inited = true;
+      
+      // Initialize EventService using Provider/GraphProvider
+      final client = GraphProvider.of(context);
+      final userId = context.read<AppState>().profile?.id;
+      _eventService = EventService(client, currentUserId: userId);
+
+      _checkRole();
+      _loadRSVPs();
     }
   }
 
@@ -49,50 +62,54 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
   @override
   void didPopNext() {
+    // Refresh when returning to this page
     _loadRSVPs();
     _checkRole();
   }
 
+  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _checkRole() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    final profile = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-
-    if (mounted) {
+    final uid = context.read<AppState>().profile?.id;
+    if (uid == null || uid.isEmpty) return;
+    
+    // NOTE: This assumes EventService has a checkGroupMemberRole method now
+    // that encapsulates the GraphQL query.
+    try {
+      final role = await _eventService.checkGroupMemberRole(
+        groupId: widget.event.groupId,
+        userId: uid,
+      );
+      if (!mounted) return;
       setState(() {
-        _isSupervisor = ['leader', 'supervisor', 'owner'].contains(profile['role']);
+        _isSupervisor = const {'leader', 'supervisor', 'owner', 'admin'}.contains(role);
       });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isSupervisor = false);
     }
   }
 
+  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _removeRSVP() async {
-    setState(() => _saving = true);
-    try {
-      await Supabase.instance.client
-          .from('event_attendance')
-          .delete()
-          .match({
-            'event_id': widget.event.id,
-            'user_id': Supabase.instance.client.auth.currentUser!.id,
-          });
+    final uid = context.read<AppState>().profile?.id;
+    if (uid == null || uid.isEmpty) return;
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_136".tr())),
-        );
-        _loadRSVPs();
-      }
+    setState(() => _saving = true);
+    
+    // NOTE: This assumes EventService has a removeGroupEventRSVP method
+    try {
+      await _eventService.removeGroupEventRSVP(widget.event.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_136".tr())),
+      );
+      _loadRSVPs();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (!mounted) return;
+      // We rely on the service to provide an informative exception
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')), 
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -101,52 +118,73 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
   Future<void> _loadRSVPs() async {
     try {
       final data = await _eventService.fetchGroupEventRSVPs(widget.event.id);
-      if (mounted) setState(() => _rsvps = data);
-    } catch (_) {}
+      if (mounted) {
+        final currentUserId = context.read<AppState>().profile?.id;
+        final existingRsvp = data.firstWhere(
+          (r) => r['user_id'] == currentUserId,
+        );
+
+        setState(() {
+          _rsvps = data;
+          // FIX: Initialize _attendingCount with existing value, or default to 1
+          _attendingCount = existingRsvp['attending_count'] as int? ?? 1;
+        });
+      }
+    } catch (_) {
+      // no-op
+    }
   }
 
+  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _submitRSVP() async {
-    setState(() => _saving = true);
-    try {
-      await Supabase.instance.client.from('event_attendance').upsert({
-        'event_id': widget.event.id,
-        'user_id': Supabase.instance.client.auth.currentUser!.id,
-        'attending_count': _attendingCount,
-      }, onConflict: 'event_id, user_id');
+    final uid = context.read<AppState>().profile?.id;
+    if (uid == null || uid.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not signed in')),
+      );
+      return;
+    }
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_138".tr())),
-        );
-        _loadRSVPs();
-      }
+    setState(() => _saving = true);
+
+    // NOTE: This assumes EventService has an rsvpGroupEvent method
+    try {
+      await _eventService.rsvpGroupEvent(
+        eventId: widget.event.id, 
+        count: _attendingCount,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_138".tr())),
+      );
+      _loadRSVPs();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
+      if (!mounted) return;
+      // We rely on the service to provide an informative exception
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   void addEventToCalendar(GroupEvent event) {
-    final Event calendarEvent = Event(
+    final calendarEvent = Event(
       title: event.title,
       description: event.description,
       startDate: event.eventDate,
       endDate: event.eventDate.add(const Duration(hours: 1)),
       location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
-
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
+    final currentUserId = context.watch<AppState>().profile?.id; // text id
+    final hasRSVP = currentUserId != null && _rsvps.any((r) => r['user_id'] == currentUserId);
     final e = widget.event;
 
     return Scaffold(
@@ -205,17 +243,12 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
               const Spacer(),
               ElevatedButton(
                 onPressed: _saving ? null : _submitRSVP,
-                child: _saving
-                    ? const CircularProgressIndicator()
-                    : Text("key_142".tr()),
+                child: _saving ? const CircularProgressIndicator() : Text("key_142".tr()),
               ),
               if (hasRSVP)
                 TextButton(
                   onPressed: _saving ? null : _removeRSVP,
-                  child: Text(
-                    "key_143".tr(),
-                    style: TextStyle(color: Colors.red),
-                  ),
+                  child: Text("key_143".tr(), style: const TextStyle(color: Colors.red)),
                 ),
             ],
           ),
@@ -224,7 +257,9 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
             Text("key_143a".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {
-              final profile = rsvp['profiles'] ?? {};
+              // NOTE: If your fetchGroupEventRSVPs query uses 'profiles', 
+              // the key below should be 'profiles', otherwise it should be 'profile'
+              final profile = rsvp['profiles'] ?? {}; 
               final photoUrl = profile['photo_url'];
               return ListTile(
                 leading: CircleAvatar(

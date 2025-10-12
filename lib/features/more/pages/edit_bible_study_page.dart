@@ -1,12 +1,15 @@
+// File: lib/features/more/pages/edit_bible_study_page.dart
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart' as graphql;
 import 'package:easy_localization/easy_localization.dart';
 
+import 'package:ccf_app/core/media/presigned_uploader.dart';
+
 class EditBibleStudyPage extends StatefulWidget {
-  final Map<String, dynamic>? study; // if null, this is a new entry
+  final Map<String, dynamic>? study; // null => new
 
   const EditBibleStudyPage({super.key, this.study});
 
@@ -15,7 +18,6 @@ class EditBibleStudyPage extends StatefulWidget {
 }
 
 class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
-  final supabase = Supabase.instance.client;
   final _formKey = GlobalKey<FormState>();
 
   late final TextEditingController _title;
@@ -32,53 +34,71 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     _youtubeUrl = TextEditingController(text: s?['youtube_url'] ?? '');
     _notesUrl = TextEditingController(text: s?['notes_url'] ?? '');
     if (s?['date'] != null) {
-      _selectedDate = DateTime.parse(s!['date']);
+      final raw = s!['date'] as String;
+      _selectedDate = DateTime.tryParse(raw) ?? DateTime.parse('${raw}T00:00:00Z');
     }
   }
 
-  String _generateFilenameFromTitle(String title, String ext) {
-    final safeTitle = title
+  @override
+  void dispose() {
+    _title.dispose();
+    _youtubeUrl.dispose();
+    _notesUrl.dispose();
+    super.dispose();
+  }
+
+  String _slug(String input, {int maxLen = 50}) {
+    final trimmed = input.trim();
+    if (trimmed.isEmpty) return 'untitled';
+    final safe = trimmed
         .toLowerCase()
         .replaceAll(RegExp(r'[^\w\s-]'), '')
         .replaceAll(RegExp(r'\s+'), '-')
-        .replaceAll(RegExp(r'-+'), '-')
-        .substring(0, title.length.clamp(1, 50)); // prevent filename overflow
-    return 'study-notes/$safeTitle$ext';
+        .replaceAll(RegExp(r'-+'), '-');
+    final end = safe.length < maxLen ? safe.length : maxLen;
+    return safe.substring(0, end);
   }
 
   Future<void> _pickAndUploadFile() async {
-    final result = await FilePicker.platform.pickFiles(
+    final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['docx', 'pdf'],
     );
+    if (picked == null || picked.files.single.path == null) return;
 
-    if (result == null || result.files.single.path == null) return;
-
-    final file = File(result.files.single.path!);
-    final ext = p.extension(file.path);
+    final file = File(picked.files.single.path!);
+    final ext = p.extension(file.path).toLowerCase();
     final title = _title.text.trim();
 
     if (title.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_260".tr())),
+        SnackBar(content: Text("key_260".tr())), // “Please enter a title first…”
       );
       return;
     }
 
-    final filename = _generateFilenameFromTitle(title, ext);
-
     try {
-      await supabase.storage.from('biblestudynotes').upload(filename, file);
-      final publicUrl = supabase.storage.from('biblestudynotes').getPublicUrl(filename);
+      // Reuse your S3/GCS presigned upload helper
+      final logicalId = widget.study?['id'] as String? ?? _slug(title);
+      final uploadedUrl = await PresignedUploader.upload(
+        file: file,
+        keyPrefix: 'bible_studies', // folder/prefix in your storage
+        logicalId: '$logicalId$ext', // keep filetype in the logical key
+      );
 
       if (!mounted) return;
 
-      setState(() => _notesUrl.text = publicUrl);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_261".tr())),
-      );
+      if (uploadedUrl.isNotEmpty) {
+        setState(() => _notesUrl.text = uploadedUrl);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("key_261".tr())), // “Notes uploaded!”
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -91,53 +111,64 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => isSaving = true);
 
-    final data = {
+    final client = graphql.GraphQLProvider.of(context).value; // was: gql
+
+    final dateStr = _selectedDate.toIso8601String().split('T').first;
+
+    final vars = {
+      'id': widget.study?['id'],
       'title': _title.text.trim(),
-      'date': _selectedDate.toIso8601String(),
+      'date': dateStr,
       'youtube_url': _youtubeUrl.text.trim(),
       'notes_url': _notesUrl.text.trim().isEmpty ? null : _notesUrl.text.trim(),
     };
 
-    try {
-      if (widget.study == null) {
-        await supabase.from('bible_studies').insert(data);
-      } else {
-        await supabase
-            .from('bible_studies')
-            .update(data)
-            .eq('id', widget.study!['id']);
+    const mInsert = r'''
+      mutation InsertStudy($title: String!, $date: date!, $youtube_url: String!, $notes_url: String) {
+        insert_bible_studies_one(object: {
+          title: $title, date: $date, youtube_url: $youtube_url, notes_url: $notes_url
+        }) { id }
       }
+    ''';
 
-      if (mounted) {
-        Navigator.pop(context, true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(widget.study == null ? "key_262".tr() : "key_262a".tr())),
-        );
+    const mUpdate = r'''
+      mutation UpdateStudy($id: uuid!, $title: String!, $date: date!, $youtube_url: String!, $notes_url: String) {
+        update_bible_studies_by_pk(
+          pk_columns: { id: $id },
+          _set: { title: $title, date: $date, youtube_url: $youtube_url, notes_url: $notes_url }
+        ) { id }
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_263".tr())),
-        );
-      }
+    ''';
+
+    final isNew = widget.study == null;
+    final doc = graphql.gql(isNew ? mInsert : mUpdate); // call the real gql()
+    final effectiveVars = isNew ? (Map.of(vars)..remove('id')) : vars;
+
+    try {
+      final res = await client.mutate(
+        graphql.MutationOptions(document: doc, variables: effectiveVars),
+      );
+      if (res.hasException) throw res.exception!;
+      if (!mounted) return;
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(isNew ? "key_262".tr() : "key_262a".tr())),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_263".tr())));
     } finally {
-      setState(() => isSaving = false);
+      if (mounted) setState(() => isSaving = false);
     }
   }
 
   @override
-  void dispose() {
-    _title.dispose();
-    _youtubeUrl.dispose();
-    _notesUrl.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final isEditing = widget.study != null;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.study == null ? "key_264".tr() : "key_264a".tr()),
+        title: Text(isEditing ? "key_264a".tr() : "key_264".tr()),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),
@@ -161,9 +192,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
                     firstDate: DateTime(2023),
                     lastDate: DateTime(2030),
                   );
-                  if (picked != null) {
-                    setState(() => _selectedDate = picked);
-                  }
+                  if (picked != null) setState(() => _selectedDate = picked);
                 },
               ),
               const SizedBox(height: 16),
@@ -186,7 +215,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: isSaving ? null : _save,
-                child: Text(widget.study == null ? "key_187".tr() : "key_041i".tr()),
+                child: Text(isEditing ? "key_041i".tr() : "key_187".tr()),
               ),
             ],
           ),

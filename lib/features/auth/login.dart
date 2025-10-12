@@ -1,122 +1,49 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'auth_service.dart';
 import '../../app_state.dart';
-import 'profile_service.dart';
-import 'profile.dart';
-import 'package:easy_localization/easy_localization.dart';
 
-class LoginForm extends StatefulWidget {
-  final void Function(Profile? profile)? onLoginSuccess;
-
-  const LoginForm({super.key, this.onLoginSuccess});
-
+class LoginSheet extends StatefulWidget {
+  const LoginSheet({super.key});
   @override
-  State<LoginForm> createState() => _LoginFormState();
+  State<LoginSheet> createState() => _LoginSheetState();
 }
 
-class _LoginFormState extends State<LoginForm> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isLoading = false;
+class _LoginSheetState extends State<LoginSheet> {
+  bool _loading = false;
 
-  void _showErrorDialog(String message) {
-    if (!mounted) return;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text("key_012".tr()),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text("key_011".tr()),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _login() async {
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
-
-    if (email.isEmpty || password.isEmpty) {
-      _showErrorDialog("key_016".tr());
-      return;
-    }
-
-    setState(() => _isLoading = true);
+  Future<void> _signin() async {
+    if (_loading) return;
+    setState(() => _loading = true);
     try {
-      final authService = AuthService(context.read<AppState>());
-      final authResponse = await authService.signIn(email, password);
-      final user = authResponse.user;
-
-      if (user != null) {
-        final profile = await ProfileService().getProfile(user.id);
-        if (!mounted) return;
-
-        // Update global state so other widgets see the login
-        context.read<AppState>().setProfile(profile);
-
-        // Optional: also load user groups if needed
-        await context.read<AppState>().loadUserGroups();
-
-        widget.onLoginSuccess?.call(profile);
-
-        // Close the login screen
-        if (!mounted) return;
-        Navigator.of(context).pop();
-      }
+      await context.read<AppState>().signInWithZitadel();
+      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
     } catch (e) {
-      _showErrorDialog("key_021a".tr());
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed')),
+      );
     } finally {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() => _loading = false);
     }
-  }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 400),
-      child: SingleChildScrollView(
-        child: Column(
-          children: [
-            Text(
-              "key_017".tr(),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: _emailController,
-              autofillHints: const [AutofillHints.email],
-              keyboardType: TextInputType.emailAddress,
-              decoration: InputDecoration(labelText: "key_023a".tr()),
-            ),
-            TextField(
-              controller: _passwordController,
-              autofillHints: const [AutofillHints.password],
-              obscureText: true,
-              decoration: InputDecoration(labelText: "key_023c".tr()),
-            ),
-            const SizedBox(height: 20),
-            _isLoading
-                ? const CircularProgressIndicator()
-                : ElevatedButton(
-                    onPressed: _login,
-                    child: Text("key_017".tr()),
-                  ),
-          ],
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(height: 8),
+        Text('Sign in or Create Account', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 16),
+        _loading
+            ? const Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator())
+            : ElevatedButton(onPressed: _signin, child: const Text('Continue')),
+        const SizedBox(height: 8),
+        TextButton(
+          onPressed: () => Navigator.of(context).maybePop(),
+          child: const Text('Not now'),
         ),
-      ),
+      ],
     );
   }
 }

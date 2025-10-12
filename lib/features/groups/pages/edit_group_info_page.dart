@@ -1,6 +1,7 @@
 // File: lib/features/groups/pages/edit_group_info_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:ccf_app/core/graph_provider.dart';
 import '../models/group.dart';
 import '../../../shared/widgets/primary_button.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -20,11 +21,20 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
   bool _saving = false;
   final _formKey = GlobalKey<FormState>();
 
+  GraphQLClient? _client;
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.group.name);
-    _descriptionController = TextEditingController(text: widget.group.description ?? '');
+    _descriptionController =
+        TextEditingController(text: widget.group.description ?? '');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _client ??= GraphProvider.of(context);
   }
 
   @override
@@ -36,28 +46,70 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
 
   Future<void> _saveChanges() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_client == null) return;
 
     setState(() => _saving = true);
 
+    final name = _nameController.text.trim();
+    final descRaw = _descriptionController.text.trim();
+    final desc = descRaw.isEmpty ? null : descRaw;
+
+    // 1) Update group (by PK)
+    const mUpdate = r'''
+      mutation UpdateGroup($id: uuid!, $name: String!, $description: String) {
+        update_groups_by_pk(
+          pk_columns: { id: $id },
+          _set: { name: $name, description: $description }
+        ) { id }
+      }
+    ''';
+
+    // 2) Read back the full group (so we can return an up-to-date model)
+    const qGroup = r'''
+      query GetGroup($id: uuid!) {
+        groups_by_pk(id: $id) {
+          id
+          name
+          description
+          photo_url
+          visibility
+          temporary
+          archived
+          pinned_message_id
+          created_at
+        }
+      }
+    ''';
+
     try {
-      await Supabase.instance.client.from('groups').update({
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-      }).eq('id', widget.group.id);
+      final upd = await _client!.mutate(MutationOptions(
+        document: gql(mUpdate),
+        variables: {
+          'id': widget.group.id,
+          'name': name,
+          'description': desc,
+        },
+      ));
+      if (upd.hasException) throw upd.exception!;
 
-      // Fetch updated group before returning
-      final updatedData = await Supabase.instance.client
-          .from('groups')
-          .select()
-          .eq('id', widget.group.id)
-          .single();
+      final qry = await _client!.query(QueryOptions(
+        document: gql(qGroup),
+        variables: {'id': widget.group.id},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+      if (qry.hasException) throw qry.exception!;
 
-      final updatedGroup = Group.fromMap(updatedData);
+      final data = qry.data?['groups_by_pk'] as Map<String, dynamic>?;
+      if (data == null) throw Exception('Group not found after update');
+
+      final updatedGroup = Group.fromMap(data);
 
       if (!mounted) return;
-      Navigator.of(context).pop(updatedGroup); // return success flag
+      Navigator.of(context).pop(updatedGroup);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -76,7 +128,8 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(labelText: "key_068a".tr()),
-                validator: (value) => value == null || value.isEmpty ? "key_068b".tr() : null,
+                validator: (value) =>
+                    value == null || value.isEmpty ? "key_068b".tr() : null,
               ),
               const SizedBox(height: 16),
               TextFormField(
@@ -85,8 +138,9 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
                 maxLines: 4,
               ),
               const Spacer(),
-              if (_saving) const CircularProgressIndicator(),
-              if (!_saving)
+              if (_saving)
+                const CircularProgressIndicator()
+              else
                 PrimaryButton(
                   title: "key_068d".tr(),
                   onTap: _saveChanges,

@@ -3,8 +3,11 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:logger/logger.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+import '../../../app_state.dart';
 
 const defaultRelationships = [
   'Parent', 'Child', 'Sibling', 'Spouse', 'Cousin', 'Uncle', 'Aunt',
@@ -21,14 +24,14 @@ class FamilyPage extends StatefulWidget {
 }
 
 class _FamilyPageState extends State<FamilyPage> {
-  final supabase = Supabase.instance.client;
   final logger = Logger();
+
   List<Map<String, dynamic>> members = [];
   Map<String, String> userDefinedRelationships = {};
   String? familyCode;
   bool isLoading = true;
   String? error;
-  late final String currentUserId;
+  String? currentUserId;
 
   String _generateFamilyCode() {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -39,17 +42,19 @@ class _FamilyPageState extends State<FamilyPage> {
   @override
   void initState() {
     super.initState();
-    final user = supabase.auth.currentUser;
-    if (user == null) {
-      context.go('/landing');
-      return;
-    }
-    currentUserId = user.id;
-    if (widget.familyId != null) {
-      _loadFamily();
-    } else {
-      setState(() => isLoading = false);
-    }
+    // Delay to ensure Provider is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      currentUserId = context.read<AppState>().profile?.id;
+      if (currentUserId == null) {
+        context.go('/landing');
+        return;
+      }
+      if (widget.familyId != null) {
+        _loadFamily();
+      } else {
+        setState(() => isLoading = false);
+      }
+    });
   }
 
   Future<void> _loadFamily() async {
@@ -58,8 +63,8 @@ class _FamilyPageState extends State<FamilyPage> {
       error = null;
     });
 
-    final familyId = widget.familyId;
-    if (familyId == null) {
+    final fid = widget.familyId;
+    if (fid == null) {
       setState(() {
         isLoading = false;
         error = 'No family ID provided';
@@ -68,53 +73,136 @@ class _FamilyPageState extends State<FamilyPage> {
     }
 
     try {
-      final membersResult = await supabase
-          .from('family_members')
-          .select('*, user:profiles!family_members_user_id_fkey(*), inviter:profiles!family_members_invited_by_fkey(*), child:child_profiles(*)')
-          .eq('family_id', familyId);
+      final client = GraphQLProvider.of(context).value;
 
-      final relationshipsResult = await supabase
-          .from('user_family_relationships')
-          .select()
-          .eq('viewer_id', currentUserId)
-          .eq('family_id', familyId);
+      const q = r'''
+        query FamilyData($fid: uuid!, $viewer: String!) {
+          families_by_pk(id: $fid) {
+            family_code
+          }
+          family_members(where: { family_id: { _eq: $fid } }) {
+            id
+            family_id
+            user_id
+            relationship
+            status
+            is_child
+            # These relationship field names assume standard Hasura object relationships:
+            user: profile {
+              id
+              display_name
+              photo_url
+            }
+            child: child_profile {
+              id
+              display_name
+              photo_url
+              birthday
+              allergies
+              notes
+              emergency_contact
+            }
+          }
+          user_family_relationships(
+            where: {
+              family_id: { _eq: $fid },
+              viewer_id: { _eq: $viewer }
+            }
+          ) {
+            related_user_id
+            relationship
+          }
+        }
+      ''';
 
-      final familyResult = await supabase
-          .from('families')
-          .select('family_code')
-          .eq('id', familyId)
-          .maybeSingle();
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          variables: {'fid': fid, 'viewer': currentUserId},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+
+      if (res.hasException) {
+        logger.e('FamilyData error', error: res.exception);
+        setState(() {
+          error = 'Failed to load family';
+          isLoading = false;
+        });
+        return;
+      }
+
+      final data = res.data!;
+      final fm = (data['family_members'] as List<dynamic>).cast<Map<String, dynamic>>();
+      final rels = (data['user_family_relationships'] as List<dynamic>).cast<Map<String, dynamic>>();
+      final code = data['families_by_pk']?['family_code'] as String?;
 
       setState(() {
-        members = List<Map<String, dynamic>>.from(membersResult);
+        members = fm;
         userDefinedRelationships = {
-          for (var r in relationshipsResult)
+          for (final r in rels)
             if (r['related_user_id'] != null && r['relationship'] != null)
-              r['related_user_id']: r['relationship']
+              r['related_user_id'] as String: r['relationship'] as String
         };
-        familyCode = familyResult?['family_code'];
+        familyCode = code;
+        isLoading = false;
       });
     } catch (e, stack) {
       logger.e('Failed to load family', error: e, stackTrace: stack);
-      setState(() => error = 'Failed to load family');
-    } finally {
-      setState(() => isLoading = false);
+      setState(() {
+        error = 'Failed to load family';
+        isLoading = false;
+      });
     }
   }
 
   Future<void> _updateRelationship(String relatedUserId, String value) async {
-    final familyId = widget.familyId;
-    if (familyId == null) return;
+    final fid = widget.familyId;
+    if (fid == null || currentUserId == null) return;
 
     try {
-      await supabase
-        .from('user_family_relationships')
-        .upsert({
-          'viewer_id': currentUserId,
-          'related_user_id': relatedUserId,
-          'family_id': familyId,
-          'relationship': value,
-        }, onConflict: 'viewer_id,related_user_id,family_id');
+      final client = GraphQLProvider.of(context).value;
+      const m = r'''
+        mutation UpsertRelationship(
+          $viewer: String!,
+          $related: uuid!,
+          $fid: uuid!,
+          $relationship: String!
+        ) {
+          insert_user_family_relationships_one(
+            object: {
+              viewer_id: $viewer,
+              related_user_id: $related,
+              family_id: $fid,
+              relationship: $relationship
+            },
+            on_conflict: {
+              constraint: user_family_relationships_viewer_id_related_user_id_family_id_key,
+              update_columns: [relationship]
+            }
+          ) {
+            viewer_id
+          }
+        }
+      ''';
+
+      final res = await client.mutate(
+        MutationOptions(
+          document: gql(m),
+          variables: {
+            'viewer': currentUserId,
+            'related': relatedUserId,
+            'fid': fid,
+            'relationship': value,
+          },
+        ),
+      );
+
+      if (res.hasException) {
+        logger.e('UpsertRelationship error', error: res.exception);
+        _showSnackbar('Could not update relationship');
+        return;
+      }
 
       setState(() => userDefinedRelationships[relatedUserId] = value);
     } catch (e) {
@@ -151,9 +239,9 @@ class _FamilyPageState extends State<FamilyPage> {
       return Scaffold(body: Center(child: Text(error!)));
     }
 
-    final self = members.where((m) => m['user']?['id'] == currentUserId).toList();
+    final self = members.where((m) => (m['user']?['id'] as String?) == currentUserId).toList();
     final children = members.where((m) => m['is_child'] == true).toList();
-    final adults = members.where((m) => m['is_child'] != true && m['user']?['id'] != currentUserId).toList();
+    final adults = members.where((m) => m['is_child'] != true && (m['user']?['id'] as String?) != currentUserId).toList();
 
     return Scaffold(
       appBar: AppBar(
@@ -219,16 +307,15 @@ class _FamilyPageState extends State<FamilyPage> {
     final isChild = m['is_child'] == true;
     final user = m['user'];
     final child = m['child'];
-    final userId = user?['id'];
-    final memberUserId = user?['id'];
+    final userId = user?['id'] as String?;
     final name = user?['display_name'] ?? child?['display_name'] ?? 'Unnamed';
     final photo = user?['photo_url'] ?? child?['photo_url'];
-    final relationship = userId != null ? userDefinedRelationships[userId] ?? '' : '';
+    final relationship = userId != null ? (userDefinedRelationships[userId] ?? '') : '';
 
     return ListTile(
       leading: CircleAvatar(
-        backgroundImage: (photo != null && photo.isNotEmpty) ? NetworkImage(photo) : null,
-        child: (photo == null || photo.isEmpty)
+        backgroundImage: (photo != null && photo.toString().isNotEmpty) ? NetworkImage(photo) : null,
+        child: (photo == null || photo.toString().isEmpty)
             ? Icon(isChild ? Icons.child_care : Icons.person)
             : null,
       ),
@@ -236,7 +323,8 @@ class _FamilyPageState extends State<FamilyPage> {
       subtitle: Wrap(
         spacing: 6,
         children: [
-          if (!isChild && userId != null && memberUserId != userId)
+          // fixed condition: hide for self, show for other adults
+          if (!isChild && userId != null && userId != currentUserId)
             DropdownButton<String>(
               value: relationship.isEmpty ? null : relationship,
               hint: Text("key_281".tr()),
@@ -267,40 +355,102 @@ class _FamilyPageState extends State<FamilyPage> {
 
   Future<void> _createFamily() async {
     final code = _generateFamilyCode();
-    final res = await supabase.from('families').insert({'family_code': code}).select('id').single();
-    final newId = res['id'];
-    await supabase.from('family_members').insert({
-      'user_id': currentUserId,
-      'family_id': newId,
-      'relationship': 'Self',
-      'is_child': false,
-      'status': 'accepted',
-    });
-    if (mounted) context.go('/more/family', extra: {'familyId': newId});
+    final uid = currentUserId;
+    if (uid == null) return;
+
+    final client = GraphQLProvider.of(context).value;
+
+    const mCreate = r'''
+      mutation CreateFamily($code: String!) {
+        insert_families_one(object: { family_code: $code }) { id }
+      }
+    ''';
+    const mAddSelf = r'''
+      mutation AddSelf($fid: uuid!, $uid: String!) {
+        insert_family_members_one(object: {
+          family_id: $fid,
+          user_id: $uid,
+          relationship: "Self",
+          status: "accepted"
+        }) { id }
+      }
+    ''';
+
+    try {
+      final res1 = await client.mutate(
+        MutationOptions(document: gql(mCreate), variables: {'code': code}),
+      );
+      if (res1.hasException) {
+        logger.e('CreateFamily error', error: res1.exception);
+        return;
+      }
+      final newId = res1.data?['insert_families_one']?['id'] as String;
+
+      final res2 = await client.mutate(
+        MutationOptions(document: gql(mAddSelf), variables: {'fid': newId, 'uid': uid}),
+      );
+      if (res2.hasException) {
+        logger.e('AddSelf error', error: res2.exception);
+        return;
+      }
+
+      if (mounted) context.go('/more/family', extra: {'familyId': newId});
+    } catch (e) {
+      logger.e('Create family failed', error: e);
+    }
   }
 
   Future<void> _joinFamilyByCode(String code) async {
     final formatted = code.trim().toUpperCase();
-    final result = await supabase
-        .from('families')
-        .select('id')
-        .eq('family_code', formatted)
-        .maybeSingle();
-    if (result == null) {
+    final uid = currentUserId;
+    if (uid == null) return;
+
+    final client = GraphQLProvider.of(context).value;
+
+    const qByCode = r'''
+      query FindFamilyByCode($code: String!) {
+        families(where: { family_code: { _eq: $code } }, limit: 1) { id }
+      }
+    ''';
+    const mJoin = r'''
+      mutation JoinFamily($fid: uuid!, $uid: String!) {
+        insert_family_members_one(object: {
+          user_id: $uid,
+          family_id: $fid,
+          relationship: "Relative",
+          status: "accepted"
+        }) { id }
+      }
+    ''';
+
+    final res1 = await client.query(
+      QueryOptions(document: gql(qByCode), variables: {'code': formatted}),
+    );
+    if (res1.hasException) {
+      _showSnackbar('Family code lookup failed.');
+      return;
+    }
+    final families = (res1.data?['families'] as List<dynamic>? ?? []);
+    if (families.isEmpty) {
       _showSnackbar('Family code not found.');
       return;
     }
-    await supabase.from('family_members').insert({
-      'user_id': currentUserId,
-      'family_id': result['id'],
-      'relationship': 'Relative',
-      'is_child': false,
-      'status': 'accepted',
-    });
-    if (mounted) context.go('/more/family', extra: {'familyId': result['id']});
+    final fid = families.first['id'] as String;
+
+    final res2 = await client.mutate(
+      MutationOptions(document: gql(mJoin), variables: {'fid': fid, 'uid': uid}),
+    );
+    if (res2.hasException) {
+      _showSnackbar('Could not join family.');
+      return;
+    }
+
+    if (mounted) context.go('/more/family', extra: {'familyId': fid});
   }
 
   Future<void> _leaveFamily() async {
+    if (currentUserId == null || widget.familyId == null) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
@@ -313,12 +463,24 @@ class _FamilyPageState extends State<FamilyPage> {
       ),
     );
     if (confirm != true) return;
+    if (!mounted) return;
 
-    await supabase
-        .from('family_members')
-        .delete()
-        .eq('user_id', currentUserId)
-        .eq('family_id', widget.familyId!);
+    final client = GraphQLProvider.of(context).value;
+    const m = r'''
+      mutation LeaveFamily($uid: String!, $fid: uuid!) {
+        delete_family_members(
+          where: { user_id: { _eq: $uid }, family_id: { _eq: $fid } }
+        ) { affected_rows }
+      }
+    ''';
+
+    final res = await client.mutate(
+      MutationOptions(document: gql(m), variables: {'uid': currentUserId, 'fid': widget.familyId}),
+    );
+    if (res.hasException) {
+      _showSnackbar('Unable to leave family.');
+      return;
+    }
 
     if (mounted) context.go('/more/family', extra: {'familyId': null});
   }

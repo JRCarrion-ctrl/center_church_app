@@ -2,16 +2,17 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class YourGroupsSection extends StatefulWidget {
   const YourGroupsSection({super.key, this.excludeArchived = true});
 
-  /// Hide archived groups defensively at the UI layer (in case the service
-  /// doesn’t filter them yet).
+  /// Hide archived groups defensively at the UI layer
   final bool excludeArchived;
 
   @override
@@ -41,22 +42,29 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     super.dispose();
   }
 
+  Future<GroupService> _service() async {
+    // Prefer the cached instance from AppState; otherwise build with GraphProvider
+    final appState = context.read<AppState>();
+    return appState.groupService;
+  }
+
   Future<List<GroupModel>> _loadGroups() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) {
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+    if (userId == null || userId.isEmpty) {
       _allGroups = [];
       _filteredGroups = [];
       return [];
     }
 
-    final groups = await GroupService().getUserGroups(userId);
+    final groups = await (await _service()).getUserGroups(userId);
 
     // Defensive filter: hide archived if requested
     final visible = widget.excludeArchived
         ? groups.where((g) => (g.archived) == false).toList()
         : groups;
 
-    // Sort by name for a stable grid
+    // Stable sort by name
     visible.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     _allGroups = visible;
@@ -88,10 +96,9 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
   }
 
   void _openGroup(GroupModel group) {
-    // If an archived group slips through, show a friendly note instead of navigating.
     if ((group.archived) == true) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('key_group_archived'.tr())), // add i18n
+        SnackBar(content: Text('key_group_archived'.tr())),
       );
       return;
     }
@@ -100,7 +107,8 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
+    final appState = context.watch<AppState>();
+    final isLoggedIn = appState.profile != null;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -122,8 +130,8 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
         ),
         const SizedBox(height: 12),
 
-        // If not logged in, show a soft message (matches your GroupsPage pattern)
-        if (user == null)
+        // If not logged in, show a soft message
+        if (!isLoggedIn)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12.0),
             child: Text(
@@ -173,20 +181,14 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                   onTap: () => _openGroup(group),
                   child: Column(
                     children: [
-                      Hero(
-                        tag: 'group_avatar_${group.id}',
-                        child: CircleAvatar(
-                          radius: 32,
-                          backgroundColor:
-                              Theme.of(context).colorScheme.primaryContainer,
-                          backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                              ? NetworkImage(group.photoUrl!)
-                              : null,
-                          onBackgroundImageError: (_, _) {},
-                          child: (group.photoUrl?.isEmpty ?? true)
-                              ? const Icon(Icons.group, size: 30, color: Colors.white)
-                              : null,
-                        ),
+                      CircleAvatar(
+                        radius: 40,
+                        backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
+                            ? NetworkImage(group.photoUrl!)
+                            : null,
+                        child: (group.photoUrl?.isEmpty ?? true)
+                            ? const Icon(Icons.group, size: 30)
+                            : null,
                       ),
                       const SizedBox(height: 6),
                       SizedBox(

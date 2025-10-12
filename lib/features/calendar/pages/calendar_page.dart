@@ -1,10 +1,13 @@
+// filename: calendar_page.dart
+import 'package:ccf_app/shared/user_roles.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 import '../../../app_state.dart';
 import '../event_service.dart';
@@ -22,40 +25,36 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late Future<_CalendarData> _calendarFuture;
-  bool _canManageApp = false;
+  // REMOVED: bool _canManageApp = false; // Now calculated synchronously in build
+
   String _refreshKey = UniqueKey().toString();
-  final user = Supabase.instance.client.auth.currentUser;
+
+  late EventService _eventService;
+  bool _svcReady = false;
 
   @override
   void initState() {
     super.initState();
-    _checkPermissions();
-    _calendarFuture = _loadAllEvents();
+    // initState remains empty as the initial service setup is in didChangeDependencies
   }
 
-  Future<void> _checkPermissions() async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    if (user == null) return;
-    final res = await client.from('profiles').select('role').eq('id', user.id).single();
-    final role = res['role'] as String?;
-    setState(() {
-      _canManageApp = role == 'supervisor' || role == 'owner';
-    });
-  }
+  // DELETED: Future<void> _checkPermissions() async { ... } 
+  // The role check is now done via Provider in the build method.
 
   Future<_CalendarData> _loadAllEvents() async {
-    final appState = Provider.of<AppState>(context, listen: false);
-    final service = EventService();
-    final appEvents = await service.fetchAppEvents();
+    final appState = context.read<AppState>();
+
+    // uses the ready service
+    final appEvents = await _eventService.fetchAppEvents();
 
     List<GroupEvent> filteredGroupEvents = [];
+    final currentUserId = appState.profile?.id;
 
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user != null && appState.visibleCalendarGroupIds.isNotEmpty) {
-      final groupEvents = await service.fetchUpcomingGroupEvents();
+    if (currentUserId != null && appState.visibleCalendarGroupIds.isNotEmpty) {
+      final groupEvents = await _eventService.fetchUpcomingGroupEvents();
       final visibleGroupIds = appState.visibleCalendarGroupIds.toSet();
-      filteredGroupEvents = groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
+      filteredGroupEvents =
+          groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
     }
 
     return _CalendarData(appEvents: appEvents, groupEvents: filteredGroupEvents);
@@ -82,9 +81,25 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    // FIX 1: Memory Leak Fix - Always unsubscribe before subscribing
+    routeObserver.unsubscribe(this);
+
+    // subscribe to route changes
     final route = ModalRoute.of(context);
     if (route is PageRoute) {
       routeObserver.subscribe(this, route);
+    }
+
+    // initialize EventService once we have inherited widgets
+    if (!_svcReady) {
+      final client = GraphQLProvider.of(context).value;
+      final userId = context.read<AppState>().profile?.id;
+      _eventService = EventService(client, currentUserId: userId);
+      _svcReady = true;
+
+      // now safe to load events
+      _calendarFuture = _loadAllEvents();
     }
   }
 
@@ -96,6 +111,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
   @override
   void didPopNext() {
+    // refresh when returning to this page
     setState(() {
       _calendarFuture = _loadAllEvents();
       _refreshKey = UniqueKey().toString();
@@ -104,6 +120,12 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
+    final isLoggedIn = context.select<AppState, bool>((s) => s.profile?.id != null);
+    
+    // FIX 2: Synchronous Role Check for button visibility
+    final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
+    final bool canManageApp = userRole == UserRole.supervisor || userRole == UserRole.owner;
+
     return Scaffold(
       body: Stack(
         children: [
@@ -133,7 +155,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                   child: ListView(
                     physics: const AlwaysScrollableScrollPhysics(),
                     children: [
-                      SizedBox(height: 200),
+                      const SizedBox(height: 200),
                       Center(child: Text("key_036".tr())),
                     ],
                   ),
@@ -144,7 +166,8 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
               if (appEvents.isNotEmpty) {
                 items.add(_sectionHeader("key_036a".tr()));
-                items.addAll(appEvents.map(_buildAppEventCard));
+                // Pass the permission down to the card builder
+                items.addAll(appEvents.map(_buildAppEventCard(isLoggedIn, canManageApp)));
               }
 
               if (groupEvents.isNotEmpty) {
@@ -180,7 +203,8 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
           ),
         ],
       ),
-      floatingActionButton: _canManageApp
+      // Use the local 'canManageApp' boolean
+      floatingActionButton: canManageApp
           ? FloatingActionButton(
               onPressed: () => _openAppForm(),
               tooltip: "key_036c".tr(),
@@ -192,45 +216,52 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
   Widget _sectionHeader(String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(text,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-      );
-
-  Widget _buildAppEventCard(AppEvent e) => Card(
-        margin: const EdgeInsets.only(bottom: 12),
-        child: ListTile(
-          onTap: user == null
-              ? () => ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text("key_037".tr())),
-                )
-              : () => context.push('/app-event/${e.id}', extra: e),
-          trailing: _canManageApp
-              ? PopupMenuButton<String>(
-                  onSelected: (action) async {
-                    if (action == 'edit') {
-                      await _openAppForm(e);
-                    } else if (action == 'delete') {
-                      await EventService().deleteAppEvent(e.id);
-                      setState(() => _calendarFuture = _loadAllEvents());
-                    }
-                  },
-                  itemBuilder: (_) => [
-                    PopupMenuItem(value: 'edit', child: Text("key_038".tr())),
-                    PopupMenuItem(value: 'delete', child: Text("key_039".tr())),
-                  ],
-                )
-              : null,
-          leading: e.imageUrl != null
-              ? Image.network(
-                  e.imageUrl!,
-                  gaplessPlayback: true,
-                  fit: BoxFit.cover,
-                )
-              : const Icon(Icons.announcement, size: 40),
-          title: Text(e.title),
-          subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
+        child: Text(
+          text,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
       );
+
+  // Updated function signature to accept canManageApp
+  Widget Function(AppEvent) _buildAppEventCard(bool isLoggedIn, bool canManageApp) =>
+      (AppEvent e) => Card(
+            margin: const EdgeInsets.only(bottom: 12),
+            child: ListTile(
+              onTap: !isLoggedIn
+                  ? () => ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text("key_037".tr())),
+                      )
+                  : () => context.push('/app-event/${e.id}', extra: e),
+              // Use the passed 'canManageApp' boolean
+              trailing: canManageApp
+                  ? PopupMenuButton<String>(
+                      onSelected: (action) async {
+                        if (action == 'edit') {
+                          await _openAppForm(e);
+                        } else if (action == 'delete') {
+                          await _eventService.deleteAppEvent(e.id);
+                          setState(() => _calendarFuture = _loadAllEvents());
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        PopupMenuItem(value: 'edit', child: Text("key_038".tr())),
+                        PopupMenuItem(value: 'delete', child: Text("key_039".tr())),
+                      ],
+                    )
+                  : null,
+              leading: e.imageUrl != null
+                  ? Image.network(
+                      e.imageUrl!,
+                      gaplessPlayback: true,
+                      fit: BoxFit.cover,
+                    )
+                  : const Icon(Icons.announcement, size: 40),
+              title: Text(e.title),
+              subtitle: Text(
+                TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
+              ),
+            ),
+          );
 
   Widget _buildGroupEventCard(GroupEvent e) => Card(
         margin: const EdgeInsets.only(bottom: 12),
@@ -244,7 +275,9 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                 )
               : const Icon(Icons.event, size: 40),
           title: Text(e.title),
-          subtitle: Text(TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a')),
+          subtitle: Text(
+            TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
+          ),
         ),
       );
 }

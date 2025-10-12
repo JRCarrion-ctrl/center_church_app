@@ -1,7 +1,11 @@
+// File: lib/features/prayer/prayer_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ccf_app/routes/router_observer.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/routes/router_observer.dart';
+import 'package:ccf_app/app_state.dart';
 
 class PrayerPage extends StatefulWidget {
   const PrayerPage({super.key});
@@ -11,55 +15,137 @@ class PrayerPage extends StatefulWidget {
 }
 
 class _PrayerPageState extends State<PrayerPage> with RouteAware {
-  final _supabase = Supabase.instance.client;
   List<Map<String, dynamic>> _prayerRequests = [];
-  String _userRole = 'user'; // default
+  String _userRole = 'anonymous';
   bool _loading = true;
+  bool _bootstrapped = false;
+  
+  // Store a reference to the AppState object
+  AppState? _appState;
+  VoidCallback? _authSub;
+
+  GraphQLClient _client(BuildContext ctx) => GraphQLProvider.of(ctx).value;
+  String? _userId(BuildContext ctx) => ctx.read<AppState>().profile?.id;
 
   @override
-  void initState() {
-    super.initState();
-    _loadRoleAndRequests();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+
+    if (!_bootstrapped) {
+      _bootstrapped = true;
+      _loadRoleAndRequests();
+      // react to login/logout
+
+      // Safely read the provider here and save it to the field.
+      // The listen: false is important here.
+      _appState = context.read<AppState>(); 
+      
+      _authSub = () {
+        // when auth flips, reload everything
+        _loadRoleAndRequests();
+      };
+      _appState!.authChangeNotifier.addListener(_authSub!);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    // Use the saved reference to remove the listener
+    if (_authSub != null && _appState != null) {
+      _appState!.authChangeNotifier.removeListener(_authSub!);
+    }
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _loadPrayerRequests();
   }
 
   Future<void> _loadRoleAndRequests() async {
+    if (!mounted) return;
+    setState(() => _loading = true);
     await _getUserRole();
     await _loadPrayerRequests();
   }
 
   Future<void> _getUserRole() async {
-    final userId = _supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    final client = _client(context);
+    final userId = _userId(context);
+    if (userId == null) {
+      if (mounted) setState(() => _userRole = 'anonymous');
+      return;
+    }
 
-    final result = await _supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
+    const q = r'''
+      query GetMyRole($id: String!) {
+        profiles_by_pk(id: $id) { role }
+      }
+    ''';
 
-    if (mounted) {
-      setState(() {
-        _userRole = (result != null && result['role'] != null)
-            ? result['role'] as String
-            : 'user';
-      });
+    try {
+      final res = await client.query(QueryOptions(
+        document: gql(q),
+        variables: {'id': userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+      if (!mounted) return;
+      final role = res.data?['profiles_by_pk']?['role'] as String?;
+      setState(() => _userRole = role ?? 'anonymous');
+    } catch (_) {
+      if (mounted) setState(() => _userRole = 'anonymous');
     }
   }
 
   Future<void> _loadPrayerRequests() async {
-    try {
-      final response = await _supabase
-          .from('prayer_requests')
-          .select('id, request, include_name, profiles(display_name)')
-          .eq('status', 'open')
-          .order('created_at', ascending: false);
+    final client = _client(context);
 
-      if (mounted) {
-        setState(() {
-          _prayerRequests = List<Map<String, dynamic>>.from(response);
-          _loading = false;
-        });
+    const q = r'''
+      query DebugPrayer {
+        prayer_requests(where: { status: { _eq: "open" } }, order_by: { created_at: desc }, limit: 20) {
+          id
+          status
+          user_id
+          request
+          include_name
+          created_at
+          profiles {
+            display_name
+          }
+        }
       }
+    ''';
+
+    try {
+      final res = await client.query(QueryOptions(
+        document: gql(q),
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      if (!mounted) return;
+
+      if (res.hasException) {
+        setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to load prayer requests')),
+        );
+        return;
+      }
+
+      final rows = (res.data?['prayer_requests'] as List<dynamic>? ?? [])
+          .map((e) => Map<String, dynamic>.from(e as Map))
+          .toList();
+
+      setState(() {
+        _prayerRequests = rows;
+        _loading = false;
+      });
     } catch (e) {
       if (mounted) {
         setState(() => _loading = false);
@@ -77,33 +163,28 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         title: Text("key_332".tr()),
         content: Text("key_333".tr()),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text("key_334".tr()),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            child: Text("key_335".tr()),
-          ),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text("key_334".tr())),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text("key_335".tr())),
         ],
       ),
     );
-
     if (confirmed != true || !mounted) return;
 
+    final client = _client(context);
+    const m = r'''
+      mutation ClosePrayer($id: uuid!) {
+        update_prayer_requests_by_pk(pk_columns: {id: $id}, _set: { status: "closed" }) { id }
+      }
+    ''';
+
     try {
-      await _supabase
-          .from('prayer_requests')
-          .update({'status': 'closed'})
-          .eq('id', prayerId);
-
-      if (!mounted) return;
+      final res = await client.mutate(
+        MutationOptions(document: gql(m), variables: {'id': prayerId}),
+      );
+      if (res.hasException) throw res.exception!;
       await _loadPrayerRequests();
-
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_330".tr())),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_330".tr())));
       }
     } catch (e) {
       if (mounted) {
@@ -114,7 +195,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     }
   }
 
-
   void _showPrayerRequestForm() {
     showModalBottomSheet(
       context: context,
@@ -123,34 +203,42 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) => PrayerRequestForm(onSubmit: (request, includeName) async {
-        final userId = Supabase.instance.client.auth.currentUser?.id;
+        final client = _client(context);
+        final userId = _userId(context);
         if (userId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("key_338".tr())),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_338".tr())));
           return;
         }
-
         final navigator = Navigator.of(context);
+
+        const m = r'''
+          mutation InsertPrayer($user_id: String!, $request: String!, $include_name: Boolean!) {
+            insert_prayer_requests_one(object: {
+              user_id: $user_id,
+              request: $request,
+              include_name: $include_name,
+              status: "open"
+            }) { id }
+          }
+        ''';
+
         try {
-          await Supabase.instance.client.from('prayer_requests').insert({
-            'user_id': userId,
-            'request': request,
-            'include_name': includeName,
-          });
+          final res = await client.mutate(
+            MutationOptions(
+              document: gql(m),
+              variables: {'user_id': userId, 'request': request, 'include_name': includeName},
+            ),
+          );
+          if (res.hasException) throw res.exception!;
           if (mounted) {
             navigator.pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("key_339".tr())),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_339".tr())));
             _loadPrayerRequests();
           }
         } catch (e) {
           if (mounted) {
             navigator.pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Error: $e')),
-            );
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
           }
         }
       }),
@@ -158,27 +246,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      routeObserver.subscribe(this, route);
-    }
-  }
-
-  @override
-  void dispose() {
-    routeObserver.unsubscribe(this);
-    super.dispose();
-  }
-
-  @override
-  void didPopNext() {
-    _loadPrayerRequests();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final currentUserId = _userId(context);
+    final isSupervisorOrOwner = _userRole == 'supervisor' || _userRole == 'owner';
+
     return Scaffold(
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -194,20 +265,24 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       final isAnonymous = item['include_name'] == false;
                       final name = isAnonymous
                           ? 'Anonymous'
-                          : (item['profiles']?['display_name'] ?? 'Someone');
+                          : ((item['profiles']?['display_name'] ?? 'Someone') as String);
+
+                      final prayerUserId = item['user_id'] as String?;
+                      final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
+                      final canClose = isSupervisorOrOwner || isPrayerOwner;
 
                       return Card(
                         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         child: ListTile(
-                          title: Text(item['request'] ?? ''),
+                          title: Text((item['request'] ?? '') as String),
                           subtitle: Text("key_342".tr(args: [name])),
-                          trailing: (_userRole == 'supervisor' || _userRole == 'owner')
-                            ? IconButton(
-                                icon: const Icon(Icons.close),
-                                tooltip: 'Mark as closed',
-                                onPressed: () => _confirmAndClosePrayer(item['id']),
-                              )
-                            : null,
+                          trailing: canClose
+                              ? IconButton(
+                                  icon: const Icon(Icons.close),
+                                  tooltip: 'Mark as closed',
+                                  onPressed: () => _confirmAndClosePrayer(item['id'] as String),
+                                )
+                              : null,
                         ),
                       );
                     },
@@ -252,7 +327,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
           children: [
             Text(
               "key_342a".tr(),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             TextFormField(
               decoration: InputDecoration(labelText: "key_342b".tr()),

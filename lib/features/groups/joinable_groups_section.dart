@@ -1,9 +1,13 @@
+// File: lib/features/groups/joinable_groups_section.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ccf_app/features/groups/models/group_model.dart';
-import 'package:ccf_app/features/groups/group_service.dart';
-import 'package:ccf_app/features/groups/pages/group_join_page.dart';
+import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/features/groups/group_service.dart';
+import 'package:ccf_app/features/groups/models/group_model.dart';
+import 'package:ccf_app/features/groups/pages/group_join_page.dart';
 
 class JoinableGroupsSection extends StatefulWidget {
   const JoinableGroupsSection({super.key});
@@ -26,31 +30,47 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
   void refresh() => _loadFilteredGroups();
 
+  Future<GroupService> _service() async {
+    final appState = context.read<AppState>();
+    return appState.groupService;
+  }
+
   Future<void> _loadFilteredGroups() async {
-    final client = Supabase.instance.client;
-    final userId = client.auth.currentUser?.id;
-    if (userId == null) return;
+    setState(() => _loading = true);
 
-    final joinable = await GroupService().getJoinableGroups();
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+    if (userId == null || userId.isEmpty) {
+      setState(() {
+        allGroups = [];
+        filteredGroups = [];
+        _loading = false;
+      });
+      return;
+    }
 
-    final memberships = await client
-        .from('group_memberships')
-        .select('group_id')
-        .eq('user_id', userId)
-        .eq('status', 'approved');
+    final svc = await _service();
 
-    final joinedIds = (memberships as List)
-        .map((m) => m['group_id'] as String)
-        .toSet();
+    // Hasura-only: get joinable + my groups, then exclude ones I'm already in
+    final joinable = await svc.getJoinableGroups();
+    final myGroups = await svc.getUserGroups(userId);
+    final joinedIds = myGroups.map((g) => g.id).toSet();
 
     allGroups = joinable.where((g) => !joinedIds.contains(g.id)).toList();
+
+    // Optional stable sort by name
+    allGroups.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+
     _applyFilter();
     setState(() => _loading = false);
   }
 
   void _applyFilter() {
+    final q = _query.trim().toLowerCase();
     setState(() {
-      filteredGroups = allGroups.where((g) => g.name.toLowerCase().contains(_query.toLowerCase())).toList();
+      filteredGroups = q.isEmpty
+          ? List<GroupModel>.from(allGroups)
+          : allGroups.where((g) => g.name.toLowerCase().contains(q)).toList();
     });
   }
 
@@ -59,13 +79,13 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text("key_059d".tr(), style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+        Text("key_059d".tr(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
         const SizedBox(height: 12),
         TextField(
           decoration: InputDecoration(
             hintText: "key_063".tr(),
-            prefixIcon: Icon(Icons.search),
-            border: OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+            prefixIcon: const Icon(Icons.search),
+            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
           ),
           onChanged: (val) {
             _query = val;
@@ -106,11 +126,11 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
                         children: [
                           CircleAvatar(
                             radius: 30,
-                            backgroundImage: group.photoUrl != null
+                            backgroundImage: (group.photoUrl != null && group.photoUrl!.isNotEmpty)
                                 ? NetworkImage(group.photoUrl!)
                                 : null,
                             backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                            child: group.photoUrl == null
+                            child: (group.photoUrl == null || group.photoUrl!.isEmpty)
                                 ? const Icon(Icons.group, size: 28, color: Colors.white)
                                 : null,
                           ),

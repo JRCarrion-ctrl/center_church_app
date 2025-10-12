@@ -1,9 +1,14 @@
+// File: lib/features/groups/pages/manage_members_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../group_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+
+import '../../../core/graph_provider.dart';          // Hasura GraphQLClient
+import '../../../app_state.dart';            // AppState for current user id
+import '../group_service.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
@@ -16,15 +21,24 @@ class ManageMembersPage extends StatefulWidget {
 
 class _ManageMembersPageState extends State<ManageMembersPage> {
   late Future<List<Map<String, dynamic>>> _futureMembers;
+  late GroupService _groups;
+  late GraphQLClient _gql;
+  bool _inited = false;
 
   @override
-  void initState() {
-    super.initState();
-    _futureMembers = GroupService().getGroupMembers(widget.groupId);
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inited) return;
+    _inited = true;
+    _gql = GraphProvider.of(context);
+    _groups = GroupService(_gql);
+    _futureMembers = _groups.getGroupMembers(widget.groupId);
   }
 
   @override
   Widget build(BuildContext context) {
+    final myUserId = context.watch<AppState>().profile?.id; // text id
+
     return Scaffold(
       appBar: AppBar(title: Text("key_144".tr())),
       body: SingleChildScrollView(
@@ -48,16 +62,17 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("key_145".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("key_145".tr(),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
-                    ...members.map((m) => _buildMemberTile(m)),
+                    ...members.map((m) => _buildMemberTile(m, myUserId)),
                   ],
                 );
               },
             ),
             const SizedBox(height: 32),
             FutureBuilder<List<Map<String, dynamic>>>(
-              future: GroupService().getGroupJoinRequests(widget.groupId),
+              future: _groups.getGroupJoinRequests(widget.groupId),
               builder: (context, snapshot) {
                 if (snapshot.connectionState != ConnectionState.done) {
                   return const SizedBox();
@@ -69,7 +84,8 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text("key_146a".tr(), style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    Text("key_146a".tr(),
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 8),
                     ...pending.map((m) => _buildPendingTile(m)),
                   ],
@@ -82,11 +98,11 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     );
   }
 
-  Widget _buildMemberTile(Map<String, dynamic> member) {
-    final isCurrentUser = Supabase.instance.client.auth.currentUser?.id == member['user_id'];
+  Widget _buildMemberTile(Map<String, dynamic> member, String? myUserId) {
+    final isCurrentUser = (myUserId != null && myUserId == member['user_id']);
     final photoUrl = member['photo_url'] != null
-      ? '${member['photo_url']}?t=${DateTime.now().millisecondsSinceEpoch}'
-      : null;
+        ? '${member['photo_url']}?t=${DateTime.now().millisecondsSinceEpoch}'
+        : null;
 
     return ListTile(
       leading: CircleAvatar(
@@ -103,9 +119,14 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       onLongPress: () async {
         if (isCurrentUser) return;
 
-        final myRole = await GroupService().getMyGroupRole(widget.groupId);
+        // If your service now requires userId, pass it:
+        final myRole = await _groups.getMyGroupRole(
+          groupId: widget.groupId,
+          userId: myUserId, // text id (nullable ok if your service handles it)
+        );
+
         final targetRole = member['role'] as String;
-        final targetId = member['user_id'];
+        final targetId = member['user_id'] as String;
 
         final roleHierarchy = {
           'member': 1,
@@ -153,9 +174,9 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
             ),
           );
           if (confirm == true) {
-            await GroupService().removeMember(widget.groupId, targetId);
+            await _groups.removeMember(widget.groupId, targetId);
             if (!mounted) return;
-            final updated = await GroupService().getGroupMembers(widget.groupId);
+            final updated = await _groups.getGroupMembers(widget.groupId);
             if (!mounted) return;
             setState(() {
               _futureMembers = Future.value(updated);
@@ -165,9 +186,9 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
             );
           }
         } else if (selected == 'promote') {
-          await GroupService().setMemberRole(widget.groupId, targetId, 'admin');
+          await _groups.setMemberRole(widget.groupId, targetId, 'admin');
           if (!mounted) return;
-          final updated = await GroupService().getGroupMembers(widget.groupId);
+          final updated = await _groups.getGroupMembers(widget.groupId);
           if (!mounted) return;
           setState(() {
             _futureMembers = Future.value(updated);
@@ -176,9 +197,9 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
             SnackBar(content: Text('${member['display_name']} promoted to admin')),
           );
         } else if (selected == 'demote') {
-          await GroupService().setMemberRole(widget.groupId, targetId, 'member');
+          await _groups.setMemberRole(widget.groupId, targetId, 'member');
           if (!mounted) return;
-          final updated = await GroupService().getGroupMembers(widget.groupId);
+          final updated = await _groups.getGroupMembers(widget.groupId);
           if (!mounted) return;
           setState(() {
             _futureMembers = Future.value(updated);
@@ -192,7 +213,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   }
 
   Widget _buildPendingTile(Map<String, dynamic> member) {
-    final photoUrl = member['photo_url'];
+    final photoUrl = member['photo_url'] as String?;
 
     return Card(
       child: ListTile(
@@ -209,33 +230,84 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
+            // Approve
             IconButton(
               icon: const Icon(Icons.check, color: Colors.green),
               tooltip: 'Approve',
               onPressed: () async {
-                await Supabase.instance.client.from('group_memberships').insert({
-                  'group_id': widget.groupId,
-                  'user_id': member['user_id'],
-                  'role': 'member',
-                  'status': 'approved',
-                  'joined_at': DateTime.now().toUtc().toIso8601String(),
-                });
-                await Supabase.instance.client
-                  .from('group_requests')
-                  .delete()
-                  .eq('group_id', widget.groupId)
-                  .eq('user_id', member['user_id']);
+                // Insert membership, then delete request (Hasura)
+                const m = r'''
+                  mutation Approve($gid: uuid!, $uid: String!, $joinedAt: timestamptz!) {
+                    insert_group_memberships_one(
+                      object: {
+                        group_id: $gid,
+                        user_id: $uid,
+                        role: "member",
+                        status: "approved",
+                        joined_at: $joinedAt
+                      }
+                      on_conflict: {
+                        constraint: group_memberships_pkey,
+                        update_columns: [role, status, joined_at]
+                      }
+                    ) { group_id }
+                    delete_group_requests(
+                      where: { group_id: { _eq: $gid }, user_id: { _eq: $uid } }
+                    ) { affected_rows }
+                  }
+                ''';
+                try {
+                  await _gql.mutate(MutationOptions(
+                    document: gql(m),
+                    variables: {
+                      'gid': widget.groupId,
+                      'uid': member['user_id'] as String,
+                      'joinedAt': DateTime.now().toUtc().toIso8601String(),
+                    },
+                  ));
+                  // refresh lists
+                  final updated = await _groups.getGroupMembers(widget.groupId);
+                  if (!mounted) return;
+                  setState(() {
+                    _futureMembers = Future.value(updated);
+                  });
+                  // Let the pending list FutureBuilder re-run by setState
+                  setState(() {});
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Approve failed: $e')),
+                  );
+                }
               },
             ),
+            // Deny
             IconButton(
               icon: const Icon(Icons.close, color: Colors.red),
               tooltip: 'Deny',
               onPressed: () async {
-                await Supabase.instance.client
-                  .from('group_requests')
-                  .delete()
-                  .eq('group_id', widget.groupId)
-                  .eq('user_id', member['user_id']);
+                const m = r'''
+                  mutation Deny($gid: uuid!, $uid: String!) {
+                    delete_group_requests(
+                      where: { group_id: { _eq: $gid }, user_id: { _eq: $uid } }
+                    ) { affected_rows }
+                  }
+                ''';
+                try {
+                  await _gql.mutate(MutationOptions(
+                    document: gql(m),
+                    variables: {
+                      'gid': widget.groupId,
+                      'uid': member['user_id'] as String,
+                    },
+                  ));
+                  setState(() {}); // triggers pending FutureBuilder rebuild
+                } catch (e) {
+                  if (!mounted) return;
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Deny failed: $e')),
+                  );
+                }
               },
             ),
           ],

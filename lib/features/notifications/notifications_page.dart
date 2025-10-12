@@ -1,8 +1,14 @@
+// File: lib/features/notifications/notifications_page.dart
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ccf_app/core/time_service.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:gql/ast.dart' show DocumentNode; // ⬅️ add this
+
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/core/time_service.dart';
+import 'package:ccf_app/routes/router_observer.dart';
 
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
@@ -25,6 +31,7 @@ class NotificationsPage extends StatelessWidget {
                     final tabIndex = DefaultTabController.of(context).index;
                     final isApp = tabIndex == 0;
                     await _NotificationsTab.markAllAsRead(
+                      context,
                       typeFilter: isApp ? 'app' : 'group',
                     );
 
@@ -60,37 +67,53 @@ class _NotificationsTab extends StatefulWidget {
   final String typeFilter; // 'app' or 'group'
   const _NotificationsTab({required this.typeFilter});
 
-  static Future<void> markAllAsRead({required String typeFilter}) async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
+  /// Marks all unread as read for the current user, filtered by type.
+  static Future<void> markAllAsRead(BuildContext context, {required String typeFilter}) async {
+    final gql = GraphQLProvider.of(context).value;
+    final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
 
-    final result = await supabase
-      .from('outgoing_notifications')
-      .select('id, type')
-      .eq('user_id', userId)
-      .eq('status', 'sent');
+    // Two variants: group_* vs not group_*
+    const mGroup = r'''
+      mutation MarkAllGroupAsRead($uid: String!, $now: timestamptz!) {
+        update_outgoing_notifications(
+          where: {
+            user_id: { _eq: $uid },
+            status: { _eq: "sent" },
+            read_at: { _is_null: true },
+            type: { _like: "group_%" }
+          },
+          _set: { read_at: $now }
+        ) { affected_rows }
+      }
+    ''';
 
-    final filtered = result.where((n) => n['read_at'] == null).toList();
+    const mApp = r'''
+      mutation MarkAllAppAsRead($uid: String!, $now: timestamptz!) {
+        update_outgoing_notifications(
+          where: {
+            user_id: { _eq: $uid },
+            status: { _eq: "sent" },
+            read_at: { _is_null: true },
+            _not: { type: { _like: "group_%" } }
+          },
+          _set: { read_at: $now }
+        ) { affected_rows }
+      }
+    ''';
 
-    final idsToUpdate = filtered
-      .where((n) {
-        final type = n['type'] as String?;
-        return typeFilter == 'app'
-            ? !(type?.startsWith('group_') ?? false)
-            : (type?.startsWith('group_') ?? false);
-      })
-      .map((n) => n['id'] as String)
-      .toList();
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    final doc = gqlClientDoc(typeFilter == 'group' ? mGroup : mApp);
 
-    if (idsToUpdate.isEmpty) return;
-
-    // Perform update per ID if `.in_()` isn't available
-    for (final id in idsToUpdate) {
-      await supabase
-          .from('outgoing_notifications')
-          .update({'read_at': DateTime.now().toIso8601String()})
-          .eq('id', id);
+    final res = await gql.mutate(
+      MutationOptions(
+        document: doc,
+        variables: {'uid': userId, 'now': nowIso},
+      ),
+    );
+    if (res.hasException) {
+      // Soft-fail to mirror original behavior; optionally show a toast.
+      debugPrint('markAllAsRead error: ${res.exception}');
     }
   }
 
@@ -98,45 +121,140 @@ class _NotificationsTab extends StatefulWidget {
   State<_NotificationsTab> createState() => _NotificationsTabState();
 }
 
-class _NotificationsTabState extends State<_NotificationsTab> {
+class _NotificationsTabState extends State<_NotificationsTab> with RouteAware {
   List<Map<String, dynamic>> notifications = [];
   bool loading = true;
-
-  Future<void> fetchNotifications() async {
-    final supabase = Supabase.instance.client;
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
-
-    final result = await supabase
-        .from('outgoing_notifications')
-        .select('id, title, body, scheduled_at, read_at, data, type')
-        .match({
-          'user_id': userId,
-          'status': 'sent',
-        })
-        .order('scheduled_at', ascending: false);
-
-    final filtered = result.where((n) {
-      final type = n['type'] as String?;
-      if (widget.typeFilter == 'app') {
-        return !(type?.startsWith('group_') ?? false);
-      } else {
-        return type?.startsWith('group_') ?? false;
-      }
-    }).toList();
-
-    if (mounted) {
-      setState(() {
-        notifications = filtered;
-        loading = false;
-      });
-    }
-  }
 
   @override
   void initState() {
     super.initState();
     fetchNotifications();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    fetchNotifications();
+  }
+
+  Future<void> fetchNotifications() async {
+    final gql = GraphQLProvider.of(context).value;
+    final userId = context.read<AppState>().profile?.id;
+    if (userId == null) {
+      if (mounted) setState(() => loading = false);
+      return;
+    }
+
+    // Fetch only the tab’s slice to avoid client-side filtering
+    const qGroup = r'''
+      query MyGroupNotifications($uid: String!) {
+        outgoing_notifications(
+          where: {
+            user_id: { _eq: $uid },
+            status: { _eq: "sent" },
+            type: { _like: "group_%" }
+          },
+          order_by: { scheduled_at: desc }
+        ) {
+          id
+          title
+          body
+          scheduled_at
+          read_at
+          data
+          type
+        }
+      }
+    ''';
+
+    const qApp = r'''
+      query MyAppNotifications($uid: String!) {
+        outgoing_notifications(
+          where: {
+            user_id: { _eq: $uid },
+            status: { _eq: "sent" },
+            _not: { type: { _like: "group_%" } }
+          },
+          order_by: { scheduled_at: desc }
+        ) {
+          id
+          title
+          body
+          scheduled_at
+          read_at
+          data
+          type
+        }
+      }
+    ''';
+
+    final doc = gqlClientDoc(widget.typeFilter == 'group' ? qGroup : qApp);
+
+    try {
+      final res = await gql.query(
+        QueryOptions(
+          document: doc,
+          variables: {'uid': userId},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+
+      if (res.hasException) {
+        debugPrint('fetchNotifications error: ${res.exception}');
+        if (mounted) setState(() => loading = false);
+        return;
+      }
+
+      final rows = (res.data?['outgoing_notifications'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      if (mounted) {
+        setState(() {
+          notifications = rows;
+          loading = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('fetchNotifications error: $e');
+      if (mounted) setState(() => loading = false);
+    }
+  }
+
+  Future<void> _deleteNotification(String id) async {
+    final gql = GraphQLProvider.of(context).value;
+
+    const m = r'''
+      mutation DeleteNotification($id: uuid!) {
+        delete_outgoing_notifications_by_pk(id: $id) { id }
+      }
+    ''';
+
+    try {
+      final res = await gql.mutate(
+        MutationOptions(document: gqlClientDoc(m), variables: {'id': id}),
+      );
+      if (res.hasException) {
+        debugPrint('delete error: ${res.exception}');
+        return;
+      }
+      await fetchNotifications();
+    } catch (e) {
+      debugPrint('delete error: $e');
+    }
   }
 
   @override
@@ -156,7 +274,7 @@ class _NotificationsTabState extends State<_NotificationsTab> {
         itemBuilder: (context, index) {
           final item = notifications[index];
           return Dismissible(
-            key: Key(item['id']),
+            key: Key(item['id'] as String),
             direction: DismissDirection.endToStart,
             background: Container(
               alignment: Alignment.centerRight,
@@ -178,19 +296,15 @@ class _NotificationsTabState extends State<_NotificationsTab> {
               );
             },
             onDismissed: (_) async {
-              await Supabase.instance.client
-                  .from('outgoing_notifications')
-                  .delete()
-                  .eq('id', item['id']);
-              await fetchNotifications();
+              await _deleteNotification(item['id'] as String);
             },
             child: _NotificationTile(
-              id: item['id'],
-              title: item['title'] ?? 'Untitled',
-              subtitle: item['body'] ?? '',
-              data: item['data'] as Map<String, dynamic>?,
-              readAt: item['read_at'],
-              scheduledAt: item['scheduled_at'],
+              id: item['id'] as String,
+              title: (item['title'] ?? 'Untitled') as String,
+              subtitle: (item['body'] ?? '') as String,
+              data: item['data'] as Map<String, dynamic>?, // jsonb
+              readAt: item['read_at'] as String?,
+              scheduledAt: item['scheduled_at'] as String?,
               onRead: fetchNotifications,
             ),
           );
@@ -250,3 +364,6 @@ class _NotificationTile extends StatelessWidget {
     );
   }
 }
+
+// Small helper to ensure the doc is created via gql()
+DocumentNode gqlClientDoc(String s) => gql(s);

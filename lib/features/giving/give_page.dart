@@ -1,7 +1,13 @@
+// File: lib/features/give/give_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import '../../shared/widgets/primary_button.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+// If you don't already import intl elsewhere, uncomment the next line.
+// import 'package:intl/intl.dart';
+
+import '../../shared/widgets/primary_button.dart';
+import '../../../app_state.dart';
 
 class GivePage extends StatefulWidget {
   const GivePage({super.key});
@@ -42,45 +48,103 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
 
   late TabController _tabController;
 
+  // GraphQL wiring
+  GraphQLClient? _gql;
+  String? _userId;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _gql ??= GraphQLProvider.of(context).value;
+    _userId ??= context.read<AppState>().profile?.id;
+
+    // Load history once we have user info
     _loadDonationHistory();
   }
 
   Future<void> _loadDonationHistory() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    if (_gql == null || _userId == null) return;
 
-    final response = await Supabase.instance.client
-        .from('donations')
-        .select()
-        .eq('user_id', user.id)
-        .order('created_at', ascending: false);
+    const q = r'''
+      query DonationHistory($uid: String!) {
+        donations(
+          where: { user_id: { _eq: $uid } }
+          order_by: { created_at: desc }
+        ) {
+          amount
+          fund
+          created_at
+        }
+      }
+    ''';
+
+    final res = await _gql!.query(
+      QueryOptions(
+        document: gql(q),
+        variables: {'uid': _userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+
+    if (res.hasException) {
+      // You could log res.exception here
+      return;
+    }
+
+    final rows = (res.data?['donations'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
 
     setState(() {
-      _history.clear();
-      for (var d in response) {
-        _history.add(DonationRecord(
-          amount: (d['amount'] as num).toDouble(),
-          fund: d['fund'] as String,
-          date: DateTime.parse(d['created_at']),
-        ));
-      }
+      _history
+        ..clear()
+        ..addAll(rows.map((d) => DonationRecord(
+              amount: (d['amount'] as num).toDouble(),
+              fund: d['fund'] as String,
+              date: DateTime.parse(d['created_at'] as String),
+            )));
     });
   }
 
-  Future<void> _saveDonationToSupabase(DonationRecord record) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+  Future<void> _saveDonation(DonationRecord record) async {
+    if (_gql == null || _userId == null) return;
 
-    await Supabase.instance.client.from('donations').insert({
-      'user_id': user.id,
-      'amount': record.amount,
-      'fund': record.fund,
-      'is_recurring': _isRecurring,
-    });
+    const m = r'''
+      mutation InsertDonation($user_id: uuid!, $amount: numeric!, $fund: String!, $is_recurring: Boolean!) {
+        insert_donations_one(object: {
+          user_id: $user_id,
+          amount: $amount,
+          fund: $fund,
+          is_recurring: $is_recurring
+        }) { id }
+      }
+    ''';
+
+    final res = await _gql!.mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {
+          'user_id': _userId,
+          'amount': record.amount,
+          'fund': record.fund,
+          'is_recurring': _isRecurring,
+        },
+      ),
+    );
+
+    if (res.hasException) {
+      // surface a friendly error, but don't crash the flow
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("key_043".tr())), // reuse generic error
+        );
+      }
+    }
   }
 
   void _submitDonation() async {
@@ -88,6 +152,7 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
 
     setState(() => _isSubmitting = true);
 
+    // Simulate payment processing (replace with your real gateway)
     await Future.delayed(const Duration(seconds: 2));
 
     setState(() => _isSubmitting = false);
@@ -117,7 +182,7 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
       _history.insert(0, newRecord);
     });
 
-    await _saveDonationToSupabase(newRecord);
+    await _saveDonation(newRecord);
 
     _formKey.currentState!.reset();
     _amountController.clear();
@@ -154,71 +219,84 @@ class _GivePageState extends State<GivePage> with SingleTickerProviderStateMixin
   }
 
   Widget _buildGiveForm() {
+    final loggedIn = _userId != null;
     return Padding(
       padding: const EdgeInsets.all(16.0),
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              DropdownButtonFormField<String>(
-                value: _selectedFund,
-                decoration: InputDecoration(labelText: "key_047b".tr()),
-                items: mockFunds
-                    .map((f) => DropdownMenuItem(value: f, child: Text(f)))
-                    .toList(),
-                onChanged: (value) => setState(() => _selectedFund = value!),
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _amountController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: "key_047c".tr()),
-                validator: (value) =>
-                    (value == null || value.isEmpty) ? "key_047d".tr() : null,
-              ),
-              const SizedBox(height: 16),
-              SwitchListTile(
-                title: Text("key_048".tr()),
-                value: _isRecurring,
-                onChanged: (val) => setState(() => _isRecurring = val),
-              ),
-              const Divider(),
-              TextFormField(
-                controller: _cardNumberController,
-                keyboardType: TextInputType.number,
-                decoration: InputDecoration(labelText: "key_048a".tr()),
-                validator: (value) =>
-                    (value == null || value.length < 12) ? "key_048b".tr() : null,
-              ),
-              Row(
+      child: AbsorbPointer(
+        absorbing: !loggedIn,
+        child: Opacity(
+          opacity: loggedIn ? 1 : 0.6,
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _expiryController,
-                      decoration: const InputDecoration(labelText: 'MM/YY'),
-                      validator: (value) =>
-                          (value == null || value.length < 4) ? "key_048b".tr() : null,
-                    ),
+                  DropdownButtonFormField<String>(
+                    initialValue: _selectedFund,
+                    decoration: InputDecoration(labelText: "key_047b".tr()),
+                    items: mockFunds
+                        .map((f) => DropdownMenuItem(value: f, child: Text(f)))
+                        .toList(),
+                    onChanged: (value) => setState(() => _selectedFund = value!),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _cvcController,
-                      decoration: const InputDecoration(labelText: 'CVC'),
-                      validator: (value) =>
-                          (value == null || value.length < 3) ? "key_048b".tr() : null,
-                    ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: _amountController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: "key_047c".tr()),
+                    validator: (value) =>
+                        (value == null || value.isEmpty) ? "key_047d".tr() : null,
+                  ),
+                  const SizedBox(height: 16),
+                  SwitchListTile(
+                    title: Text("key_048".tr()),
+                    value: _isRecurring,
+                    onChanged: (val) => setState(() => _isRecurring = val),
+                  ),
+                  const Divider(),
+                  TextFormField(
+                    controller: _cardNumberController,
+                    keyboardType: TextInputType.number,
+                    decoration: InputDecoration(labelText: "key_048a".tr()),
+                    validator: (value) =>
+                        (value == null || value.length < 12) ? "key_048b".tr() : null,
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextFormField(
+                          controller: _expiryController,
+                          decoration: const InputDecoration(labelText: 'MM/YY'),
+                          validator: (value) =>
+                              (value == null || value.length < 4) ? "key_048b".tr() : null,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: TextFormField(
+                          controller: _cvcController,
+                          decoration: const InputDecoration(labelText: 'CVC'),
+                          validator: (value) =>
+                              (value == null || value.length < 3) ? "key_048b".tr() : null,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 32),
+                  PrimaryButton(
+                    title: _isSubmitting ? "key_048c".tr() : "key_048d".tr(),
+                    onTap: _isSubmitting
+                        ? () {}
+                        : (loggedIn ? _submitDonation : () {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text("key_037".tr())), // "Please log in" (same key used elsewhere)
+                            );
+                          }),
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
-              PrimaryButton(
-                title: _isSubmitting ? "key_048c".tr() : "key_048d".tr(),
-                onTap: _isSubmitting ? () {} : _submitDonation,
-              ),
-            ],
+            ),
           ),
         ),
       ),

@@ -1,9 +1,16 @@
 // File: lib/features/calendar/widgets/app_event_form_modal.dart
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'dart:io';
+
 import '../models/app_event.dart';
 import '../event_service.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/core/media/presigned_uploader.dart';
+import 'package:ccf_app/core/media/image_picker_field.dart';
 
 /// Modal bottom sheet for creating or editing an AppEvent
 class AppEventFormModal extends StatefulWidget {
@@ -17,7 +24,12 @@ class AppEventFormModal extends StatefulWidget {
 
 class _AppEventFormModalState extends State<AppEventFormModal> {
   final _formKey = GlobalKey<FormState>();
-  final _service = EventService();
+  late EventService _service;           // <-- Hasura-backed service
+  bool _svcReady = false;
+
+  File? _localImageFile;
+  bool _imageRemoved = false;
+  String? _imageUrl; // existing when editing
 
   late TextEditingController _titleController;
   late TextEditingController _descController;
@@ -33,6 +45,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     _titleController = TextEditingController(text: ev?.title ?? '');
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
+    _imageUrl = widget.existing?.imageUrl;
     if (ev != null) {
       final local = ev.eventDate.toLocal();
       _selectedDate = DateTime(local.year, local.month, local.day);
@@ -41,9 +54,21 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_svcReady) {
+      final client = GraphQLProvider.of(context).value;
+      final userId = context.read<AppState>().profile?.id;
+      _service = EventService(client, currentUserId: userId);
+      _svcReady = true;
+    }
+  }
+
+  @override
   void dispose() {
     _titleController.dispose();
     _descController.dispose();
+    _locationController.dispose();
     super.dispose();
   }
 
@@ -67,14 +92,32 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
   }
 
   Future<void> _save() async {
+    if (!_svcReady) return;
+
+    String? finalImageUrl = _imageUrl;
     if (!_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
-      if (mounted){ ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("key_040".tr())));}
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("key_040".tr())));
+      }
       return;
     }
 
+    // Handle image upload/delete
+    if (_imageRemoved && _localImageFile == null) {
+      finalImageUrl = null;
+    } else if (_localImageFile != null) {
+      final logicalId = widget.existing?.id ?? 'new';
+      finalImageUrl = await PresignedUploader.upload(
+        file: _localImageFile!,
+        keyPrefix: 'app_events',
+        logicalId: logicalId,
+      );
+    }
+
     setState(() => _saving = true);
+
     final dt = DateTime(
       _selectedDate!.year,
       _selectedDate!.month,
@@ -88,7 +131,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       eventDate: dt.toUtc(),
-      imageUrl: widget.existing?.imageUrl,
+      imageUrl: finalImageUrl,
       location: _locationController.text.trim(),
     );
 
@@ -97,8 +140,10 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
-      if (mounted){ ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("key_041".tr())));}
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text("key_041".tr())));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -130,6 +175,17 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                   controller: _descController,
                   decoration: InputDecoration(labelText: "key_041d".tr()),
                   maxLines: 2,
+                ),
+                const SizedBox(height: 12),
+                ImagePickerField(
+                  label: "key_041d2".tr(),
+                  initialUrl: _imageUrl,
+                  onChanged: (file, removed) {
+                    setState(() {
+                      _localImageFile = file;
+                      _imageRemoved = removed;
+                    });
+                  },
                 ),
                 TextFormField(
                   controller: _locationController,

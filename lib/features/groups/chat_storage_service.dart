@@ -1,55 +1,91 @@
 // File: lib/features/groups/chat_storage_service.dart
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:path/path.dart' as p;
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:uuid/uuid.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
+import 'package:uuid/uuid.dart';
 
 class ChatStorageService {
-  final _client = Supabase.instance.client;
+  final GraphQLClient _client;
+  ChatStorageService(this._client);
 
   Future<String> uploadFile(File file, String groupId) async {
     try {
-      final filename = 'group/$groupId/${Uuid().v4()}_${p.basename(file.path)}';
-      final fileBytes = await file.readAsBytes();
+      // Build storage path (namespaced by group)
+      final filename = 'group/$groupId/${const Uuid().v4()}_${p.basename(file.path)}';
+      final bytes = await file.readAsBytes();
+      final contentType = _detectContentType(file.path);
 
-      // 1. Request presigned URL from Supabase Edge Function
-      final response = await _client.functions.invoke('generate-presigned-url', body: {
-        'filename': filename,
-        'contentType': 'application/octet-stream', // or detect
-      });
+      // 1) Ask Hasura Action to presign an S3 upload (replace with your action name/shape if needed)
+      // TODO: Get presigned upload hasura action
+      const mPresign = r'''
+        mutation PresignUpload($path: String!, $contentType: String!) {
+          get_presigned_upload(path: $path, contentType: $contentType) {
+            uploadUrl
+            finalUrl
+          }
+        }
+      ''';
 
-      debugPrint('📥 Edge Function raw response: ${response.data}');
-
-      final data = response.data;
-      final uploadUrl = data['uploadUrl'];
-      final finalUrl = data['finalUrl'];
-
-      if (uploadUrl == null || finalUrl == null) {
-        throw Exception('Invalid presigned URL response');
-      }
-
-      // 2. Upload to AWS S3 using presigned URL
-      final uploadRes = await http.put(
-        Uri.parse(uploadUrl),
-        headers: {
-          HttpHeaders.contentTypeHeader: 'application/octet-stream',
-        },
-        body: fileBytes,
+      final presignRes = await _client.mutate(
+        MutationOptions(
+          document: gql(mPresign),
+          variables: {'path': filename, 'contentType': contentType},
+          fetchPolicy: FetchPolicy.noCache,
+        ),
       );
-
-      if (uploadRes.statusCode != 200) {
-        debugPrint('❌ Failed to upload to S3: ${uploadRes.body}');
-        throw Exception('S3 upload failed with status: ${uploadRes.statusCode}');
+      if (presignRes.hasException) {
+        throw Exception('Presign failed: ${presignRes.exception}');
       }
 
-      debugPrint('✅ File uploaded to S3: $finalUrl');
+      final payload = presignRes.data?['get_presigned_upload'] as Map<String, dynamic>?;
+      final uploadUrl = payload?['uploadUrl'] as String?;
+      final finalUrl  = payload?['finalUrl']  as String?;
+      if (uploadUrl == null || finalUrl == null) {
+        throw Exception('Invalid presign response');
+      }
+
+      // 2) Upload to S3 with the presigned URL
+      final put = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {HttpHeaders.contentTypeHeader: contentType},
+        body: bytes,
+      );
+      if (put.statusCode != 200 && put.statusCode != 204) {
+        debugPrint('❌ S3 upload failed: ${put.statusCode} ${put.body}');
+        throw Exception('S3 upload failed (${put.statusCode})');
+      }
+
+      debugPrint('✅ Uploaded to $finalUrl');
       return finalUrl;
-    } catch (e, stack) {
-      debugPrint('❌ Upload error: $e');
-      debugPrint(stack.toString());
+    } catch (e, st) {
+      debugPrint('❌ ChatStorageService.uploadFile error: $e');
+      debugPrint(st.toString());
       rethrow;
+    }
+  }
+
+  String _detectContentType(String path) {
+    final ext = p.extension(path).toLowerCase();
+    switch (ext) {
+      case '.jpg':
+      case '.jpeg':
+        return 'image/jpeg';
+      case '.png':
+        return 'image/png';
+      case '.webp':
+        return 'image/webp';
+      case '.gif':
+        return 'image/gif';
+      case '.mp4':
+        return 'video/mp4';
+      case '.mov':
+        return 'video/quicktime';
+      case '.pdf':
+        return 'application/pdf';
+      default:
+        return 'application/octet-stream';
     }
   }
 }

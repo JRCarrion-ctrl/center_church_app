@@ -1,6 +1,10 @@
+// File: lib/features/more/pages/bible_study_requests_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/app_state.dart';
 
 class BibleStudyRequestsPage extends StatefulWidget {
   const BibleStudyRequestsPage({super.key});
@@ -10,7 +14,6 @@ class BibleStudyRequestsPage extends StatefulWidget {
 }
 
 class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
-  final supabase = Supabase.instance.client;
   List<Map<String, dynamic>> requests = [];
   bool isLoading = true;
   String? error;
@@ -27,17 +30,50 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
       error = null;
     });
 
+    final client = GraphQLProvider.of(context).value;
+
+    // Assumes object relationships:
+    //   bible_study_access_requests.user -> profiles (by user_id)
+    //   bible_study_access_requests.study -> bible_studies (by bible_study_id)
+    const q = r'''
+      query ListBibleStudyRequests {
+        bible_study_access_requests(order_by: {created_at: desc}) {
+          id
+          status
+          created_at
+          reason
+          user_id
+          reviewed_by
+          user { display_name }
+          study { title }
+        }
+      }
+    ''';
+
     try {
-      final result = await supabase
-          .from('bible_study_access_requests')
-          .select('*, user:profiles!bible_study_access_requests_user_id_fkey(display_name), study:bible_studies!bible_study_access_requests_bible_study_id_fkey(title)')
-          .order('created_at', ascending: false);
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+      if (res.hasException) {
+        setState(() {
+          error = 'Failed to load requests';
+          isLoading = false;
+        });
+        return;
+      }
+
+      final rows =
+          (res.data?['bible_study_access_requests'] as List<dynamic>? ?? [])
+              .cast<Map<String, dynamic>>();
 
       setState(() {
-        requests = List<Map<String, dynamic>>.from(result);
+        requests = rows;
         isLoading = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() {
         error = 'Failed to load requests';
         isLoading = false;
@@ -46,21 +82,50 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
   }
 
   Future<void> _respondToRequest(String id, bool approve) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    final client = GraphQLProvider.of(context).value;
+    final reviewerId = context.read<AppState>().profile?.id;
+    if (reviewerId == null) return;
 
-    await supabase.from('bible_study_access_requests').update({
-      'status': approve ? 'approved' : 'denied',
-      'reviewed_by': userId,
-    }).eq('id', id);
+    const m = r'''
+      mutation RespondToRequest($id: uuid!, $status: String!, $reviewedBy: uuid!) {
+        update_bible_study_access_requests_by_pk(
+          pk_columns: {id: $id},
+          _set: { status: $status, reviewed_by: $reviewedBy }
+        ) { id }
+      }
+    ''';
 
-    _loadRequests();
+    try {
+      final res = await client.mutate(
+        MutationOptions(
+          document: gql(m),
+          variables: {
+            'id': id,
+            'status': approve ? 'approved' : 'denied',
+            'reviewedBy': reviewerId,
+          },
+        ),
+      );
+      if (res.hasException) {
+        // Soft-fail and show a toast
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed: ${res.exception}')),
+        );
+        return;
+      }
 
-    if (!context.mounted) return;
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(approve ? "key_249a".tr() : "key_249b".tr()),
-    ));
+      await _loadRequests();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(approve ? "key_249a".tr() : "key_249b".tr())),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed: $e')),
+      );
+    }
   }
 
   @override
@@ -73,41 +138,44 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
               ? Center(child: Text(error!))
               : requests.isEmpty
                   ? Center(child: Text("key_250".tr()))
-                  : ListView.builder(
-                      itemCount: requests.length,
-                      itemBuilder: (context, index) {
-                        final req = requests[index];
-                        final user = req['user'];
-                        final study = req['study'];
-                        final status = req['status'];
+                  : RefreshIndicator(
+                      onRefresh: _loadRequests,
+                      child: ListView.builder(
+                        itemCount: requests.length,
+                        itemBuilder: (context, index) {
+                          final req = requests[index];
+                          final user = req['user'] as Map<String, dynamic>?;
+                          final study = req['study'] as Map<String, dynamic>?;
+                          final status = (req['status'] as String?) ?? 'pending';
 
-                        return Card(
-                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: ListTile(
-                            title: Text('${user?['display_name'] ?? 'Unknown'} → ${study?['title'] ?? 'Untitled'}'),
-                            trailing: status == 'pending'
-                                ? Wrap(
-                                    spacing: 8,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.check, color: Colors.green),
-                                        onPressed: () => _respondToRequest(req['id'], true),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.close, color: Colors.red),
-                                        onPressed: () => _respondToRequest(req['id'], false),
-                                      ),
-                                    ],
-                                  )
-                                : Chip(
-                                    label: Text(status),
-                                    backgroundColor: status == 'approved'
-                                        ? Colors.green.shade100
-                                        : Colors.red.shade100,
-                                  ),
-                          ),
-                        );
-                      },
+                          return Card(
+                            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: ListTile(
+                              title: Text('${user?['display_name'] ?? 'Unknown'} → ${study?['title'] ?? 'Untitled'}'),
+                              trailing: status == 'pending'
+                                  ? Wrap(
+                                      spacing: 8,
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.check, color: Colors.green),
+                                          onPressed: () => _respondToRequest(req['id'] as String, true),
+                                        ),
+                                        IconButton(
+                                          icon: const Icon(Icons.close, color: Colors.red),
+                                          onPressed: () => _respondToRequest(req['id'] as String, false),
+                                        ),
+                                      ],
+                                    )
+                                  : Chip(
+                                      label: Text(status),
+                                      backgroundColor: status == 'approved'
+                                          ? Colors.green.shade100
+                                          : Colors.red.shade100,
+                                    ),
+                            ),
+                          );
+                        },
+                      ),
                     ),
     );
   }

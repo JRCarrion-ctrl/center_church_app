@@ -1,69 +1,37 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-
-import 'profile_service.dart';
 import '../../app_state.dart';
-import '../splash/splash_screen.dart'; // You’ll create this next
+import 'login.dart';
 
-class AuthGate extends StatefulWidget {
+class AuthGate extends StatelessWidget {
   final Widget child;
-
-  const AuthGate({super.key, required this.child});
-
-  @override
-  State<AuthGate> createState() => _AuthGateState();
-}
-
-class _AuthGateState extends State<AuthGate> {
-  StreamSubscription<AuthState>? _authSubscription;
-  bool _isLoading = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _authSubscription =
-        Supabase.instance.client.auth.onAuthStateChange.listen(_handleAuthChange);
-
-    _loadProfile(); // initial
-  }
-
-  Future<void> _loadProfile() async {
-    final session = Supabase.instance.client.auth.currentSession;
-    final user = session?.user;
-
-    try {
-      final profile = user != null
-          ? await ProfileService().getProfile(user.id)
-          : null;
-      if (mounted) {
-        context.read<AppState>().setProfile(profile);
-      }
-    } catch (e) {
-      debugPrint('AuthGate: Failed to load profile – $e');
-    }
-
-    if (mounted) setState(() => _isLoading = false);
-  }
-
-  Future<void> _handleAuthChange(AuthState data) async {
-    setState(() => _isLoading = true);
-    await _loadProfile();
-  }
-
-  @override
-  void dispose() {
-    _authSubscription?.cancel();
-    super.dispose();
-  }
+  final bool requireMember; // if false, just passes through
+  const AuthGate({super.key, required this.child, this.requireMember = true});
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const SplashScreen(); // Replace with your custom screen
-    }
+    final app = context.watch<AppState>();
+    if (!requireMember) return child;
 
-    return widget.child;
+    if (app.isAuthenticated) return child;
+
+    return Center(
+      child: ElevatedButton(
+        onPressed: () async {
+          await showDialog(
+            context: context,
+            barrierDismissible: true,
+            builder: (_) => const Dialog(
+              insetPadding: EdgeInsets.all(24),
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: LoginSheet(),
+              ),
+            ),
+          );
+        },
+        child: const Text('Sign in to continue'),
+      ),
+    );
   }
 }

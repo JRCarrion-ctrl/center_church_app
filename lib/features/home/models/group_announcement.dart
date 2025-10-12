@@ -18,12 +18,12 @@ class GroupAnnouncement {
 
   factory GroupAnnouncement.fromMap(Map<String, dynamic> map) {
     return GroupAnnouncement(
-      id: map['id'],
-      groupId: map['group_id'],
-      title: map['title'],
-      body: map['body'],
-      imageUrl: map['image_url'],
-      publishedAt: DateTime.parse(map['published_at']),
+      id: map['id'] as String,
+      groupId: map['group_id'] as String,
+      title: map['title'] as String,
+      body: map['body'] as String?,
+      imageUrl: map['image_url'] as String?,
+      publishedAt: DateTime.parse(map['published_at'] as String),
     );
   }
 }

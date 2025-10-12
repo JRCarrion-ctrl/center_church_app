@@ -1,30 +1,41 @@
-// File: lib/app_state.dart
+// file: lib/app_state.dart
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_native_timezone_latest/flutter_native_timezone_latest.dart';
 import 'package:logger/logger.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:jwt_decoder/jwt_decoder.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+
+import 'features/auth/oidc_auth.dart';
+import 'core/hasura_client.dart';
 
 import 'features/auth/profile.dart';
-import 'features/auth/profile_service.dart';
 import 'features/groups/group_service.dart';
 import 'features/groups/models/group_model.dart';
 import 'shared/user_roles.dart';
 
 class AppState extends ChangeNotifier {
-  // Core State
+  // --- Core ---
   final _logger = Logger();
   final _authChangeNotifier = ValueNotifier<int>(0);
   final _authStreamController = StreamController<void>.broadcast();
+  
+  // Use a single GraphQLClient and update it.
+  GraphQLClient? _client;
+  GraphQLClient get client => _client ?? buildPublicHasuraClient();
+
+  GroupService? _groups;
+  GroupService get groupService => _groups ??= GroupService(client);
 
   bool _initialized = false;
   bool _isLoading = true;
   String? _timezone;
 
-  // UI State
+  // --- UI ---
   int _selectedIndex = 0;
   int _previousTabIndex = 2;
   int _currentTabIndex = 2;
@@ -32,18 +43,18 @@ class AppState extends ChangeNotifier {
   String _languageCode = 'en';
   double _fontScale = 1.0;
 
-  // Feature Toggles
+  // --- Feature Toggles ---
   bool _showCountdown = true;
   bool _showGroupAnnouncements = true;
   bool _wifiOnlyMediaDownload = true;
   bool get wifiOnlyMediaDownload => _wifiOnlyMediaDownload;
 
-  // Profile & Group Data
+  // --- Profile & Groups ---
   Profile? _profile;
   List<GroupModel> _userGroups = [];
   List<String> _visibleCalendarGroupIds = [];
 
-  // Getters
+  // --- Getters ---
   bool get isInitialized => _initialized && !_isLoading;
   bool get isLoading => _isLoading;
   int get selectedIndex => _selectedIndex;
@@ -68,66 +79,53 @@ class AppState extends ChangeNotifier {
     _init();
   }
 
-  void _init() async {
+  // --- Boot ---
+  Future<void> _init() async {
     if (_initialized) return;
     _initialized = true;
     _setLoading(true);
 
-    await Future.wait([
-      _loadTheme(),
-      _loadAnnouncementSettings(),
-      _loadCachedProfile(),
-      _loadLanguage(),
-      _loadFontScale(),
-      _loadVisibleCalendarGroupIds(),
-      _loadWifiOnlyMediaDownload(),
-    ]);
+    try {
+      await Future.wait([
+        _loadPrefs(),
+        _loadCachedProfile(),
+        loadTimezone(),
+      ]);
 
-    Supabase.instance.client.auth.onAuthStateChange.listen((_) => restoreSession());
-    await restoreSession();
-    _setLoading(false);
+      await restoreSession();
+
+    } catch (e, st) {
+      _logger.e('App state initialization failed', error: e, stackTrace: st);
+    } finally {
+      _setLoading(false);
+    }
   }
-
-  // Initialization Helpers
+  
+  // --- Helpers ---
   Future<void> loadTimezone() async {
     try {
       _timezone = await FlutterNativeTimezoneLatest.getLocalTimezone();
-    } catch (e, stackTrace) {
-      _logger.e('Failed to get timezone', error: e, stackTrace: stackTrace);
+    } catch (e, st) {
+      _logger.e('Failed to get timezone', error: e, stackTrace: st);
       _timezone = 'UTC';
     } finally {
       notifyListeners();
     }
   }
 
-  Future<void> _loadWifiOnlyMediaDownload() async {
+  Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
     _wifiOnlyMediaDownload = prefs.getBool('wifiOnlyMediaDownload') ?? true;
-  }
-
-  Future<void> _loadLanguage() async {
-    final prefs = await SharedPreferences.getInstance();
     _languageCode = prefs.getString('language_code') ?? 'en';
-  }
-
-  Future<void> _loadTheme() async {
-    final prefs = await SharedPreferences.getInstance();
-    final stored = prefs.getString('theme_mode');
+    final storedTheme = prefs.getString('theme_mode');
     _themeMode = ThemeMode.values.firstWhere(
-      (e) => e.name == stored,
+      (e) => e.name == storedTheme,
       orElse: () => ThemeMode.system,
     );
-  }
-
-  Future<void> _loadFontScale() async {
-    final prefs = await SharedPreferences.getInstance();
     _fontScale = prefs.getDouble('font_scale') ?? 1.0;
-  }
-
-  Future<void> _loadAnnouncementSettings() async {
-    final prefs = await SharedPreferences.getInstance();
     _showCountdown = prefs.getBool('showCountdown') ?? true;
     _showGroupAnnouncements = prefs.getBool('showGroupAnnouncements') ?? true;
+    _visibleCalendarGroupIds = prefs.getStringList('visibleCalendarGroupIds') ?? [];
   }
 
   Future<void> _loadCachedProfile() async {
@@ -139,39 +137,129 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> _loadVisibleCalendarGroupIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    _visibleCalendarGroupIds = prefs.getStringList('visibleCalendarGroupIds') ?? [];
+  // --- Session lifecycle ---
+  Future<void> _setClient(GraphQLClient? newClient) async {
+    _client = newClient;
+    _groups = null; // Reset group service to use new client
+    notifyListeners();
   }
 
-  // Session
   Future<void> restoreSession() async {
+    _logger.i('Starting restoreSession');
     try {
-      final user = Supabase.instance.client.auth.currentUser;
-      if (user != null) {
-        final profile = await ProfileService().getProfile(user.id);
-        _setProfile(profile);
-        await _cacheProfile(profile);
-        await loadUserGroups();
-        await updateOneSignalUser(); // centralized OneSignal sync
-      } else {
-        _setProfile(null);
-        await _cacheProfile(null);
-        await updateOneSignalUser(); // will call logout
+      await OidcAuth.refreshIfNeeded();
+      final access = await OidcAuth.readAccessToken();
+      final idTok  = await OidcAuth.readIdToken();
+
+      if (access == null || access.isEmpty) {
+        await _clearSessionData();
+        return;
       }
-    } catch (e) {
-      debugPrint('Failed to restore session: $e');
-      _setProfile(null);
+
+      final claims = JwtDecoder.decode(access);
+      final hasuraClaims = claims['hasura_claims'] as Map<String, dynamic>?;
+
+      if (hasuraClaims == null) {
+          throw Exception("JWT is missing nested 'hasura_claims' object.");
+      }
+
+      final userId = (hasuraClaims['x-hasura-user-id'] as String?) ?? (claims['sub'] as String?);
+      final defaultRole = (hasuraClaims['x-hasura-default-role'] as String?) ?? 'member';
+      if (userId == null || userId.isEmpty) {
+        throw Exception('JWT missing x-hasura-user-id / sub');
+      }
+
+      String? displayName;
+      if (idTok != null && idTok.isNotEmpty) {
+        try {
+          final idc = JwtDecoder.decode(idTok);
+          displayName = (idc['name'] as String?) ?? (idc['given_name'] as String?);
+        } catch (e) {
+          _logger.w('Failed to decode ID token: $e');
+        }
+      }
+
+      final tempClient = await makeHasuraClient();
+
+      const mUpsert = r'''
+        mutation UpsertProfile($id: String!, $display: String!) {
+          insert_profiles_one(
+            object: { 
+            id: $id
+            display_name: $display 
+          }
+            on_conflict: { constraint: profiles_pkey, update_columns: [display_name] }
+          ) { id }
+        }
+      ''';
+      await tempClient.mutate(MutationOptions(
+        document: gql(mUpsert),
+        variables: {'id': userId, 'display': displayName ?? 'New User'},
+      ));
+
+      const qMe = r'''
+        query Me($id: String!) {
+          profiles_by_pk(id: $id) { id display_name role }
+        }
+      ''';
+      final me = await tempClient.query(QueryOptions(
+        document: gql(qMe),
+        variables: {'id': userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      if (me.hasException || me.data?['profiles_by_pk'] == null) {
+        _logger.e('[auth] Me query failed: ${me.exception}');
+        await _clearSessionData();
+        return;
+      }
+      
+      final m = me.data!['profiles_by_pk'] as Map<String, dynamic>;
+      final prof = Profile(
+        id: m['id'] as String,
+        displayName: (m['display_name'] as String?) ?? (displayName ?? 'User'),
+        role: (m['role'] as String?) ?? defaultRole,
+      );
+
+      _setProfile(prof);
+      await _cacheProfile(prof);
+      await _setClient(tempClient);
+
+      await loadUserGroups();
+      await updateOneSignalUser();
+      
+    } catch (e, st) {
+      _logger.e('Failed to restore Zitadel session', error: e, stackTrace: st);
+      await _clearSessionData();
+    } finally {
+      _notifyAuthChanged();
     }
   }
 
-  // Profile
-  void setProfile(Profile? profile) {
-    _setProfile(profile);
-    _cacheProfile(profile);
-    _notifyAuthChanged();
+  Future<void> _clearSessionData() async {
+    await OidcAuth.signOut();
+    _setProfile(null);
+    await _cacheProfile(null);
+    await _setClient(null);
+    await updateOneSignalUser();
   }
 
+  Future<void> signInWithZitadel() async {
+    _logger.i('Starting signInWithZitadel');
+    _setLoading(true);
+    await OidcAuth.signIn();
+    await restoreSession();
+    _setLoading(false);
+  }
+
+  Future<void> signOut() async {
+    _logger.i('Starting signOut');
+    _setLoading(true);
+    await _clearSessionData();
+    _setLoading(false);
+  }
+
+  // --- Profile ---
   void _setProfile(Profile? profile) {
     if (_profile != profile) {
       _profile = profile;
@@ -190,16 +278,91 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  Future<void> signOut() async {
-    await Supabase.instance.client.auth.signOut();
-    _setProfile(null);
-    await _cacheProfile(null);
-    _notifyAuthChanged();
+  // --- Groups ---
+  Future<void> loadUserGroups() async {
+    final userId = _profile?.id;
+    if (userId == null || userId.isEmpty) {
+      _userGroups = [];
+      notifyListeners();
+      return;
+    }
+    try {
+      final groups = await groupService.getUserGroups(userId);
+      _userGroups = groups;
+      notifyListeners();
+    } catch (e, st) {
+      _logger.e('Failed to load user groups', error: e, stackTrace: st);
+      _userGroups = [];
+      notifyListeners();
+    }
   }
 
-  void _notifyAuthChanged() => _authChangeNotifier.value++;
+  void setVisibleCalendarGroupIds(List<String> groupIds) async {
+    _visibleCalendarGroupIds = groupIds;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('visibleCalendarGroupIds', groupIds);
+    notifyListeners();
+  }
 
-  // UI Actions
+  // --- OneSignal ---
+  Future<void> updateOneSignalUser() async {
+    _logger.i('Starting updateOneSignalUser');
+    try {
+      final loginId = _profile?.id;
+      if (loginId == null || loginId.isEmpty) {
+        await OneSignal.logout();
+        _logger.i('OneSignal logged out');
+        return;
+      }
+
+      await OneSignal.login(loginId);
+      final String? pushToken = OneSignal.User.pushSubscription.id;
+      
+      final m = r'''
+        mutation UpsertEndpoint($userId: String!, $externalId: String!, $token: String, $seen: timestamptz!) {
+          insert_notification_endpoints_one(
+            object: {
+              user_id: $userId,
+              provider: "onesignal",
+              external_id: $externalId,
+              push_token: $token,
+              last_seen: $seen
+            },
+            on_conflict: {
+              constraint: notification_endpoints_pkey,
+              update_columns: [push_token, last_seen, external_id]
+            }
+          ) { user_id provider push_token }
+        }
+      ''';
+
+      await client.mutate(MutationOptions(
+        document: gql(m),
+        variables: {
+          'userId': loginId,
+          'externalId': loginId,
+          'token': pushToken,
+          'seen': DateTime.now().toUtc().toIso8601String(),
+        },
+      ));
+      _logger.i('OneSignal endpoint updated in Hasura');
+
+      final role = _profile?.role;
+      if (role != null && role.isNotEmpty) {
+        await OneSignal.User.addTags({'role': role});
+      }
+      if (_userGroups.isNotEmpty) {
+        await OneSignal.User.addTags({
+          for (final g in _userGroups) 'group_${g.id}': 'member',
+        });
+      }
+      _logger.i('OneSignal tags updated');
+    } catch (e, st) {
+      _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);
+    }
+  }
+
+  // --- UI prefs ---
   void setIndex(int index) {
     if (_selectedIndex != index) {
       _selectedIndex = index;
@@ -252,58 +415,11 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setUserGroups(List<GroupModel> groups) {
-    _userGroups = groups;
-    notifyListeners();
-  }
-
-  Future<void> loadUserGroups() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId != null) {
-      final groups = await GroupService().getUserGroups(userId);
-      setUserGroups(groups);
-    }
-  }
-
-  void setVisibleCalendarGroupIds(List<String> groupIds) async {
-    _visibleCalendarGroupIds = groupIds;
+  void setWifiOnlyMediaDownload(bool value) async {
+    _wifiOnlyMediaDownload = value;
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList('visibleCalendarGroupIds', groupIds);
+    await prefs.setBool('wifiOnlyMediaDownload', value);
     notifyListeners();
-  }
-
-  Future<void> updateOneSignalUser() async {
-    try {
-      final user = Supabase.instance.client.auth.currentUser;
-
-      if (user != null) {
-        OneSignal.login(user.id);
-
-        // Store player ID in Supabase for server-side targeting
-        final device = OneSignal.User.pushSubscription.id;
-        final playerId = device;
-        if (playerId != null) {
-          await Supabase.instance.client
-              .from('profiles')
-              .update({'onesignal_id': playerId})
-              .eq('id', user.id);
-        }
-
-        // Tag user role for role-based pushes
-        if (_profile?.role != null) {
-          await OneSignal.User.addTags({'role': _profile!.role});
-        }
-
-        // Tag group memberships for group-targeted pushes
-        for (final group in _userGroups) {
-          await OneSignal.User.addTags({'group_${group.id}': 'member'});
-        }
-      } else {
-        OneSignal.logout();
-      }
-    } catch (e, st) {
-      _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);
-    }
   }
 
   void resetAppState() {
@@ -315,19 +431,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void setWifiOnlyMediaDownload(bool value) async {
-    _wifiOnlyMediaDownload = value;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('wifiOnlyMediaDownload', value);
-    notifyListeners();
-  }
-
+  // --- Loading ---
   void _setLoading(bool loading) {
     if (_isLoading != loading) {
       _isLoading = loading;
       notifyListeners();
     }
   }
+
+  void _notifyAuthChanged() => _authChangeNotifier.value++;
 
   @override
   void dispose() {

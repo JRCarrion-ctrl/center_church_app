@@ -1,11 +1,12 @@
 // File: lib/features/home/announcements_section.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/routes/router_observer.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class AnnouncementsSection extends StatefulWidget {
   const AnnouncementsSection({super.key});
@@ -15,7 +16,8 @@ class AnnouncementsSection extends StatefulWidget {
 }
 
 class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteAware {
-  final supabase = Supabase.instance.client;
+  GraphQLClient? _gql;
+  String? _userId;
 
   List<Map<String, dynamic>> mainAnnouncements = [];
   List<Map<String, dynamic>> groupAnnouncements = [];
@@ -25,7 +27,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   @override
   void initState() {
     super.initState();
-    _loadData();
+    // actual loading is triggered after inherited widgets are available
   }
 
   @override
@@ -35,6 +37,12 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     if (route is PageRoute) {
       routeObserver.subscribe(this, route);
     }
+
+    // init GraphQL + user id once
+    _gql ??= GraphQLProvider.of(context).value;
+    _userId ??= context.read<AppState>().profile?.id;
+
+    _loadData();
   }
 
   @override
@@ -49,57 +57,117 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   }
 
   Future<void> _loadData() async {
-    final userId = supabase.auth.currentUser?.id;
-    final nowUtc = DateTime.now().toUtc().toIso8601String();
+    final client = _gql;
+    if (client == null) return;
+
     setState(() => loading = true);
+    final nowUtc = DateTime.now().toUtc().toIso8601String();
+    String? role;
+    List<String> groupIds = [];
 
     try {
-      final global = await supabase
-          .from('app_announcements')
-          .select()
-          .lte('published_at', nowUtc)
-          .order('published_at', ascending: false);
+      // Global announcements (published_at <= now)
+      const qGlobal = r'''
+        query GlobalAnnouncements($now: timestamptz!) {
+          app_announcements(
+            where: { published_at: { _lte: $now } }
+            order_by: { published_at: desc }
+          ) {
+            id
+            title
+            body
+            published_at
+          }
+        }
+      ''';
+      final globalRes = await client.query(
+        QueryOptions(
+          document: gql(qGlobal),
+          variables: {'now': nowUtc},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+      if (globalRes.hasException) throw globalRes.exception!;
+      final globalRows =
+          (globalRes.data?['app_announcements'] as List<dynamic>? ?? [])
+              .cast<Map<String, dynamic>>();
 
-      List<dynamic> groups = [];
-      String? role;
+      // If logged in, get role & memberships → group announcements
+      if (_userId != null) {
+        const qProfileAndMemberships = r'''
+          query ProfileAndMemberships($uid: String!) {
+            profiles_by_pk(id: $uid) { role }
+            group_memberships(
+              where: { user_id: { _eq: $uid }, status: { _eq: "approved" } }
+            ) { group_id }
+          }
+        ''';
 
-      if (userId != null) {
-        final profile = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', userId)
-            .maybeSingle();
+        final pmRes = await client.query(
+          QueryOptions(
+            document: gql(qProfileAndMemberships),
+            variables: {'uid': _userId},
+            fetchPolicy: FetchPolicy.networkOnly,
+          ),
+        );
+        if (pmRes.hasException) throw pmRes.exception!;
 
-        role = profile?['role'];
-
-        final memberships = await supabase
-            .from('group_memberships')
-            .select('group_id')
-            .eq('user_id', userId)
-            .eq('status', 'approved');
-
-        final groupIds = (memberships as List)
-            .whereType<Map<String, dynamic>>()
-            .map((m) => m['group_id'] as String)
+        role = pmRes.data?['profiles_by_pk']?['role'] as String?;
+        final memberships = (pmRes.data?['group_memberships'] as List<dynamic>? ?? []);
+        groupIds = memberships
+            .map((e) => e as Map<String, dynamic>) // Cast to Map
+            .where((e) => e.containsKey('group_id') && e['group_id'] is String) // Filter for valid keys and types
+            .map((e) => e['group_id'] as String) // Safely map to String
             .toList();
 
+        // Group announcements (published_at <= now, for the user’s groups)
+        List<Map<String, dynamic>> groups = [];
         if (groupIds.isNotEmpty) {
-          groups = await supabase
-              .from('group_announcements')
-              .select()
-              .inFilter('group_id', groupIds)
-              .lte('published_at', nowUtc)
-              .order('published_at', ascending: false);
+          const qGroupAnnouncements = r'''
+            query GroupAnnouncements($groupIds: [uuid!]!, $now: timestamptz!) {
+              group_announcements(
+                where: { group_id: { _in: $groupIds }, published_at: { _lte: $now } }
+                order_by: { published_at: desc }
+              ) {
+                id
+                group_id
+                title
+                body
+                image_url
+                published_at
+              }
+            }
+          ''';
+          final groupsRes = await client.query(
+            QueryOptions(
+              document: gql(qGroupAnnouncements),
+              variables: {'groupIds': groupIds, 'now': nowUtc},
+              fetchPolicy: FetchPolicy.networkOnly,
+            ),
+          );
+          if (groupsRes.hasException) throw groupsRes.exception!;
+          groups = (groupsRes.data?['announcements'] as List<dynamic>? ?? [])
+              .cast<Map<String, dynamic>>();
         }
-      }
 
-      if (mounted) {
-        setState(() {
-          isAdmin = role == 'supervisor' || role == 'owner';
-          mainAnnouncements = List<Map<String, dynamic>>.from(global);
-          groupAnnouncements = List<Map<String, dynamic>>.from(groups);
-          loading = false;
-        });
+        if (mounted) {
+          setState(() {
+            isAdmin = role == 'supervisor' || role == 'owner';
+            mainAnnouncements = List<Map<String, dynamic>>.from(globalRows);
+            groupAnnouncements = groups;
+            loading = false;
+          });
+        }
+      } else {
+        // not logged in → only global announcements
+        if (mounted) {
+          setState(() {
+            isAdmin = false;
+            mainAnnouncements = List<Map<String, dynamic>>.from(globalRows);
+            groupAnnouncements = const [];
+            loading = false;
+          });
+        }
       }
     } catch (e) {
       debugPrint('Error loading announcements: $e');
@@ -138,19 +206,21 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                 child: Column(
                   children: [
                     Text("key_175".tr()),
-                    if (Supabase.instance.client.auth.currentUser == null)
+                    if (_userId == null)
                       Text(
                         "key_175a".tr(),
-                        style: TextStyle(color: Colors.grey),
+                        style: const TextStyle(color: Colors.grey),
                       ),
                   ],
                 ),
               ),
             if (hasMain)
-              ...mainAnnouncements.map((a) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: _buildAnnouncementCard(a),
-                  )),
+              ...mainAnnouncements.map(
+                (a) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: _buildAnnouncementCard(a),
+                ),
+              ),
             if (showGroupAnnouncements && hasGroup) ...[
               const SizedBox(height: 20),
               Row(
@@ -158,7 +228,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                 children: [
                   Text(
                     "key_175b".tr(),
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                   ),
                   TextButton(
                     onPressed: () => GoRouter.of(context).push('/group-announcements'),
@@ -181,7 +251,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       children: [
         Text(
           "key_112c".tr(),
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         if (isAdmin)
           TextButton(
@@ -197,12 +267,13 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ExpansionTile(
         title: Text(
-          a['title'] ?? '',
+          (a['title'] ?? '') as String,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
         childrenPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         children: [
-          if (a['body'] != null) Text(a['body']),
+          if ((a['body'] ?? '') is String && (a['body'] as String).isNotEmpty)
+            Text(a['body'] as String),
         ],
       ),
     );
@@ -219,8 +290,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
           itemBuilder: (context, index) {
             final a = groupAnnouncements[index];
             final isDark = Theme.of(context).brightness == Brightness.dark;
-            final backgroundColor =
-                isDark ? Colors.blueGrey[900] : Colors.blue[50];
+            final backgroundColor = isDark ? Colors.blueGrey[900] : Colors.blue[50];
 
             return Material(
               color: backgroundColor,
@@ -234,8 +304,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                       context: context,
                       useRootNavigator: false,
                       builder: (dialogContext) => AlertDialog(
-                        title: Text(a['title'] ?? ''),
-                        content: Text(a['body'] ?? ''),
+                        title: Text((a['title'] ?? '') as String),
+                        content: Text((a['body'] ?? '') as String),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.of(dialogContext).pop(),
@@ -253,13 +323,13 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        a['title'] ?? '',
+                        (a['title'] ?? '') as String,
                         style: const TextStyle(fontWeight: FontWeight.w600),
                       ),
                       const SizedBox(height: 6),
-                      if (a['body'] != null)
+                      if ((a['body'] ?? '') is String && (a['body'] as String).isNotEmpty)
                         Text(
-                          a['body'],
+                          a['body'] as String,
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),

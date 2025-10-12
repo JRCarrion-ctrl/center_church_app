@@ -1,10 +1,14 @@
+// File: lib/features/groups/pages/group_event_list_page.dart
 import 'package:flutter/material.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ccf_app/routes/router_observer.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
+import '../../../core/graph_provider.dart';
+import '../../../app_state.dart';
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
 import '../../calendar/widgets/group_event_form_modal.dart';
@@ -19,24 +23,35 @@ class GroupEventListPage extends StatefulWidget {
 }
 
 class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware {
-  final _service = EventService();
   final _attendanceCounts = <String, int>{};
   final _events = <GroupEvent>[];
   bool _loading = true;
   bool _isAdmin = false;
 
+  GraphQLClient? _gql;
+  EventService? _service;
+  bool _bootstrapped = false;
+
   @override
   void initState() {
     super.initState();
-    _initialize();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+
+    _gql ??= GraphProvider.of(context);
+    _service ??= EventService(_gql!);
+
     final route = ModalRoute.of(context);
     if (route is PageRoute) {
       routeObserver.subscribe(this, route);
+    }
+
+    if (!_bootstrapped) {
+      _bootstrapped = true;
+      _initialize();
     }
   }
 
@@ -59,31 +74,63 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
   }
 
   Future<void> _checkAdminRole() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+    if (userId == null || _gql == null) {
+      if (mounted) setState(() => _isAdmin = false);
+      return;
+    }
 
-    final profile = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
+    // Prefer group-specific role; fall back to global owner
+    const qRole = r'''
+      query MyGroupRole($gid: uuid!, $uid: String!) {
+        group_memberships(
+          where: {
+            group_id: { _eq: $gid }
+            user_id: { _eq: $uid }
+            status: { _eq: "approved" }
+          }
+          limit: 1
+        ) { role }
+      }
+    ''';
 
-    final role = profile['role'];
-    if (mounted) {
-      setState(() {
-        _isAdmin = ['leader', 'supervisor', 'owner'].contains(role);
-      });
+    try {
+      final res = await _gql!.query(QueryOptions(
+        document: gql(qRole),
+        variables: {'gid': widget.groupId, 'uid': userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      String? role;
+      if (!res.hasException) {
+        final rows = (res.data?['group_memberships'] as List?) ?? const [];
+        if (rows.isNotEmpty) role = rows.first['role'] as String?;
+      }
+
+      final groupAdminRoles = {'admin', 'leader', 'supervisor', 'owner'};
+      final isOwnerGlobally = appState.userRole.name == 'owner';
+
+      if (mounted) {
+        setState(() {
+          _isAdmin = role != null
+              ? groupAdminRoles.contains(role)
+              : isOwnerGlobally; // fallback
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isAdmin = false);
     }
   }
 
   Future<void> _loadEvents() async {
     setState(() => _loading = true);
     try {
-      final events = await _service.fetchGroupEvents(widget.groupId);
+      final events = await _service!.fetchGroupEvents(widget.groupId);
       final counts = <String, int>{};
 
       for (final event in events) {
-        final rsvps = await _service.fetchGroupEventRSVPs(event.id);
+        final rsvps = await _service!.fetchGroupEventRSVPs(event.id);
         final total = rsvps.fold<int>(
           0,
           (sum, r) => sum + ((r['attending_count'] ?? 0) as int),
@@ -189,7 +236,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
                                         ),
                                       );
                                       if (confirm == true) {
-                                        await _service.deleteEvent(e.id);
+                                        await _service?.deleteEvent(e.id);
                                         await _loadEvents();
                                       }
                                     }

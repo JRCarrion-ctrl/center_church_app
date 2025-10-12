@@ -1,7 +1,6 @@
 // File: lib/features/groups/widgets/input_row.dart
 import 'dart:io';
 import 'dart:convert';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
@@ -9,6 +8,9 @@ import 'package:image_picker/image_picker.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:logger/logger.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+
+import '../../../app_state.dart';
 
 final _logger = Logger();
 
@@ -27,9 +29,9 @@ Future<File> _compressImage(File file) async {
   return File(targetPath)..writeAsBytesSync(compressedBytes!);
 }
 
-Future<List<String>> searchKlipyGifs(String query) async {
-  final userId = Supabase.instance.client.auth.currentUser?.id;
-  if (userId == null) throw Exception('User not logged in');
+Future<List<String>> searchKlipyGifs(BuildContext context, String query) async {
+  final userId = context.read<AppState>().profile?.id;
+  if (userId == null || userId.isEmpty) throw Exception('User not logged in');
 
   const appKey = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
   const locale = 'US';
@@ -62,12 +64,9 @@ Future<List<String>> searchKlipyGifs(String query) async {
   }
 }
 
-
-
-
 class InputRow extends StatefulWidget {
   final TextEditingController controller;
-  final VoidCallback onSend;
+  final Future<void> Function() onSend;
   final Future<void> Function(File file) onFilePicked;
   final Future<void> Function(String gifUrl) onGifPicked;
 
@@ -125,6 +124,7 @@ class _InputRowState extends State<InputRow> {
                   File file = File(picked.path);
                   file = await _compressImage(file);
                   setState(() => _selectedFile = file);
+                  _handleInputChange();
                 }
               },
             ),
@@ -138,6 +138,7 @@ class _InputRowState extends State<InputRow> {
                   File file = File(picked.path);
                   file = await _compressImage(file);
                   setState(() => _selectedFile = file);
+                  _handleInputChange();
                 }
               },
             ),
@@ -154,6 +155,7 @@ class _InputRowState extends State<InputRow> {
                     file = await _compressImage(file);
                   }
                   setState(() => _selectedFile = file);
+                  _handleInputChange();
                 }
               },
             ),
@@ -163,22 +165,22 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
-  //Future<void> _openGifPicker() async {
-    //final gifUrl = await showModalBottomSheet<String>(
-      //context: context,
-      //isScrollControlled: true,
-      //builder: (_) => const _KlipyGifPicker(),
-    //);
-
-    //if (gifUrl != null) {
-      //await widget.onGifPicked(gifUrl);
-      //widget.controller.clear();
-      //setState(() {
-        //_selectedFile = null;
-        //_canSend = false;
-      //});
-    //}
-  //}
+  // If you later re-enable the GIF picker, pass context to the search helper.
+  // Future<void> _openGifPicker() async {
+  //   final gifUrl = await showModalBottomSheet<String>(
+  //     context: context,
+  //     isScrollControlled: true,
+  //     builder: (_) => const _KlipyGifPicker(),
+  //   );
+  //   if (gifUrl != null) {
+  //     await widget.onGifPicked(gifUrl);
+  //     widget.controller.clear();
+  //     setState(() {
+  //       _selectedFile = null;
+  //       _canSend = false;
+  //     });
+  //   }
+  // }
 
   bool _isGifUrl(String text) {
     return text.toLowerCase().endsWith('.gif') && text.startsWith('http');
@@ -186,22 +188,41 @@ class _InputRowState extends State<InputRow> {
 
   Future<void> _handleSend() async {
     final text = widget.controller.text.trim();
+    _logger.i('[InputRow] handleSend start text="${text.replaceAll('\n',' ')}" '
+              'hasFile=${_selectedFile != null} isGif=${_isGifUrl(text)}');
 
-    if (_selectedFile != null) {
-      await widget.onFilePicked(_selectedFile!);
+    try {
+      if (_selectedFile != null) {
+        _logger.i('[InputRow] onFilePicked: ${_selectedFile!.path}');
+        await widget.onFilePicked(_selectedFile!);
+        _logger.i('[InputRow] onFilePicked done');
+      }
+
+      if (_isGifUrl(text)) {
+        _logger.i('[InputRow] onGifPicked: $text');
+        await widget.onGifPicked(text);
+        _logger.i('[InputRow] onGifPicked done');
+      } else if (text.isNotEmpty) {
+        _logger.i('[InputRow] onSend() begin');
+        await widget.onSend();                  // ← await it so failures surface here
+        _logger.i('[InputRow] onSend() done');
+      }
+
+      widget.controller.clear();
+      setState(() {
+        _selectedFile = null;
+        _canSend = false;
+      });
+      _logger.i('[InputRow] cleared UI state');
+    } catch (e, st) {
+      _logger.e('[InputRow] send failed', error: e, stackTrace: st);
+      // Optional: show a SnackBar / toast here
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(tr('key_message_send_failed'))),
+        );
+      }
     }
-
-    if (_isGifUrl(text)) {
-      await widget.onGifPicked(text);
-    } else if (text.isNotEmpty) {
-      widget.onSend();
-    }
-
-    widget.controller.clear();
-    setState(() {
-      _selectedFile = null;
-      _canSend = false;
-    });
   }
 
   @override
@@ -249,11 +270,11 @@ class _InputRowState extends State<InputRow> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              //IconButton.filledTonal(
-                //icon: const Icon(Icons.gif_box_outlined),
-                //tooltip: 'GIF',
-                //onPressed: _openGifPicker,
-              //),
+              // IconButton.filledTonal(
+              //   icon: const Icon(Icons.gif_box_outlined),
+              //   tooltip: 'GIF',
+              //   onPressed: _openGifPicker,
+              // ),
               IconButton.filledTonal(
                 icon: const Icon(Icons.attach_file),
                 tooltip: 'Attach',
@@ -317,7 +338,7 @@ class _KlipyGifPickerState extends State<_KlipyGifPicker> {
     if (q.isEmpty) return;
     setState(() => loading = true);
     try {
-      gifs = await searchKlipyGifs(q);
+      gifs = await searchKlipyGifs(context, q);
     } catch (_) {
       gifs = [];
     }

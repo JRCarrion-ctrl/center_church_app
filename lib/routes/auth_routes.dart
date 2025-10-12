@@ -1,19 +1,22 @@
-// File: lib/routes/auth_routes.dart
-import 'package:ccf_app/features/auth/reset_password.dart';
+// lib/routes/auth_routes.dart
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
 import '../features/auth/auth_page.dart';
 import '../transitions/transitions.dart';
+import '../app_state.dart';
 
 final List<GoRoute> authRoutes = [
   GoRoute(
     path: '/auth',
-    pageBuilder: (_, _) => buildSlidePage(
+    name: 'auth',
+    pageBuilder: (context, state) => buildSlidePage(
       const AuthPage(),
       direction: SlideDirection.left,
     ),
-  ),
-  GoRoute(
-    path: '/reset-password',
-    builder: (context, state) => const ResetPasswordPage(),
+    // If already authenticated (Zitadel token present → AppState.profile set), keep them off /auth
+    redirect: (context, state) {
+      final app = context.read<AppState>();
+      return app.isAuthenticated ? '/' : null;
+    },
   ),
 ];

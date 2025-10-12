@@ -7,51 +7,60 @@ class ChildProfilePage extends StatelessWidget {
 
   const ChildProfilePage({super.key, required this.child});
 
-  String _formatDate(String? isoDate) {
-    if (isoDate == null) return 'N/A';
+  String _formatDate(String? iso) {
+    if (iso == null || iso.isEmpty) return "N/A";
     try {
-      return DateFormat.yMMMd().format(DateTime.parse(isoDate));
+      return DateFormat.yMMMd().format(DateTime.parse(iso));
     } catch (_) {
-      return isoDate;
+      return iso; // fall back to raw string if parse fails
     }
+  }
+
+  String _ifBlank(String? s, String fallback) {
+    final v = s?.trim();
+    return (v == null || v.isEmpty) ? fallback : v;
   }
 
   @override
   Widget build(BuildContext context) {
-    final displayName = child['display_name'] ?? 'Child Profile';
-    final photoUrl = child['photo_url'];
-    final birthday = _formatDate(child['birthday']);
-    final allergies = (child['allergies']?.toString().trim().isNotEmpty ?? false)
-        ? child['allergies']
-        : 'None';
-    final notes = (child['notes']?.toString().trim().isNotEmpty ?? false)
-        ? child['notes']
-        : 'None';
-    final emergencyContact = child['emergency_contact'] ?? 'N/A';
+    final displayName   = _ifBlank(child['display_name'] as String?, 'Child Profile');
+    final photoUrl      = child['photo_url'] as String?;
+    final birthdayLabel = _formatDate(child['birthday'] as String?);
+    final allergies     = _ifBlank(child['allergies'] as String?, 'None');
+    final notes         = _ifBlank(child['notes'] as String?, 'None');
+    final emergency     = _ifBlank(child['emergency_contact'] as String?, 'N/A');
+    final isCheckedIn   = child['is_checked_in'] == true;
 
     return Scaffold(
       appBar: AppBar(title: Text(displayName)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          CircleAvatar(
-            radius: 60,
-            backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                ? NetworkImage(photoUrl)
-                : null,
-            child: (photoUrl == null || photoUrl.isEmpty)
-                ? const Icon(Icons.child_care, size: 48)
-                : null,
+          Center(
+            child: CircleAvatar(
+              radius: 60,
+              foregroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                  ? NetworkImage(photoUrl)
+                  : null,
+              child: (photoUrl == null || photoUrl.isEmpty)
+                  ? const Icon(Icons.child_care, size: 48)
+                  : null,
+            ),
           ),
           const SizedBox(height: 20),
-          Text("key_252".tr(args: [birthday])),
+
+          // “Born: <date>”
+          Text("key_252".tr(args: [birthdayLabel]),
+              style: Theme.of(context).textTheme.bodyLarge),
+
           const SizedBox(height: 10),
           Text("key_253".tr(args: [allergies])),
           const SizedBox(height: 10),
           Text("key_254".tr(args: [notes])),
           const SizedBox(height: 10),
-          Text("key_255".tr(args: [emergencyContact])),
-          if (child['is_checked_in'] == true)
+          Text("key_255".tr(args: [emergency])),
+
+          if (isCheckedIn)
             Padding(
               padding: const EdgeInsets.only(top: 12),
               child: Chip(

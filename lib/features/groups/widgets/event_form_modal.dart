@@ -1,8 +1,10 @@
 // File: lib/features/groups/widgets/event_form_modal.dart
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:ccf_app/core/graph_provider.dart';
+
 import '../../calendar/models/group_event.dart';
 import '../../calendar/event_service.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 /// Modal bottom sheet for creating or editing a GroupEvent
 class EventFormModal extends StatefulWidget {
@@ -16,13 +18,14 @@ class EventFormModal extends StatefulWidget {
 
 class _EventFormModalState extends State<EventFormModal> {
   final _formKey = GlobalKey<FormState>();
-  final _service = EventService();
 
+  late EventService _service;
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
-  DateTime? _selectedDate;
-  TimeOfDay? _selectedTime;
+
+  DateTime? _selectedDateTime;
+  String? _dateTimeError;
 
   bool _saving = false;
 
@@ -34,9 +37,16 @@ class _EventFormModalState extends State<EventFormModal> {
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
     if (ev != null) {
-      final local = ev.eventDate.toLocal();
-      _selectedDate = DateTime(local.year, local.month, local.day);
-      _selectedTime = TimeOfDay.fromDateTime(local);
+      _selectedDateTime = ev.eventDate.toLocal();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (mounted) {
+      final client = GraphProvider.of(context);
+      _service = EventService(client);
     }
   }
 
@@ -52,38 +62,60 @@ class _EventFormModalState extends State<EventFormModal> {
     final now = DateTime.now();
     final date = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? now,
+      initialDate: _selectedDateTime ?? now,
       firstDate: now.subtract(const Duration(days: 1)),
       lastDate: now.add(const Duration(days: 365)),
     );
-    if (date != null) setState(() => _selectedDate = date);
+    if (date != null) {
+      setState(() {
+        _selectedDateTime = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          _selectedDateTime?.hour ?? TimeOfDay.now().hour,
+          _selectedDateTime?.minute ?? TimeOfDay.now().minute,
+        );
+        _dateTimeError = null;
+      });
+    }
   }
 
   Future<void> _pickTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: _selectedTime ?? TimeOfDay.now(),
+      initialTime: _selectedDateTime != null
+          ? TimeOfDay.fromDateTime(_selectedDateTime!)
+          : TimeOfDay.now(),
     );
-    if (time != null) setState(() => _selectedTime = time);
+    if (time != null) {
+      setState(() {
+        _selectedDateTime = DateTime(
+          _selectedDateTime?.year ?? DateTime.now().year,
+          _selectedDateTime?.month ?? DateTime.now().month,
+          _selectedDateTime?.day ?? DateTime.now().day,
+          time.hour,
+          time.minute,
+        );
+        _dateTimeError = null;
+      });
+    }
   }
 
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    if (_selectedDate == null || _selectedTime == null) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text("key_160".tr())));
+  void _validateAndSave() {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
+    if (_selectedDateTime == null) {
+      setState(() => _dateTimeError = 'key_160'.tr());
+      return;
+    }
+
+    _save();
+  }
+
+  Future<void> _save() async {
     setState(() => _saving = true);
-    // Combine date and time
-    final dt = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedTime!.hour,
-      _selectedTime!.minute,
-    );
 
     final event = GroupEvent(
       id: widget.existing?.id ?? '',
@@ -92,8 +124,9 @@ class _EventFormModalState extends State<EventFormModal> {
       description: _descController.text.trim(),
       location: _locationController.text.trim(),
       imageUrl: widget.existing?.imageUrl,
-      eventDate: dt.toUtc(),
+      eventDate: _selectedDateTime!.toUtc(),
     );
+    
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
@@ -101,8 +134,7 @@ class _EventFormModalState extends State<EventFormModal> {
       await _service.saveEvent(event);
       navigator.pop();
     } catch (e) {
-      messenger
-          .showSnackBar(SnackBar(content: Text('Error saving event: $e')));
+      messenger.showSnackBar(SnackBar(content: Text('Error saving event: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -146,9 +178,9 @@ class _EventFormModalState extends State<EventFormModal> {
                       child: OutlinedButton(
                         onPressed: _pickDate,
                         child: Text(
-                          _selectedDate == null
+                          _selectedDateTime == null
                               ? "key_041f".tr()
-                              : DateFormat.yMMMd().format(_selectedDate!),
+                              : DateFormat.yMMMd().format(_selectedDateTime!),
                         ),
                       ),
                     ),
@@ -157,17 +189,25 @@ class _EventFormModalState extends State<EventFormModal> {
                       child: OutlinedButton(
                         onPressed: _pickTime,
                         child: Text(
-                          _selectedTime == null
+                          _selectedDateTime == null
                               ? "key_041g".tr()
-                              : _selectedTime!.format(context),
+                              : TimeOfDay.fromDateTime(_selectedDateTime!).format(context),
                         ),
                       ),
                     ),
                   ],
                 ),
+                if (_dateTimeError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: Text(
+                      _dateTimeError!,
+                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    ),
+                  ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: _saving ? null : _save,
+                  onPressed: _saving ? null : _validateAndSave,
                   child: _saving
                       ? const CircularProgressIndicator()
                       : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),

@@ -1,8 +1,13 @@
+// File: lib/features/groups/invitations_section.dart
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 class InvitationsSection extends StatefulWidget {
   const InvitationsSection({super.key});
@@ -12,7 +17,6 @@ class InvitationsSection extends StatefulWidget {
 }
 
 class InvitationsSectionState extends State<InvitationsSection> {
-  final supabase = Supabase.instance.client;
   List<GroupModel> _invites = [];
   bool _loading = true;
   String? _expandedGroupId;
@@ -23,9 +27,27 @@ class InvitationsSectionState extends State<InvitationsSection> {
     _loadInvitations();
   }
 
+  Future<GroupService> _svc() async {
+    final app = context.read<AppState>();
+    return app.groupService;
+  }
+
   Future<void> _loadInvitations() async {
-    final userId = supabase.auth.currentUser?.id ?? '';
-    final invites = await GroupService().getGroupInvitations(userId);
+    setState(() => _loading = true);
+
+    final userId = context.read<AppState>().profile?.id;
+    if (userId == null || userId.isEmpty) {
+      setState(() {
+        _invites = [];
+        _loading = false;
+      });
+      return;
+    }
+
+    final svc = await _svc();
+    final invites = await svc.getGroupInvitations(userId);
+
+    if (!mounted) return;
     setState(() {
       _invites = invites;
       _loading = false;
@@ -34,46 +56,87 @@ class InvitationsSectionState extends State<InvitationsSection> {
 
   void refresh() => _loadInvitations();
 
+  GraphQLClient _client() => GraphProvider.of(context);
+
   Future<void> _acceptInvite(GroupModel group) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    final userId = context.read<AppState>().profile?.id;
+    if (userId == null || userId.isEmpty) return;
 
-    await supabase.from('group_memberships').insert({
-      'group_id': group.id,
-      'user_id': userId,
-      'role': 'member',
-      'status': 'approved',
-      'joined_at': DateTime.now().toUtc().toIso8601String(),
-    });
+    const m = r'''
+      mutation AcceptInvite($gid: String!, $uid: String!) {
+        insert_group_memberships_one(
+          object: {
+            group_id: $gid
+            user_id: $uid
+            role: "member"
+            status: "approved"
+            joined_at: "now()"
+          },
+          on_conflict: {
+            constraint: group_memberships_pkey,
+            update_columns: [status, role, joined_at]
+          }
+        ) { group_id }
+        delete_group_invitations(
+          where: { group_id: { _eq: $gid }, user_id: { _eq: $uid } }
+        ) { affected_rows }
+      }
+    ''';
 
-    await supabase
-        .from('group_invitations')
-        .delete()
-        .eq('group_id', group.id)
-        .eq('user_id', userId);
+    final res = await _client().mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {'gid': group.id, 'uid': userId},
+        fetchPolicy: FetchPolicy.noCache,
+      ),
+    );
 
-    if (mounted) {
+    if (res.hasException) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Joined ${group.name}')),
+        SnackBar(content: Text(tr('key_error_generic'))),
       );
+      return;
     }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('key_group_joined', args: [group.name]))),
+    );
   }
 
   Future<void> _declineInvite(GroupModel group) async {
-    final userId = supabase.auth.currentUser?.id;
-    if (userId == null) return;
+    final userId = context.read<AppState>().profile?.id;
+    if (userId == null || userId.isEmpty) return;
 
-    await supabase
-        .from('group_invitations')
-        .delete()
-        .eq('group_id', group.id)
-        .eq('user_id', userId);
+    const m = r'''
+      mutation DeclineInvite($gid: String!, $uid: String!) {
+        delete_group_invitations(
+          where: { group_id: { _eq: $gid }, user_id: { _eq: $uid } }
+        ) { affected_rows }
+      }
+    ''';
 
-    if (mounted) {
+    final res = await _client().mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {'gid': group.id, 'uid': userId},
+        fetchPolicy: FetchPolicy.noCache,
+      ),
+    );
+
+    if (res.hasException) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Declined invitation to ${group.name}')),
+        SnackBar(content: Text(tr('key_error_generic'))),
       );
+      return;
     }
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('key_group_declined', args: [group.name]))),
+    );
   }
 
   @override
@@ -91,8 +154,8 @@ class InvitationsSectionState extends State<InvitationsSection> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          "key_059a".tr(),
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          "key_059a".tr(), // "Invitations"
+          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         ListView.builder(
@@ -116,14 +179,16 @@ class InvitationsSectionState extends State<InvitationsSection> {
                     },
                     contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                     leading: CircleAvatar(
-                      backgroundImage: group.photoUrl != null ? NetworkImage(group.photoUrl!) : null,
+                      backgroundImage: (group.photoUrl != null && group.photoUrl!.isNotEmpty)
+                          ? NetworkImage(group.photoUrl!)
+                          : null,
                       backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                      child: group.photoUrl == null
+                      child: (group.photoUrl == null || group.photoUrl!.isEmpty)
                           ? const Icon(Icons.group, color: Colors.white)
                           : null,
                     ),
                     title: Text(group.name, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    subtitle: group.description != null && group.description!.isNotEmpty
+                    subtitle: (group.description != null && group.description!.isNotEmpty)
                         ? Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Text(
@@ -144,24 +209,26 @@ class InvitationsSectionState extends State<InvitationsSection> {
                           OutlinedButton.icon(
                             onPressed: () async {
                               await _acceptInvite(group);
+                              if (!mounted) return;
                               setState(() {
                                 _invites.removeAt(index);
                                 _expandedGroupId = null;
                               });
                             },
                             icon: const Icon(Icons.check),
-                            label: Text("key_059b".tr()),
+                            label: Text("key_059b".tr()), // Accept
                           ),
                           OutlinedButton.icon(
                             onPressed: () async {
                               await _declineInvite(group);
+                              if (!mounted) return;
                               setState(() {
                                 _invites.removeAt(index);
                                 _expandedGroupId = null;
                               });
                             },
                             icon: const Icon(Icons.close),
-                            label: Text("key_059c".tr()),
+                            label: Text("key_059c".tr()), // Decline
                           ),
                         ],
                       ),
@@ -169,7 +236,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
                 ],
               ),
             );
-          }
+          },
         ),
       ],
     );

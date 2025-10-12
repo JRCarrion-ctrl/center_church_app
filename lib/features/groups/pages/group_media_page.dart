@@ -1,6 +1,5 @@
 // File: lib/features/groups/pages/group_media_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:share_plus/share_plus.dart';
@@ -8,7 +7,9 @@ import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
 import 'dart:typed_data';
 import 'package:logger/logger.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
+import '../../../core/graph_provider.dart';          // <-- Hasura client
 import '../media_cache_service.dart';
 
 final Logger _logger = Logger();
@@ -23,45 +24,66 @@ class GroupMediaPage extends StatefulWidget {
 }
 
 class _GroupMediaPageState extends State<GroupMediaPage> {
-  final _client = Supabase.instance.client;
+  late GraphQLClient _gql;
   final List<String> _mediaUrls = [];
   bool _loading = true;
+  bool _inited = false;
 
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inited) return;
+    _inited = true;
+    _gql = GraphProvider.of(context);
     _loadMedia();
   }
 
   Future<void> _loadMedia() async {
     setState(() => _loading = true);
-    try {
-      final data = await _client
-          .from('group_messages')
-          .select('file_url')
-          .eq('group_id', widget.groupId)
-          .not('file_url', 'is', null)
-          .order('created_at', ascending: false);
+    const q = r'''
+      query GroupMedia($gid: uuid!) {
+        group_messages(
+          where: {
+            group_id: {_eq: $gid},
+            deleted: {_eq: false},
+            file_url: {_is_null: false}
+          }
+          order_by: { created_at: desc }
+        ) {
+          file_url
+        }
+      }
+    ''';
 
-      final urls = (data as List)
-          .map((item) => item['file_url'] as String)
-          .where((url) => url.isNotEmpty)
+    try {
+      final res = await _gql.query(
+        QueryOptions(
+          document: gql(q),
+          fetchPolicy: FetchPolicy.noCache,
+          variables: {'gid': widget.groupId},
+        ),
+      );
+      if (res.hasException) throw res.exception!;
+
+      final urls = ((res.data?['group_messages'] as List?) ?? [])
+          .map((e) => (e as Map<String, dynamic>)['file_url'] as String?)
+          .whereType<String>()
+          .where((u) => u.isNotEmpty)
           .toList();
 
-      if (mounted) {
-        setState(() {
-          _mediaUrls.clear();
-          _mediaUrls.addAll(urls);
-          _loading = false;
-        });
-      }
+      if (!mounted) return;
+      setState(() {
+        _mediaUrls
+          ..clear()
+          ..addAll(urls);
+        _loading = false;
+      });
     } catch (e) {
-      if (mounted) {
-        setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load media: $e')),
-        );
-      }
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load media: $e')),
+      );
     }
   }
 
@@ -216,7 +238,7 @@ class _GroupMediaPageState extends State<GroupMediaPage> {
                                       ),
                                     ),
                                 ],
-                              )
+                              ),
                             );
                           },
                           child: Stack(

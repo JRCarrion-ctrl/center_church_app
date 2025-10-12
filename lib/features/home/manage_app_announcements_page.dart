@@ -1,5 +1,6 @@
+// File: lib/features/home/manage_app_announcements_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/app_announcement_form_modal.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -11,27 +12,53 @@ class ManageAppAnnouncementsPage extends StatefulWidget {
 }
 
 class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage> {
-  final supabase = Supabase.instance.client;
+  GraphQLClient? _gql;
   List<Map<String, dynamic>> announcements = [];
   bool loading = true;
 
   @override
   void initState() {
     super.initState();
+    // actual load kicked off once GraphQLProvider is available
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _gql ??= GraphQLProvider.of(context).value;
     _loadAnnouncements();
   }
 
   Future<void> _loadAnnouncements() async {
+    final client = _gql;
+    if (client == null) return;
+
     setState(() => loading = true);
+
+    const q = r'''
+      query AllAppAnnouncements {
+        app_announcements(order_by: { published_at: desc }) {
+          id
+          title
+          body
+          image_url
+          published_at
+        }
+      }
+    ''';
+
     try {
-      final result = await supabase
-          .from('app_announcements')
-          .select()
-          .order('published_at', ascending: false);
+      final res = await client.query(
+        QueryOptions(document: gql(q), fetchPolicy: FetchPolicy.networkOnly),
+      );
+      if (res.hasException) throw res.exception!;
+
+      final rows = (res.data?['app_announcements'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
 
       if (mounted) {
         setState(() {
-          announcements = List<Map<String, dynamic>>.from(result);
+          announcements = rows;
           loading = false;
         });
       }
@@ -42,8 +69,20 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
   }
 
   Future<void> _deleteAnnouncement(String id) async {
+    final client = _gql;
+    if (client == null) return;
+
+    const m = r'''
+      mutation DeleteAppAnnouncement($id: uuid!) {
+        delete_app_announcements_by_pk(id: $id) { id }
+      }
+    ''';
+
     try {
-      await supabase.from('app_announcements').delete().eq('id', id);
+      final res = await client.mutate(
+        MutationOptions(document: gql(m), variables: {'id': id}),
+      );
+      if (res.hasException) throw res.exception!;
       await _loadAnnouncements();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -87,11 +126,14 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
                       itemCount: announcements.length,
                       itemBuilder: (context, i) {
                         final a = announcements[i];
-                        final id = a['id'];
-                        final title = a['title'] ?? '';
-                        final body = a['body'] ?? '';
-                        final published = DateTime.tryParse(a['published_at'] ?? '')?.toLocal();
-                        final imageUrl = a['image_url'];
+                        final id = a['id'] as String?;
+                        final title = (a['title'] ?? '') as String;
+                        final body = (a['body'] ?? '') as String;
+                        final publishedStr = a['published_at'] as String?;
+                        final published = publishedStr != null
+                            ? DateTime.tryParse(publishedStr)?.toLocal()
+                            : null;
+                        final imageUrl = a['image_url'] as String?;
 
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),

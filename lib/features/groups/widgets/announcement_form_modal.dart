@@ -1,9 +1,14 @@
 // File: lib/features/groups/widgets/announcement_form_modal.dart
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:ccf_app/core/time_service.dart';
-import '../models/group_announcement.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+
+import '../../../core/graph_provider.dart';
+import '../../../core/time_service.dart';
+import '../../../core/media/presigned_uploader.dart'; // Import the new service
+import '../../../core/media/image_picker_field.dart'; // Import the new widget
+import '../models/group_announcement.dart';
 
 class AnnouncementFormModal extends StatefulWidget {
   final String groupId;
@@ -24,53 +29,138 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   final _title = TextEditingController();
   final _body = TextEditingController();
   DateTime? _scheduledUtc;
+  File? _selectedImage;
+  bool _removedImage = false;
 
-  final supabase = Supabase.instance.client;
+  late GraphQLClient _client;
+  bool _clientReady = false;
   bool saving = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.existing != null) {
-      _title.text = widget.existing!.title;
-      _body.text = widget.existing!.body ?? '';
-      _scheduledUtc = widget.existing!.publishedAt;
+    final ex = widget.existing;
+    if (ex != null) {
+      _title.text = ex.title;
+      _body.text = ex.body ?? '';
+      _scheduledUtc = ex.publishedAt;
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_clientReady) return;
+    _client = GraphProvider.of(context);
+    _clientReady = true;
+  }
+
+  @override
+  void dispose() {
+    _title.dispose();
+    _body.dispose();
+    super.dispose();
   }
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => saving = true);
 
-    final announcement = {
-      'group_id': widget.groupId,
-      'title': _title.text.trim(),
-      'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
-      'published_at': (_scheduledUtc ?? DateTime.now().toUtc()).toIso8601String(),
-    };
+    String? imageUrl = widget.existing?.imageUrl;
+    if (_removedImage) {
+      imageUrl = null;
+    } else if (_selectedImage != null) {
+      try {
+        imageUrl = await PresignedUploader.upload(
+          file: _selectedImage!,
+          keyPrefix: 'announcements/${widget.groupId}',
+          logicalId: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+        );
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to upload image: $e")),
+        );
+        setState(() => saving = false);
+        return;
+      }
+    }
+
+    final whenUtc = (_scheduledUtc ?? DateTime.now().toUtc()).toIso8601String();
 
     try {
-      final navigator = Navigator.of(context);
       if (widget.existing != null) {
-        await supabase
-            .from('group_announcements')
-            .update(announcement)
-            .eq('id', widget.existing!.id);
+        const m = r'''
+          mutation UpdateAnnouncements(
+            $id: uuid!,
+            $title: String!,
+            $body: String,
+            $image_url: String,
+            $when: timestamptz!
+          ) {
+            update_group_announcements_by_pk(
+              pk_columns: { id: $id },
+              _set: { title: $title, body: $body, image_url: $image_url, published_at: $when }
+            ) { id }
+          }
+        ''';
+
+        final res = await _client.mutate(MutationOptions(
+          document: gql(m),
+          variables: {
+            'id': widget.existing!.id,
+            'title': _title.text.trim(),
+            'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
+            'image_url': imageUrl,
+            'when': whenUtc,
+          },
+        ));
+        if (res.hasException) {
+          throw res.exception!;
+        }
       } else {
-        await supabase.from('group_announcements').insert({
-          ...announcement,
-          'created_by': supabase.auth.currentUser?.id,
-        });
+        const m = r'''
+          mutation InsertAnnouncements(
+            $groupId: uuid!,
+            $title: String!,
+            $body: String,
+            $image_url: String,
+            $when: timestamptz!
+          ) {
+            insert_group_announcements_one(
+              object: {
+                group_id: $groupId,
+                title: $title,
+                body: $body,
+                image_url: $image_url,
+                published_at: $when
+              }
+            ) { id }
+          }
+        ''';
+
+        final res = await _client.mutate(MutationOptions(
+          document: gql(m),
+          variables: {
+            'groupId': widget.groupId,
+            'title': _title.text.trim(),
+            'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
+            'image_url': imageUrl,
+            'when': whenUtc,
+          },
+        ));
+        if (res.hasException) {
+          throw res.exception!;
+        }
       }
 
-      navigator.pop(); // triggers refresh on parent page
+      if (!mounted) return;
+      Navigator.of(context).pop();
     } catch (e) {
-      debugPrint('Error saving announcement: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to save: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to save: $e')),
+      );
     } finally {
       if (mounted) setState(() => saving = false);
     }
@@ -98,9 +188,16 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_clientReady) {
+      return const Padding(
+        padding: EdgeInsets.all(24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     final isEditing = widget.existing != null;
     final bottom = MediaQuery.of(context).viewInsets.bottom;
-
+    
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: SingleChildScrollView(
@@ -119,8 +216,8 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
               TextFormField(
                 controller: _title,
                 decoration: InputDecoration(labelText: "key_156".tr()),
-                validator: (value) =>
-                    value == null || value.isEmpty ? "key_156a".tr() : null,
+                validator: (v) =>
+                    v == null || v.isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 12),
 
@@ -144,6 +241,19 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                   child: Text("key_158".tr()),
                 ),
               ),
+              const SizedBox(height: 12),
+              
+              ImagePickerField(
+                label: 'Announcement Image',
+                initialUrl: widget.existing?.imageUrl,
+                onChanged: (localFile, removed) {
+                  setState(() {
+                    _selectedImage = localFile;
+                    _removedImage = removed;
+                  });
+                },
+              ),
+
               const SizedBox(height: 20),
 
               if (saving)
@@ -154,7 +264,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed: _submit,
-                        child: Text(isEditing ? "key_041i".tr() : "key_141h".tr()),
+                        child: Text(isEditing ? "key_041i".tr() : "key_041h".tr()),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -163,7 +273,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                       child: Text("key_159".tr()),
                     ),
                   ],
-                )
+                ),
             ],
           ),
         ),

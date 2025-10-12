@@ -1,9 +1,11 @@
 // File: lib/features/more/pages/view_child_profile.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+
+import 'package:ccf_app/core/graph_provider.dart';
 
 class ViewChildProfilePage extends StatefulWidget {
   final String childId;
@@ -14,7 +16,6 @@ class ViewChildProfilePage extends StatefulWidget {
 }
 
 class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
-  final _supabase = Supabase.instance.client;
   bool _loading = true;
   Map<String, dynamic>? _child;
   String? _error;
@@ -31,18 +32,41 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
       _error = null;
     });
 
-    try {
-      final response = await _supabase
-          .from('child_profiles')
-          .select()
-          .eq('id', widget.childId)
-          .maybeSingle();
+    const q = r'''
+      query Child($id: uuid!) {
+        child_profiles_by_pk(id: $id) {
+          id
+          display_name
+          birthday
+          photo_url
+          allergies
+          notes
+          emergency_contact
+          qr_code_url
+        }
+      }
+    ''';
 
-      setState(() => _child = response);
-    } catch (e) {
+    try {
+      final client = GraphProvider.of(context);
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          variables: {'id': widget.childId},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+
+      if (res.hasException) {
+        setState(() => _error = 'Failed to load child profile');
+      } else {
+        final data = res.data?['child_profiles_by_pk'] as Map<String, dynamic>?;
+        setState(() => _child = data);
+      }
+    } catch (_) {
       setState(() => _error = 'Failed to load child profile');
     } finally {
-      setState(() => _loading = false);
+      if (mounted) setState(() => _loading = false);
     }
   }
 
@@ -57,22 +81,14 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
     }
 
     final child = _child!;
-    final name = child['display_name'] ?? 'Unnamed';
-    final birthday = child['birthday'];
-    final formattedBirthday = birthday != null
-        ? DateFormat('MMM d, yyyy').format(DateTime.parse(birthday))
-        : null;
-    final photoUrl = child['photo_url'];
-    final allergies = (child['allergies'] as String?)?.trim().isNotEmpty == true
-        ? child['allergies']
-        : 'None';
-    final notes = (child['notes'] as String?)?.trim().isNotEmpty == true
-        ? child['notes']
-        : 'None';
-    final emergency = (child['emergency_contact'] as String?)?.trim().isNotEmpty == true
-        ? child['emergency_contact']
-        : 'None';
-    final qrUrl = child['qr_code_url'];
+    final name = (child['display_name'] ?? 'Unnamed') as String;
+    final birthday = child['birthday'] as String?;
+    final formattedBirthday = _formatBirthday(birthday);
+    final photoUrl = child['photo_url'] as String?;
+    final allergies = _nonEmptyOr(child['allergies'] as String?, 'None');
+    final notes = _nonEmptyOr(child['notes'] as String?, 'None');
+    final emergency = _nonEmptyOr(child['emergency_contact'] as String?, 'None');
+    final qrUrl = child['qr_code_url'] as String?;
 
     return Scaffold(
       appBar: AppBar(
@@ -81,9 +97,7 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () {
-              if (_child != null) {
-                context.pushNamed('edit_child_profile', extra: _child!);
-              }
+              context.pushNamed('edit_child_profile', extra: child);
             },
           ),
         ],
@@ -125,7 +139,7 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
                   children: [
                     Text(
                       "key_323a".tr(),
-                      style: TextStyle(fontWeight: FontWeight.bold),
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 12),
                     Image.network(qrUrl, height: 180),
@@ -137,4 +151,18 @@ class _ViewChildProfilePageState extends State<ViewChildProfilePage> {
       ),
     );
   }
+
+  String? _formatBirthday(String? iso) {
+    if (iso == null || iso.isEmpty) return null;
+    try {
+      return DateFormat('MMM d, yyyy').format(DateTime.parse(iso).toLocal());
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  String _nonEmptyOr(String? value, String fallback) {
+    final v = value?.trim() ?? '';
+    return v.isEmpty ? fallback : v;
+    }
 }

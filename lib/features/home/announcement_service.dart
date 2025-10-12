@@ -1,45 +1,101 @@
 // File: lib/features/home/announcement_service.dart
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/group_announcement.dart';
 
 class AnnouncementService {
-  final supabase = Supabase.instance.client;
+  final GraphQLClient _gql;
+  final String? _currentUserId;
 
-  /// Fetch announcements for groups the user is in
-  /// [onlyPublished] filters out announcements scheduled for the future
+  AnnouncementService(this._gql, {String? currentUserId})
+      : _currentUserId = currentUserId;
+
+  /// Fetch announcements for groups the user is in.
+  /// [onlyPublished] filters out announcements scheduled for the future.
   Future<List<GroupAnnouncement>> fetchGroupAnnouncements({bool onlyPublished = false}) async {
-    final userId = supabase.auth.currentUser?.id;
+    final userId = _currentUserId;
     if (userId == null) return [];
 
-    // Get the groups the user is in
-    final memberships = await supabase
-        .from('group_memberships')
-        .select('group_id')
-        .eq('user_id', userId)
-        .eq('status', 'approved');
+    // 1) Get approved group memberships → group_ids
+    const qMemberships = r'''
+      query MyApprovedMemberships($uid: String!) {
+        group_memberships(where: {user_id: {_eq: $uid}, status: {_eq: "approved"}}) {
+          group_id
+        }
+      }
+    ''';
 
-    final groupIds = (memberships as List)
-        .map((e) => e['group_id'] as String)
+    final res1 = await _gql.query(
+      QueryOptions(
+        document: gql(qMemberships),
+        variables: {'uid': userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (res1.hasException) throw res1.exception!;
+    final groupIds = (res1.data?['group_memberships'] as List<dynamic>? ?? [])
+        .map((e) => e as Map<String, dynamic>) // Cast to Map
+        .where((e) => e.containsKey('group_id') && e['group_id'] is String) // Filter for valid keys and types
+        .map((e) => e['group_id'] as String) // Safely map to String
         .toSet();
-
     if (groupIds.isEmpty) return [];
 
-    // Get announcements for those groups
-    final data = await supabase
-        .from('group_announcements')
-        .select()
-        .inFilter('group_id', groupIds.toList())
-        .order('published_at', ascending: false);
+    // 2) Fetch announcements for those groups (optionally only published)
+    final qAnnouncements = onlyPublished ? _qAnnouncementsPublished : _qAnnouncementsAll;
 
-    final announcements = (data as List)
-        .map((e) => GroupAnnouncement.fromMap(e))
-        .toList();
+    final vars = {
+      'groupIds': groupIds.toList(),
+      if (onlyPublished) 'now': DateTime.now().toUtc().toIso8601String(),
+    };
 
-    if (!onlyPublished) return announcements;
+    final res2 = await _gql.query(
+      QueryOptions(
+        document: gql(qAnnouncements),
+        variables: vars,
+        fetchPolicy: FetchPolicy.networkOnly,
+      ),
+    );
+    if (res2.hasException) throw res2.exception!;
 
-    final now = DateTime.now().toUtc();
-    return announcements
-        .where((a) => a.publishedAt.isBefore(now))
-        .toList();
+    final rows = (res2.data?['announcements'] as List<dynamic>? ?? [])
+        .cast<Map<String, dynamic>>();
+
+    return rows.map(GroupAnnouncement.fromMap).toList();
   }
+
+  // Query: all announcements for given groupIds
+  static const _qAnnouncementsAll = r'''
+    query AnnouncementsAll($groupIds: [uuid!]!) {
+      announcements(
+        where: { group_id: { _in: $groupIds } }
+        order_by: { published_at: desc }
+      ) {
+        id
+        group_id
+        title
+        body
+        image_url
+        published_at
+      }
+    }
+  ''';
+
+  // Query: only announcements with published_at <= now
+  static const _qAnnouncementsPublished = r'''
+    query AnnouncementsPublished($groupIds: [uuid!]!, $now: timestamptz!) {
+      announcements(
+        where: { 
+          group_id: { _in: $groupIds },
+          published_at: { _lte: $now }
+        }
+        order_by: { published_at: desc }
+      ) {
+        id
+        group_id
+        title
+        body
+        image_url
+        published_at
+      }
+    }
+  ''';
 }

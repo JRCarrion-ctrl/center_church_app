@@ -1,8 +1,12 @@
 // File: lib/features/groups/pages/group_join_page.dart
 import 'package:flutter/material.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+
+import '../../../core/graph_provider.dart';             // <-- Hasura GraphQLClient
+import '../../../app_state.dart';               // <-- AppState for current user id
 import '../group_service.dart';
 import '../models/group.dart';
-import 'package:easy_localization/easy_localization.dart';
 
 Future<void> showGroupJoinModal(BuildContext context, String groupId) async {
   showModalBottomSheet(
@@ -17,7 +21,6 @@ Future<void> showGroupJoinModal(BuildContext context, String groupId) async {
 
 class _GroupJoinModalContent extends StatefulWidget {
   final String groupId;
-
   const _GroupJoinModalContent({required this.groupId});
 
   @override
@@ -29,14 +32,21 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
   bool isLoading = true;
   bool isJoining = false;
 
+  late GroupService _groups;
+  bool _inited = false;
+
   @override
-  void initState() {
-    super.initState();
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_inited) return;
+    _inited = true;
+    _groups = GroupService(GraphProvider.of(context));
     _loadGroup();
   }
 
   Future<void> _loadGroup() async {
-    final fetched = await GroupService().getGroupById(widget.groupId);
+    final fetched = await _groups.getGroupById(widget.groupId);
+    if (!mounted) return;
     setState(() {
       group = fetched;
       isLoading = false;
@@ -44,21 +54,38 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
   }
 
   Future<void> _joinGroup() async {
+    final uid = context.read<AppState>().profile?.id;
+    if (uid == null || uid.isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Not signed in')),
+      );
+      return;
+    }
+
     setState(() => isJoining = true);
     try {
-      await GroupService().joinGroup(widget.groupId);
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(group!.visibility == 'public' ? 'Joined group!' : 'Request sent!')),
-        );
-      }
+      await _groups.joinGroup(
+        groupId: widget.groupId,
+        userId: uid, // <-- required now
+      );
+
+      if (!mounted) return;
+      Navigator.pop(context);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            (group?.visibility == 'public')
+                ? 'Joined group!'
+                : 'Request sent!',
+          ),
+        ),
+      );
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to join group: $e')),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to join group: $e')),
+      );
     } finally {
       if (mounted) setState(() => isJoining = false);
     }
@@ -75,7 +102,7 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
 
     if (group == null) {
       return Padding(
-        padding: EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
         child: Center(child: Text("key_114".tr())),
       );
     }
@@ -99,7 +126,8 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
               backgroundImage: NetworkImage(group!.photoUrl!),
             ),
           const SizedBox(height: 16),
-          Text(group!.name, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(group!.name,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
           const SizedBox(height: 8),
           Text(group!.description ?? '', textAlign: TextAlign.center),
           const SizedBox(height: 24),

@@ -1,9 +1,16 @@
+// File: lib/features/groups/widgets/group_chat_tab.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+import 'dart:developer' as dev;
+
+import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
-import 'package:easy_localization/easy_localization.dart';
 
+import '../../../app_state.dart';
 import '../models/group_message.dart';
 import '../group_chat_service.dart';
 import '../chat_storage_service.dart';
@@ -30,38 +37,70 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   final _reactionMap = <String, List<String>>{};
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
+  StreamSubscription<GroupMessage>? _msgSub;
+  final _live = <GroupMessage>[];
 
-  final _chatService = GroupChatService();
-  final _storageService = ChatStorageService();
-  final _pinService = GroupPinService();
+  late GroupChatService _chatService;
+  late ChatStorageService _storageService;
+  late GroupPinService _pinService;
+  bool _isInitialized = false;
 
-  late final RealtimeChannel _reactionChannel;
   bool _showJumpToLatest = false;
   bool _initialScrollDone = false;
   String? _highlightMessageId;
   String? _pinnedPreview;
 
-  String? get _userId => Supabase.instance.client.auth.currentUser?.id;
+  Timer? _reactionsTimer;
+
+  String? get _userId => context.read<AppState>().profile?.id;
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initializeChat());
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      routeObserver.subscribe(this, route);
+
+    if (!_isInitialized) {
+      // 1) Build and initialize services
+      final GraphQLClient gql = GraphProvider.of(context);
+      _chatService = GroupChatService(
+        gql,
+        getCurrentUserId: () => context.read<AppState>().profile?.id ?? '',
+      );
+      _storageService = ChatStorageService(gql);
+      _pinService = GroupPinService(gql);
+      
+      _isInitialized = true;
+
+      // 2) Wire the stream for new messages
+      _msgSub = _chatService
+          .streamNewMessages(widget.groupId, since: DateTime.utc(2000, 1, 1))
+          .listen((m) {
+            dev.log('[TAB] stream msg id=${m.id} content=${m.content}', name: 'TAB');
+            if (!mounted) return;
+            setState(() => _live.add(m));
+            _scrollToBottom();
+          }, onError: (e, st) {
+            dev.log('[TAB] stream error: $e', name: 'TAB', stackTrace: st);
+          });
+      
+      // 3) Other initializations
+      _initializeChat();
     }
+
+    // 4) Route observer logic
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
   }
 
   @override
   void dispose() {
+    _msgSub?.cancel();
     routeObserver.unsubscribe(this);
-    _reactionChannel.unsubscribe();
+    _reactionsTimer?.cancel();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -69,66 +108,83 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   @override
   void didPopNext() {
-    setState(() {}); // Triggers MessageListView to rebuild
+    setState(() {});
   }
 
   Future<void> _initializeChat() async {
     _reactionMap.addAll(await _chatService.getReactions(widget.groupId));
     await _loadPinnedMessage();
 
-    _reactionChannel = Supabase.instance.client
-        .channel('public:message_reactions')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'message_reactions',
-          callback: (payload) {
-            final data = payload.newRecord;
-            final messageId = data['message_id'];
-            final emoji = data['emoji'];
-            if (mounted) {
-              setState(() {
-                _reactionMap.putIfAbsent(messageId, () => []).add(emoji);
-              });
-            }
-          },
-        )
-        .subscribe();
+    _reactionsTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+      if (!mounted) return;
+      final latest = await _chatService.getReactions(widget.groupId);
+      if (!mounted) return;
+      setState(() {
+        _reactionMap
+          ..clear()
+          ..addAll(latest);
+      });
+    });
 
     _scrollController.addListener(_handleScroll);
   }
 
   void _handleScroll() {
-    final shouldShow = (_scrollController.position.maxScrollExtent - _scrollController.offset) > 300;
+    if (!_scrollController.hasClients) return;
+    final distanceFromBottom = _scrollController.offset;
+    final shouldShow = distanceFromBottom > 300;
     if (_showJumpToLatest != shouldShow && mounted) {
       setState(() => _showJumpToLatest = shouldShow);
     }
   }
 
   Future<void> _loadPinnedMessage() async {
-    final response = await Supabase.instance.client
-        .from('groups')
-        .select('pinned_message_id')
-        .eq('id', widget.groupId)
-        .maybeSingle();
+    final client = GraphProvider.of(context);
 
-    final pinnedId = response?['pinned_message_id'];
-    if (pinnedId != null) {
-      final message = await Supabase.instance.client
-          .from('group_messages')
-          .select('content')
-          .eq('id', pinnedId)
-          .maybeSingle();
-      setState(() {
-        _highlightMessageId = pinnedId;
-        _pinnedPreview = message?['content'];
-      });
-    } else {
+    const qPinned = r'''
+      query PinnedMsg($gid: uuid!) {
+        groups_by_pk(id: $gid) { pinned_message_id }
+      }
+    ''';
+    final res = await client.query(QueryOptions(
+      document: gql(qPinned),
+      variables: {'gid': widget.groupId},
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+
+    if (res.hasException) {
       setState(() {
         _highlightMessageId = null;
         _pinnedPreview = null;
       });
+      return;
     }
+
+    final pinnedId = res.data?['groups_by_pk']?['pinned_message_id'] as String?;
+    if (pinnedId == null) {
+      setState(() {
+        _highlightMessageId = null;
+        _pinnedPreview = null;
+      });
+      return;
+    }
+
+    const qContent = r'''
+      query PinnedContent($mid: uuid!) {
+        group_messages_by_pk(id: $mid) { content }
+      }
+    ''';
+    final res2 = await client.query(QueryOptions(
+      document: gql(qContent),
+      variables: {'mid': pinnedId},
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+
+    final content = res2.data?['group_messages_by_pk']?['content'] as String?;
+    setState(() {
+      _highlightMessageId = pinnedId;
+      _pinnedPreview = content;
+    });
   }
 
   void _scrollToPinnedMessage() {
@@ -145,14 +201,18 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   Future<void> _scrollToBottom({bool instant = false}) async {
     await Future.delayed(const Duration(milliseconds: 10));
+    if (_scrollController.hasClients) {
+      // jump to bottom (maxScrollExtent) for non-reversed ListView
+      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        final position = _scrollController.position.maxScrollExtent;
+        final target = _scrollController.position.maxScrollExtent;
         if (instant) {
-          _scrollController.jumpTo(position);
+          _scrollController.jumpTo(target);
         } else {
           _scrollController.animateTo(
-            position,
+            target,
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOut,
           );
@@ -232,19 +292,25 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         padding: const EdgeInsets.all(16.0),
         child: Wrap(
           spacing: 10,
-          children: emojis.map((e) => GestureDetector(
-            onTap: () async {
-              Navigator.pop(context);
-              final userId = Supabase.instance.client.auth.currentUser!.id;
-              await Supabase.instance.client
-                  .from('message_reactions')
-                  .delete()
-                  .match({'message_id': message.id, 'user_id': userId});
-              await _chatService.addReaction(message.id, e);
-              if (mounted) setState(() {});
-            },
-            child: Text(e, style: const TextStyle(fontSize: 28)),
-          )).toList(),
+          children: emojis
+              .map(
+                (e) => GestureDetector(
+                  onTap: () async {
+                    Navigator.pop(context);
+                    await _chatService.addReaction(message.id, e);
+                    if (!mounted) return;
+                    final latest = await _chatService.getReactions(widget.groupId);
+                    if (!mounted) return;
+                    setState(() {
+                      _reactionMap
+                        ..clear()
+                        ..addAll(latest);
+                    });
+                  },
+                  child: Text(e, style: const TextStyle(fontSize: 28)),
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -253,6 +319,11 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final userId = _userId ?? '';
+    if (!_isInitialized) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is ScrollUpdateNotification &&
@@ -302,7 +373,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                   Expanded(
                     child: MessageListView(
                       groupId: widget.groupId,
-                      userId: _userId ?? '',
+                      userId: userId,
                       scrollController: _scrollController,
                       reactionMap: _reactionMap,
                       onLongPress: _showMessageOptions,
@@ -314,6 +385,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                           _initialScrollDone = true;
                         }
                       },
+                      chatService: _chatService,
                     ),
                   ),
                   Padding(
@@ -322,8 +394,12 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                       controller: _messageController,
                       onSend: _sendMessage,
                       onFilePicked: (file) async {
-                        final url = await _storageService.uploadFile(file, widget.groupId);
-                        final isImage = url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg');
+                        final url =
+                            await _storageService.uploadFile(file, widget.groupId);
+                        final isImage = url.endsWith('.png') ||
+                            url.endsWith('.jpg') ||
+                            url.endsWith('.jpeg') ||
+                            url.endsWith('.webp');
                         await _chatService.sendMessage(
                           widget.groupId,
                           isImage ? '[Image]' : '[File]',

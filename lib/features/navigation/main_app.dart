@@ -8,12 +8,13 @@ import '../../app_state.dart';
 class MainApp extends StatelessWidget {
   final Widget child;
 
-  static final tabs = [
-    _TabItem(path: '/groups', icon: Icons.group, label: "main_1".tr()),
-    _TabItem(path: '/calendar', icon: Icons.calendar_today, label: "main_2".tr()),
-    _TabItem(path: '/', icon: Icons.home, label: "main_3".tr()),
-    _TabItem(path: '/prayer', icon: Icons.book, label: "main_4".tr()),
-    _TabItem(path: '/more', icon: Icons.more_horiz, label: "main_5".tr()),
+  // store keys, not translated strings
+  static const tabs = [
+    _TabItem(path: '/groups', icon: Icons.group, labelKey: 'main_1'),
+    _TabItem(path: '/calendar', icon: Icons.calendar_today, labelKey: 'main_2'),
+    _TabItem(path: '/', icon: Icons.home, labelKey: 'main_3'),
+    _TabItem(path: '/prayer', icon: Icons.book, labelKey: 'main_4'),
+    _TabItem(path: '/more', icon: Icons.more_horiz, labelKey: 'main_5'),
   ];
 
   const MainApp({super.key, required this.child});
@@ -41,10 +42,10 @@ class MainApp extends StatelessWidget {
             backgroundColor: theme.colorScheme.surfaceContainerHighest,
             leadingWidth: 120,
             leading: Padding(
-              padding: const EdgeInsets.only(left: 16.0),
+              padding: const EdgeInsets.only(left: 1.0),
               child: Center(
                 child: Text(
-                  'CCFrederick',
+                  'CCF',
                   style: TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.bold,
@@ -64,7 +65,7 @@ class MainApp extends StatelessWidget {
             actions: [
               IconButton(
                 icon: Icon(Icons.notifications, color: textColor),
-                onPressed: () => context.push('/notifications')
+                onPressed: () => context.push('/notifications'),
               ),
             ],
             bottom: PreferredSize(
@@ -80,14 +81,17 @@ class MainApp extends StatelessWidget {
             currentIndex: selectedIndex,
             onTap: (index) {
               if (index != selectedIndex) {
-                  appState.updateTabIndex(index);
-                  context.go(tabs[index].path);
+                appState.updateTabIndex(index);
+                context.go(tabs[index].path);
               }
             },
             selectedItemColor: theme.colorScheme.primary,
             unselectedItemColor: theme.unselectedWidgetColor,
             items: tabs
-                .map((t) => BottomNavigationBarItem(icon: Icon(t.icon), label: t.label))
+                .map((t) => BottomNavigationBarItem(
+                      icon: Icon(t.icon),
+                      label: t.labelKey.tr(), // translate at build time
+                    ))
                 .toList(),
           ),
         );
@@ -99,11 +103,11 @@ class MainApp extends StatelessWidget {
 class _TabItem {
   final String path;
   final IconData icon;
-  final String label;
+  final String labelKey;
 
   const _TabItem({
     required this.path,
     required this.icon,
-    required this.label,
+    required this.labelKey,
   });
 }

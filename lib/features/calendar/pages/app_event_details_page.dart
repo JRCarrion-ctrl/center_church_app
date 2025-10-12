@@ -1,9 +1,13 @@
+// filename: app_event_details_page.dart
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
-import 'package:ccf_app/core/time_service.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
 
+import 'package:ccf_app/core/time_service.dart';
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/shared/user_roles.dart'; // <--- Ensure this import is available
 import '../event_service.dart';
 import '../models/app_event.dart';
 
@@ -17,104 +21,125 @@ class AppEventDetailsPage extends StatefulWidget {
 }
 
 class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
-  final _eventService = EventService();
-  int _attendingCount = 1;
+  late EventService _eventService;
+  bool _svcReady = false;
+
+  int _attendingCount = 1; // Corrected by _loadRSVPs if an existing RSVP is found
   bool _saving = false;
-  bool _isSupervisor = false;
+  // REMOVED: bool _isSupervisor = false; // Now calculated in the build method
   List<Map<String, dynamic>> _rsvps = [];
 
   @override
   void initState() {
     super.initState();
-    _checkRole();
-    _loadRSVPs();
+    // Services are now initialized in didChangeDependencies
   }
 
-  Future<void> _checkRole() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-    final profile = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-    if (mounted) {
-      setState(() {
-        _isSupervisor = profile['role'] == 'leader' || profile['role'] == 'supervisor' || profile['role'] == 'owner';
-      });
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_svcReady) {
+      final client = GraphQLProvider.of(context).value;
+      final userId = context.read<AppState>().profile?.id;
+      _eventService = EventService(client, currentUserId: userId);
+      _svcReady = true;
+
+      // REMOVED: _checkRole(); // No longer needed, as role is read from AppState
+      _loadRSVPs();
     }
   }
 
+  // DELETED: Future<void> _checkRole() async { ... }
+
   Future<void> _loadRSVPs() async {
+    if (!_svcReady) return;
     try {
       final data = await _eventService.fetchAppEventRSVPs(widget.event.id);
-      if (mounted) setState(() => _rsvps = data);
-    } catch (_) {}
+      if (mounted) {
+        final currentUserId = context.read<AppState>().profile?.id;
+
+        // Safely find the current user's RSVP entry
+        final existingRsvp = data.firstWhere(
+          (r) => r['user_id'] == currentUserId,
+        );
+
+        setState(() {
+          _rsvps = data;
+          // FIX: Initialize _attendingCount with the existing value, or default to 1.
+          // This prevents accidentally overwriting a higher count with 1.
+          _attendingCount = existingRsvp['attending_count'] as int? ?? 1;
+        });
+      }
+    } catch (_) {
+      // no-op
+    }
   }
 
   Future<void> _submitRSVP() async {
+    if (!_svcReady) return;
     setState(() => _saving = true);
     try {
       await _eventService.rsvpAppEvent(
         appEventId: widget.event.id,
         count: _attendingCount,
       );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_027".tr())),
-        );
-        _loadRSVPs();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_028".tr())),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_027".tr())),
+      );
+      _loadRSVPs();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_028".tr())),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
   Future<void> _removeRSVP() async {
+    if (!_svcReady) return;
     setState(() => _saving = true);
     try {
       await _eventService.removeAppEventRSVP(widget.event.id);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_029".tr())),
-        );
-        _loadRSVPs();
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_030".tr())),
-        );
-      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_029".tr())),
+      );
+      _loadRSVPs();
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_030".tr())),
+      );
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
-
 
   void addEventToCalendar(AppEvent event) {
     final Event calendarEvent = Event(
       title: event.title,
       description: event.description,
       startDate: event.eventDate,
-      endDate: event.eventDate.add(Duration(hours: 1)), // Adjust duration if needed
+      endDate: event.eventDate.add(const Duration(hours: 1)),
       location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
-
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
-    final currentUserId = Supabase.instance.client.auth.currentUser?.id;
-    final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
+    final currentUserId = context.select<AppState, String?>((s) => s.profile?.id);
+    final hasRSVP = currentUserId != null && _rsvps.any((r) => r['user_id'] == currentUserId);
+    
+    // Synchronous Role Check (Replaces _isSupervisor state)
+    final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
+    final bool isSupervisor = userRole == UserRole.supervisor || userRole == UserRole.owner || userRole == UserRole.leader;
+
+
     return Scaffold(
       appBar: AppBar(title: Text(e.title)),
       body: ListView(
@@ -124,16 +149,13 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: Image.network(
-                  e.imageUrl!,
-                  gaplessPlayback: true, // prevents flicker
-                  fit: BoxFit.cover,
-                )
+                e.imageUrl!,
+                gaplessPlayback: true,
+                fit: BoxFit.cover,
+              ),
             ),
           const SizedBox(height: 16),
-          Text(
-            e.title,
-            style: Theme.of(context).textTheme.headlineSmall,
-          ),
+          Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
           Text(
             TimeService.formatUtcToLocal(
@@ -142,10 +164,10 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             ),
           ),
           const SizedBox(height: 6),
-          if (e.description != null && e.description?.isNotEmpty == true)
+          if ((e.description ?? '').isNotEmpty)
             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
           const SizedBox(height: 6),
-          if (e.location != null && e.location!.isNotEmpty)
+          if ((e.location ?? '').isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
               child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
@@ -153,13 +175,11 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
           const SizedBox(height: 6),
           ElevatedButton.icon(
             onPressed: () => addEventToCalendar(e),
-            icon: Icon(Icons.event),
+            icon: const Icon(Icons.event),
             label: Text("key_031".tr()),
           ),
           const Divider(height: 32),
-          Text("key_031a".tr(), 
-            style: Theme.of(context).textTheme.titleMedium
-          ),
+          Text("key_031a".tr(), style: Theme.of(context).textTheme.titleMedium),
           Row(
             children: [
               Text("key_032".tr()),
@@ -173,21 +193,24 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
               ),
               const Spacer(),
               ElevatedButton(
+                // The label for the button should indicate if it's a new RSVP or an update
                 onPressed: _saving ? null : _submitRSVP,
-                child: _saving ? const CircularProgressIndicator() : Text("key_033".tr()),
+                child: _saving ? const SizedBox(
+                  width: 20, 
+                  height: 20, 
+                  child: CircularProgressIndicator(strokeWidth: 2)
+                ) : Text(hasRSVP ? "key_033".tr() : "key_033".tr()),
               ),
               if (hasRSVP)
                 TextButton(
                   onPressed: _saving ? null : _removeRSVP,
-                  child: Text(
-                    "key_033a".tr(),
-                    style: TextStyle(color: Colors.red),
-                  ),
+                  child: Text("key_033a".tr(), style: const TextStyle(color: Colors.red)),
                 ),
             ],
           ),
           const Divider(height: 32),
-          if (_isSupervisor && _rsvps.isNotEmpty) ...[
+          // Use the local 'isSupervisor' bool
+          if (isSupervisor && _rsvps.isNotEmpty) ...[
             Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {

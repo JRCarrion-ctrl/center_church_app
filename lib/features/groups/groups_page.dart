@@ -1,11 +1,17 @@
 // file: lib/features/groups/groups_page.dart
 
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:easy_localization/easy_localization.dart';
+
 import 'your_groups_section.dart';
 import 'joinable_groups_section.dart';
 import 'invitations_section.dart';
-import 'package:easy_localization/easy_localization.dart';
+
+import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/core/graph_provider.dart';
+import 'package:ccf_app/shared/user_roles.dart';
 
 class GroupsPage extends StatefulWidget {
   const GroupsPage({super.key});
@@ -18,14 +24,6 @@ class _GroupsPageState extends State<GroupsPage> {
   final _yourGroupsKey = GlobalKey<YourGroupsSectionState>();
   final _joinableGroupsKey = GlobalKey<JoinableGroupsSectionState>();
   final _invitationsKey = GlobalKey<InvitationsSectionState>();
-  String? _userRole;
-  bool _loadingRole = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadUserRole();
-  }
 
   Future<void> _refreshAllSections() async {
     _yourGroupsKey.currentState?.refresh();
@@ -66,20 +64,19 @@ class _GroupsPageState extends State<GroupsPage> {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: visibility,
+                    initialValue: visibility,
                     decoration: InputDecoration(
                       labelText: "key_052c".tr(), // Visibility
                       border: const OutlineInputBorder(
                         borderRadius: BorderRadius.all(Radius.circular(32)),
                       ),
-                      contentPadding:
-                          const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                     ),
                     borderRadius: BorderRadius.circular(16),
                     items: [
                       DropdownMenuItem(value: 'invite_only', child: Text("key_053".tr())), // Invite only
-                      DropdownMenuItem(value: 'public', child: Text("key_054".tr())), // Public
-                      DropdownMenuItem(value: 'request', child: Text("Request")), // add i18n key if you have one
+                      DropdownMenuItem(value: 'public', child: Text("key_054".tr())),      // Public
+                      DropdownMenuItem(value: 'request', child: Text("Request")),           // TODO: i18n
                     ],
                     onChanged: creating
                         ? null
@@ -98,9 +95,9 @@ class _GroupsPageState extends State<GroupsPage> {
                     ? null
                     : () async {
                         setLocal(() => creating = true);
+
                         final name = nameController.text.trim();
                         final desc = descController.text.trim();
-
                         if (name.length < 3) {
                           ScaffoldMessenger.of(ctx).showSnackBar(
                             SnackBar(content: Text("key_056".tr())), // Name too short
@@ -109,42 +106,67 @@ class _GroupsPageState extends State<GroupsPage> {
                           return;
                         }
 
-                        try {
-                          final client = Supabase.instance.client;
-                          final userId = client.auth.currentUser?.id;
-                          if (userId == null) throw Exception('User not logged in');
-
-                          // Create group (explicit defaults; defensive)
-                          final groupInsert = await client
-                              .from('groups')
-                              .insert({
-                                'name': name,
-                                'description': desc.isEmpty ? null : desc,
-                                'visibility': visibility,            // 'invite_only' | 'public' | 'request'
-                                'temporary': false,
-                                'archived': false,
-                              })
-                              .select('id')
-                              .single();
-
-                          final groupId = groupInsert['id'] as String;
-
-                          // Make creator the owner
-                          await client.from('group_memberships').insert({
-                            'group_id': groupId,
-                            'user_id': userId,
-                            'role': 'owner',
-                            'status': 'approved',
-                            'joined_at': DateTime.now().toUtc().toIso8601String(),
-                          });
-
-                          if (ctx.mounted) Navigator.pop(ctx, true);
-                        } on PostgrestException catch (e) {
+                        final app = context.read<AppState>();
+                        final userId = app.profile?.id;
+                        if (userId == null || userId.isEmpty) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text(e.message)),
+                              SnackBar(content: Text("key_058a".tr())), // Please sign in...
                             );
                           }
+                          setLocal(() => creating = false);
+                          return;
+                        }
+
+                        // Hasura mutation: create group and make creator owner (nested insert)
+                        const mCreate = r'''
+                          mutation CreateGroup($name: String!, $desc: String, $vis: String!, $uid: String!) {
+                            insert_groups_one(
+                              object: {
+                                name: $name,
+                                description: $desc,
+                                visibility: $vis,
+                                temporary: false,
+                                archived: false,
+                                group_memberships: {
+                                  data: [{
+                                    user_id: $uid,
+                                    role: "owner",
+                                    status: "approved",
+                                    joined_at: "now()"
+                                  }]
+                                }
+                              }
+                            ) { id }
+                          }
+                        ''';
+
+                        try {
+                          final client = GraphProvider.of(context);
+                          final res = await client.mutate(
+                            MutationOptions(
+                              document: gql(mCreate),
+                              variables: {
+                                'name': name,
+                                'desc': desc.isEmpty ? null : desc,
+                                'vis': visibility,
+                                'uid': userId,
+                              },
+                              fetchPolicy: FetchPolicy.noCache,
+                            ),
+                          );
+
+                          if (res.hasException) {
+                            if (ctx.mounted) {
+                              ScaffoldMessenger.of(ctx).showSnackBar(
+                                SnackBar(content: Text(res.exception.toString())),
+                              );
+                            }
+                            setLocal(() => creating = false);
+                            return;
+                          }
+
+                          if (ctx.mounted) Navigator.pop(ctx, true);
                         } catch (e) {
                           if (ctx.mounted) {
                             ScaffoldMessenger.of(ctx).showSnackBar(
@@ -170,43 +192,18 @@ class _GroupsPageState extends State<GroupsPage> {
       await _refreshAllSections();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_group_created".tr(args: []),)), // add localization key if desired
+        SnackBar(content: Text("key_group_created".tr(args: []))),
       );
-    }
-  }
-
-  Future<void> _loadUserRole() async {
-    final userId = Supabase.instance.client.auth.currentUser?.id;
-    if (userId == null) {
-      if (mounted) setState(() => _loadingRole = false);
-      return;
-    }
-
-    final res = await Supabase.instance.client
-        .from('profiles')
-        .select('role')
-        .eq('id', userId)
-        .maybeSingle();
-
-    if (mounted) {
-      setState(() {
-        _userRole = res?['role'];
-        _loadingRole = false;
-      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = Supabase.instance.client.auth.currentUser;
+    final app = context.watch<AppState>();
+    final isAuthed = app.isAuthenticated;
+    final isOwner = app.userRole == UserRole.owner;
 
-    if (_loadingRole) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
-
-    if (user == null) {
+    if (!isAuthed) {
       return Scaffold(
         body: Center(
           child: Padding(
@@ -222,7 +219,7 @@ class _GroupsPageState extends State<GroupsPage> {
     }
 
     return Scaffold(
-      floatingActionButton: (_userRole == 'owner')
+      floatingActionButton: isOwner
           ? FloatingActionButton.extended(
               onPressed: _openCreateGroupDialog,
               icon: const Icon(Icons.add),

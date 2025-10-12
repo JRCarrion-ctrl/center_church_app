@@ -1,10 +1,15 @@
+// File: lib/features/nursery/pages/qr_checkin_scanner_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import 'package:logger/logger.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
+
+import 'package:ccf_app/core/graph_provider.dart';
+import 'package:ccf_app/app_state.dart';
 
 class QRCheckinScannerPage extends StatefulWidget {
   const QRCheckinScannerPage({super.key});
@@ -13,18 +18,48 @@ class QRCheckinScannerPage extends StatefulWidget {
   State<QRCheckinScannerPage> createState() => _QRCheckinScannerPageState();
 }
 
-class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
-  final supabase = Supabase.instance.client;
-  final logger = Logger();
-  final MobileScannerController _controller = MobileScannerController();
+class _QRCheckinScannerPageState extends State<QRCheckinScannerPage>
+    with WidgetsBindingObserver {
+  final MobileScannerController _controller = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+    returnImage: false,
+  );
 
   bool _processing = false;
   String? _error;
+  Timer? _errorClearTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _errorClearTimer?.cancel();
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused) {
+      _controller.stop();
+    } else if (state == AppLifecycleState.resumed) {
+      _controller.start();
+    }
+  }
+
+  void _showError(String message) {
+    _errorClearTimer?.cancel();
+    setState(() => _error = message);
+    _errorClearTimer = Timer(const Duration(seconds: 2), () {
+      if (!mounted) return;
+      setState(() => _error = null);
+    });
   }
 
   Future<void> _handleScan(String rawValue) async {
@@ -34,122 +69,205 @@ class _QRCheckinScannerPageState extends State<QRCheckinScannerPage> {
     await _controller.stop();
 
     try {
+      await HapticFeedback.mediumImpact();
+
       final childId = await _verifyQrKey(rawValue);
       if (childId == null) {
-        // key_315: "Invalid or expired QR code"
-        setState(() {
-          _error = "key_315".tr();
-          _processing = false;
-        });
+        if (!mounted) return;
+        _showError(tr('key_012')); // "Error"
+        await Future.delayed(const Duration(milliseconds: 600));
         await _controller.start();
         return;
       }
 
-      // Prevent duplicate check-ins (still checked-in with no checkout)
-      final existing = await supabase
-          .from('child_checkins')
-          .select('id')
-          .eq('child_id', childId);
-
-      if (existing.isNotEmpty) {
-        // key_317: "Child is already checked in"
-        setState(() {
-          _error = "key_317".tr();
-          _processing = false;
-        });
+      final checkin = await _checkInChild(childId);
+      if (checkin == null) {
+        if (!mounted) return;
+        _showError(tr('key_012'));
+        await Future.delayed(const Duration(milliseconds: 600));
         await _controller.start();
         return;
       }
 
-      await supabase.from('child_checkins').insert({
-        'child_id': childId,
-        // Store in UTC to be consistent app-wide
-        'check_in_time': DateTime.now().toUtc().toIso8601String(),
-      });
-
       if (!mounted) return;
-
-      // Navigate then confirm (snackbar lives on destination Scaffold)
-      context.go('/nursery');
-      // key_313: existing success string (e.g., "Checked in successfully")
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_313".tr())),
-      );
-    } catch (e, stack) {
-      logger.e('Check-in failed', error: e, stackTrace: stack);
+      // Return the childId to the caller (keeps your existing contract)
+      context.pop(childId);
+    } catch (_) {
       if (!mounted) return;
-
-      // key_316: "Check-in failed."
-      setState(() {
-        _error = "key_316".tr();
-      });
+      _showError(tr('key_012'));
+      await Future.delayed(const Duration(milliseconds: 600));
       await _controller.start();
     } finally {
-      if (mounted) {
-        setState(() => _processing = false);
-      }
+      if (mounted) setState(() => _processing = false);
     }
   }
 
+  /// Verify the scanned QR key against Hasura.
   Future<String?> _verifyQrKey(String rawKey) async {
-    final response = await supabase
-        .from('child_profile_qr_keys')
-        .select('child_id')
-        .eq('qr_key', rawKey)
-        .maybeSingle();
+    if (rawKey.isEmpty) return null;
 
-    if (response == null) return null;
-    final childId = response['child_id'];
-    return childId is String ? childId : childId?.toString();
+    const q = r'''
+      query VerifyQr($k: String!) {
+        child_profile_qr_keys(where: { qr_key: { _eq: $k } }, limit: 1) {
+          child_id
+        }
+      }
+    ''';
+
+    try {
+      final client = GraphProvider.of(context);
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          variables: {'k': rawKey},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+      if (res.hasException) return null;
+
+      final list = (res.data?['child_profile_qr_keys'] as List<dynamic>? ?? []);
+      if (list.isEmpty) return null;
+      final childId = list.first['child_id'];
+      return childId is String ? childId : childId?.toString();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Create (or reuse) a check-in for the child (idempotent).
+  Future<Map<String, dynamic>?> _checkInChild(String childId) async {
+    final staffId = context.read<AppState>().profile?.id;
+    if (staffId == null) return null;
+
+    // 1) Find existing open check-in
+    const qExisting = r'''
+      query ExistingCheckin($cid: uuid!) {
+        child_checkins(
+          where: { child_id: { _eq: $cid }, check_out_time: { _is_null: true } }
+          limit: 1
+        ) {
+          id
+          check_in_time
+        }
+      }
+    ''';
+
+    final client = GraphProvider.of(context);
+
+    try {
+      final existingRes = await client.query(
+        QueryOptions(
+          document: gql(qExisting),
+          variables: {'cid': childId},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+      if (existingRes.hasException) return null;
+
+      final existing = (existingRes.data?['child_checkins'] as List<dynamic>? ?? []);
+      if (existing.isNotEmpty) {
+        final row = existing.first as Map<String, dynamic>;
+        return {'id': row['id'], 'check_in_time': row['check_in_time']};
+      }
+
+      // 2) Insert a fresh check-in
+      const mInsert = r'''
+        mutation InsertCheckin($cid: uuid!, $uid: String!) {
+          insert_child_checkins_one(object: {
+            child_id: $cid,
+            checked_in_by: $uid
+          }) {
+            id
+            check_in_time
+          }
+        }
+      ''';
+
+      final insRes = await client.mutate(
+        MutationOptions(
+          document: gql(mInsert),
+          variables: {'cid': childId, 'uid': staffId},
+        ),
+      );
+      if (insRes.hasException) return null;
+
+      final row = insRes.data?['insert_child_checkins_one']
+          as Map<String, dynamic>?;
+      if (row == null) return null;
+
+      return {'id': row['id'], 'check_in_time': row['check_in_time']};
+    } catch (_) {
+      return null;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Scaffold(
-      // key_314: existing title, e.g., "Scan to Check In"
-      appBar: AppBar(title: Text("key_314".tr())),
+      appBar: AppBar(title: Text(tr('key_314'))), // "Scan QR Code"
       body: Stack(
         children: [
           MobileScanner(
             controller: _controller,
-            onDetect: (BarcodeCapture capture) {
+            onDetect: (capture) {
               if (_processing) return;
-
-              // Prefer a QR code if multiple barcodes detected
-              String? value;
-              for (final b in capture.barcodes) {
-                if (b.format == BarcodeFormat.qrCode) {
-                  value = b.rawValue;
-                  break;
-                }
-              }
-              value ??= capture.barcodes.isNotEmpty ? capture.barcodes.first.rawValue : null;
-
-              if (value != null) {
-                _handleScan(value);
-              }
+              final first = capture.barcodes.isNotEmpty ? capture.barcodes.first : null;
+              final raw = first?.rawValue ?? '';
+              if (raw.isEmpty) return;
+              _handleScan(raw);
             },
           ),
-          if (_processing)
-            const Center(child: CircularProgressIndicator()),
-          if (_error != null)
-            Positioned(
-              bottom: 32,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
+
+          // Hint
+          Positioned(
+            top: 16,
+            left: 16,
+            right: 16,
+            child: Center(
+              child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: Colors.red.shade200,
-                  borderRadius: BorderRadius.circular(8),
+                  color: theme.colorScheme.surface.withAlpha(217),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(
-                  _error!,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.black),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Text(
+                    tr('key_314_hint'), // "Center the QR code within the frame"
+                    textAlign: TextAlign.center,
+                  ),
                 ),
               ),
             ),
+          ),
+
+          // Error
+          if (_error != null)
+            Positioned(
+              bottom: 16,
+              left: 16,
+              right: 16,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Text(
+                    _error!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onErrorContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              ),
+            ),
+
+          if (_processing) const Center(child: CircularProgressIndicator()),
         ],
       ),
     );
