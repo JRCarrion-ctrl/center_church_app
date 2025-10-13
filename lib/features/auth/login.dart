@@ -11,22 +11,51 @@ class LoginSheet extends StatefulWidget {
 class _LoginSheetState extends State<LoginSheet> {
   bool _loading = false;
 
-  Future<void> _signin() async {
-    if (_loading) return;
-    setState(() => _loading = true);
-    try {
-      await context.read<AppState>().signInWithZitadel();
-      if (mounted && Navigator.of(context).canPop()) Navigator.of(context).pop();
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed')),
-      );
-    } finally {
-      if (mounted) setState(() => _loading = false);
-    }
-  }
+  // Refactored _signin method for _LoginSheetState
 
+Future<void> _signin() async {
+  if (_loading) return;
+  
+  // Start loading state
+  setState(() => _loading = true);
+
+  try {
+    // Attempt the sign-in flow
+    await context.read<AppState>().signInWithZitadel();
+    
+    // On success, dismiss the login sheet
+    if (mounted && Navigator.of(context).canPop()) {
+      Navigator.of(context).pop();
+    }
+  } catch (e) {
+    if (!mounted) return;
+
+    // Check if the error is the expected user cancellation message.
+    // The AppState throws Exception('Sign-in was canceled by the user.')
+    final isCancellation = e is Exception && e.toString().contains('Sign-in was canceled');
+    
+    if (isCancellation) {
+      // Do nothing: User voluntarily closed the login window.
+      // The loading spinner will be dismissed by the 'finally' block.
+    } else {
+      // Show a snackbar for all other errors (network, server, config, etc.)
+      // Use the error message or a generic failure message.
+      final displayMessage = e is Exception
+          ? 'Login failed: ${e.toString().split(':').last.trim()}'
+          : 'Login failed due to an unknown error.';
+          
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(displayMessage),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  } finally {
+    // Always stop the loading state, regardless of success or failure (cancellation/error)
+    if (mounted) setState(() => _loading = false);
+  }
+}
   @override
   Widget build(BuildContext context) {
     return Column(

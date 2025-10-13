@@ -1,4 +1,5 @@
 // file: lib/main.dart
+
 import 'dart:async';
 
 import 'package:ccf_app/app_router.dart';
@@ -55,7 +56,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   late final ValueNotifier<GraphQLClient> _clientNotifier;
   AppLinks? _appLinks;
   StreamSubscription<Uri?>? _linkSub;
-  bool _handledInitialLogin = false;
+  // _handledInitialLogin is no longer needed as the conflicting logic is removed.
 
   @override
   void initState() {
@@ -90,11 +91,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       if (uri == null) return;
 
       switch (uri.host) {
-        case 'login-callback':
-          await appState.restoreSession();
-          await appState.updateOneSignalUser();
-          if (mounted) _router.go('/');
-          break;
+        // 🛑 REMOVED: Handling for 'login-callback' has been removed to allow the OIDC library to handle the redirect Intent.
         case 'reset':
           if (mounted) _router.go('/reset-password');
           break;
@@ -108,11 +105,8 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     // Cold start link
     final initialUri = await _appLinks!.getInitialLink();
     if (initialUri != null) {
-      if (initialUri.host == 'login-callback' && !_handledInitialLogin) {
-        _handledInitialLogin = true;
-        await appState.restoreSession();
-        if (mounted) _router.go('/');
-      } else if (initialUri.host == 'reset') {
+      // 🛑 REMOVED: Handling for 'login-callback' on initial link has been removed.
+      if (initialUri.host == 'reset') {
         if (mounted) _router.go('/reset-password');
       }
     }

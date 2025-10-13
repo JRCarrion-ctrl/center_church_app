@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:flutter/services.dart'; // Import for PlatformException
 
 import 'features/auth/oidc_auth.dart';
 import 'core/hasura_client.dart';
@@ -247,11 +248,44 @@ class AppState extends ChangeNotifier {
   Future<void> signInWithZitadel() async {
     _logger.i('Starting signInWithZitadel');
     _setLoading(true);
-    await OidcAuth.signIn();
-    await restoreSession();
-    _setLoading(false);
-  }
 
+    try {
+      // 🛑 REFINEMENT: Explicitly handle the PlatformException to provide a clearer error,
+      // and keep the timeout as a safety net against non-throwing hangs.
+      await OidcAuth.signIn().timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          throw TimeoutException('Sign-in failed to complete within the time limit.');
+        },
+      );
+
+      await restoreSession();
+
+    } on PlatformException catch (e, st) {
+      _logger.e('Platform Auth Error: $e', error: e, stackTrace: st);
+      
+      // Throw a specific message for the known Android AppAuth conflict error
+      if (e.code == 'null_intent' || (e.message?.contains('Null intent received') ?? false)) {
+         throw Exception('Login Failed: Intent data was lost during redirect. Check Android deep-linking and MainActivity.kt.');
+      }
+      
+      rethrow; // Rethrow other PlatformExceptions
+      
+    } catch (e, st) {
+      _logger.e('Zitadel sign-in process failed or was cancelled', error: e, stackTrace: st);
+      
+      // If the error message indicates cancellation, throw a simple error 
+      // instead of the verbose platform exception.
+      if (e.toString().contains('User cancelled flow')) {
+          throw Exception('Sign-in was canceled by the user.');
+      }
+      
+      rethrow;
+    } finally {
+      _setLoading(false);
+    }
+  }
+  
   Future<void> signOut() async {
     _logger.i('Starting signOut');
     _setLoading(true);
