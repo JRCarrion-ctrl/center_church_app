@@ -5,56 +5,66 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
+import 'package:mime/mime.dart';
 
 class ChatStorageService {
   final GraphQLClient _client;
   ChatStorageService(this._client);
 
+  // It's good practice to define constants outside the method
+  // to avoid recreating them on every call.
+  static const _mPresign = r'''
+    mutation PresignUpload($filename: String!, $contentType: String!) {
+      get_presigned_upload(filename: $filename, contentType: $contentType) {
+        uploadUrl
+        finalUrl
+      }
+    }
+  ''';
+
   Future<String> uploadFile(File file, String groupId) async {
     try {
-      // Build storage path (namespaced by group)
-      final filename = 'group/$groupId/${const Uuid().v4()}_${p.basename(file.path)}';
-      final bytes = await file.readAsBytes();
-      final contentType = _detectContentType(file.path);
+      final filename = 'group_media/$groupId/${const Uuid().v4()}_${p.basename(file.path)}';
+      final contentType = lookupMimeType(file.path) ?? 'application/octet-stream';
 
-      // 1) Ask Hasura Action to presign an S3 upload (replace with your action name/shape if needed)
-      // TODO: Get presigned upload hasura action
-      const mPresign = r'''
-        mutation PresignUpload($path: String!, $contentType: String!) {
-          get_presigned_upload(path: $path, contentType: $contentType) {
-            uploadUrl
-            finalUrl
-          }
-        }
-      ''';
-
-      final presignRes = await _client.mutate(
+      final presignResult = await _client.mutate(
         MutationOptions(
-          document: gql(mPresign),
-          variables: {'path': filename, 'contentType': contentType},
+          document: gql(_mPresign),
+          variables: {'filename': filename, 'contentType': contentType},
           fetchPolicy: FetchPolicy.noCache,
         ),
       );
-      if (presignRes.hasException) {
-        throw Exception('Presign failed: ${presignRes.exception}');
+      if (presignResult.hasException) {
+        throw Exception('Presign failed: ${presignResult.exception}');
       }
 
-      final payload = presignRes.data?['get_presigned_upload'] as Map<String, dynamic>?;
+      final payload = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
       final uploadUrl = payload?['uploadUrl'] as String?;
       final finalUrl  = payload?['finalUrl']  as String?;
       if (uploadUrl == null || finalUrl == null) {
         throw Exception('Invalid presign response');
       }
+      debugPrint('🎯 Using Pre-signed URL: $uploadUrl');
 
-      // 2) Upload to S3 with the presigned URL
-      final put = await http.put(
-        Uri.parse(uploadUrl),
-        headers: {HttpHeaders.contentTypeHeader: contentType},
-        body: bytes,
-      );
-      if (put.statusCode != 200 && put.statusCode != 204) {
-        debugPrint('❌ S3 upload failed: ${put.statusCode} ${put.body}');
-        throw Exception('S3 upload failed (${put.statusCode})');
+      final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
+
+      // Set headers. Content-Length is crucial for S3-compatible services.
+      request.headers[HttpHeaders.contentTypeHeader] = contentType;
+      request.headers[HttpHeaders.contentLengthHeader] = (await file.length()).toString();
+
+      // ✨ REFINED PART ✨
+      // Start piping the file stream to the request sink. `send()` will consume this stream.
+      // The `pipe()` method will automatically close the sink when the file stream ends.
+      // The outer try/catch will handle any errors from the stream or the request.
+      file.openRead().pipe(request.sink);
+
+      // Send the request and wait for the response.
+      final response = await request.send();
+
+      if (response.statusCode != 200) {
+        final responseBody = await response.stream.bytesToString();
+        debugPrint('❌ S3 upload failed: ${response.statusCode} $responseBody');
+        throw Exception('S3 upload failed (${response.statusCode})');
       }
 
       debugPrint('✅ Uploaded to $finalUrl');
@@ -63,29 +73,6 @@ class ChatStorageService {
       debugPrint('❌ ChatStorageService.uploadFile error: $e');
       debugPrint(st.toString());
       rethrow;
-    }
-  }
-
-  String _detectContentType(String path) {
-    final ext = p.extension(path).toLowerCase();
-    switch (ext) {
-      case '.jpg':
-      case '.jpeg':
-        return 'image/jpeg';
-      case '.png':
-        return 'image/png';
-      case '.webp':
-        return 'image/webp';
-      case '.gif':
-        return 'image/gif';
-      case '.mp4':
-        return 'video/mp4';
-      case '.mov':
-        return 'video/quicktime';
-      case '.pdf':
-        return 'application/pdf';
-      default:
-        return 'application/octet-stream';
     }
   }
 }

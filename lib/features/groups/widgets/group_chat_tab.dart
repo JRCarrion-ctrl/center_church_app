@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'dart:developer' as dev;
 
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/core/time_service.dart';
@@ -33,12 +32,15 @@ class GroupChatTab extends StatefulWidget {
   State<GroupChatTab> createState() => _GroupChatTabState();
 }
 
+
 class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   final _reactionMap = <String, List<String>>{};
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
-  StreamSubscription<GroupMessage>? _msgSub;
-  final _live = <GroupMessage>[];
+  
+  // Removed StreamSubscription _msgSub and List _live as they are now handled by MessageListView
+  // StreamSubscription<GroupMessage>? _msgSub;
+  // final _live = <GroupMessage>[]; 
 
   late GroupChatService _chatService;
   late ChatStorageService _storageService;
@@ -75,17 +77,8 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
       
       _isInitialized = true;
 
-      // 2) Wire the stream for new messages
-      _msgSub = _chatService
-          .streamNewMessages(widget.groupId, since: DateTime.utc(2000, 1, 1))
-          .listen((m) {
-            dev.log('[TAB] stream msg id=${m.id} content=${m.content}', name: 'TAB');
-            if (!mounted) return;
-            setState(() => _live.add(m));
-            _scrollToBottom();
-          }, onError: (e, st) {
-            dev.log('[TAB] stream error: $e', name: 'TAB', stackTrace: st);
-          });
+      // 2) The MessageListView will now handle its own stream.
+      // We no longer need to wire the stream here.
       
       // 3) Other initializations
       _initializeChat();
@@ -98,7 +91,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   @override
   void dispose() {
-    _msgSub?.cancel();
+    // FIX: Removed _msgSub?.cancel()
     routeObserver.unsubscribe(this);
     _reactionsTimer?.cancel();
     _messageController.dispose();
@@ -131,8 +124,13 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   void _handleScroll() {
     if (!_scrollController.hasClients) return;
+    
+    // FIX: Scroll position check is now aligned with non-reversed list
+    // 0.0 is the newest message (bottom of screen).
+    // maxScrollExtent is the oldest message (top of screen).
     final distanceFromBottom = _scrollController.offset;
-    final shouldShow = distanceFromBottom > 300;
+    final shouldShow = distanceFromBottom > 300; // Check if user has scrolled UP (away from 0.0)
+
     if (_showJumpToLatest != shouldShow && mounted) {
       setState(() => _showJumpToLatest = shouldShow);
     }
@@ -191,7 +189,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     if (_highlightMessageId != null && _scrollController.hasClients) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollController.animateTo(
-          0,
+          _scrollController.position.maxScrollExtent, 
           duration: const Duration(milliseconds: 400),
           curve: Curves.easeInOut,
         );
@@ -200,25 +198,25 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   }
 
   Future<void> _scrollToBottom({bool instant = false}) async {
+    // FIX: Logic is simplified for non-reversed list (0.0 is the bottom/newest)
     await Future.delayed(const Duration(milliseconds: 10));
     if (_scrollController.hasClients) {
-      // jump to bottom (maxScrollExtent) for non-reversed ListView
-      _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
-    }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        final target = _scrollController.position.maxScrollExtent;
-        if (instant) {
-          _scrollController.jumpTo(target);
-        } else {
-          _scrollController.animateTo(
-            target,
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOut,
-          );
+      final target = 0.0; // The bottom/newest message is at offset 0.0
+      
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_scrollController.hasClients) {
+          if (instant) {
+            _scrollController.jumpTo(target);
+          } else {
+            _scrollController.animateTo(
+              target,
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOut,
+            );
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -327,8 +325,9 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is ScrollUpdateNotification &&
-            notification.metrics.pixels <= 0 &&
-            (notification.scrollDelta ?? 0) > 10) {
+            // FIX: Check for scroll to top (maxScrollExtent) to dismiss keyboard
+            notification.metrics.pixels >= notification.metrics.maxScrollExtent &&
+            (notification.scrollDelta ?? 0) < -10) { 
           FocusManager.instance.primaryFocus?.unfocus();
         }
         return false;
@@ -381,7 +380,8 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                       highlightMessageId: _highlightMessageId,
                       onMessagesRendered: () {
                         if (!_initialScrollDone) {
-                          _scrollToBottom(instant: true);
+                          // Scroll to bottom (0.0) on initial render
+                          _scrollToBottom(instant: true); 
                           _initialScrollDone = true;
                         }
                       },

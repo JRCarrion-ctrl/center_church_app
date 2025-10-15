@@ -389,80 +389,79 @@ class _ProfilePageState extends State<ProfilePage> {
   Future<void> _changePassword() async {
     if (!mounted) return;
 
-    final TextEditingController currentPasswordController = TextEditingController();
-    final TextEditingController newPasswordController = TextEditingController();
-    final TextEditingController confirmNewPasswordController = TextEditingController();
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmNewPasswordController = TextEditingController();
 
-    final bool? shouldChange = await showDialog<bool>(
+    await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text("Change Password"),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: currentPasswordController,
-                decoration: InputDecoration(labelText: "Current Password"),
-                obscureText: true,
+      builder: (context) {
+        // Use a StatefulBuilder to manage the dialog's own loading state.
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            bool isChanging = false;
+            String? errorText;
+
+            Future<void> performChange() async {
+              final currentPassword = currentPasswordController.text;
+              final newPassword = newPasswordController.text;
+              final confirmNewPassword = confirmNewPasswordController.text;
+
+              if (newPassword != confirmNewPassword) {
+                setDialogState(() => errorText = "Passwords do not match.");
+                return;
+              }
+              if (currentPassword.isEmpty || newPassword.isEmpty) {
+                setDialogState(() => errorText = "Password fields cannot be empty.");
+                return;
+              }
+              
+              setDialogState(() {
+                isChanging = true;
+                errorText = null;
+              });
+
+              try {
+                await OidcAuth.refreshIfNeeded();
+                await OidcAuth.changePassword(currentPassword, newPassword);
+                if (mounted) {
+                  Navigator.of(context).pop(); // Close dialog on success
+                  _showSnackbar(context, "Password changed successfully.");
+                }
+              } catch (e) {
+                _logger.e('Failed to change password', error: e);
+                setDialogState(() {
+                  isChanging = false;
+                  errorText = "Failed to change password. Please check your current password.";
+                });
+              }
+            }
+
+            return AlertDialog(
+              title: const Text("Change Password"),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(controller: currentPasswordController, decoration: const InputDecoration(labelText: "Current Password"), obscureText: true),
+                    TextField(controller: newPasswordController, decoration: const InputDecoration(labelText: "New Password"), obscureText: true),
+                    TextField(controller: confirmNewPasswordController, decoration: const InputDecoration(labelText: "Confirm New Password"), obscureText: true),
+                    if (errorText != null) Padding(padding: const EdgeInsets.only(top: 8.0), child: Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
+                  ],
+                ),
               ),
-              TextField(
-                controller: newPasswordController,
-                decoration: InputDecoration(labelText: "New Password"),
-                obscureText: true,
-              ),
-              TextField(
-                controller: confirmNewPasswordController,
-                decoration: InputDecoration(labelText: "Confirm New Password"),
-                obscureText: true,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.of(context).pop(false), child: Text("Cancel")),
-          TextButton(onPressed: () => Navigator.of(context).pop(true), child: Text("Change")),
-        ],
-      ),
+              actions: [
+                TextButton(onPressed: isChanging ? null : () => Navigator.of(context).pop(), child: const Text("Cancel")),
+                TextButton(
+                  onPressed: isChanging ? null : performChange,
+                  child: isChanging ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text("Change"),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
-
-    if (shouldChange != true) return;
-
-    final currentPassword = currentPasswordController.text;
-    final newPassword = newPasswordController.text;
-    final confirmNewPassword = confirmNewPasswordController.text;
-
-    if (newPassword != confirmNewPassword && mounted) {
-      _showSnackbar(context, "Passwords do not match.");
-      return;
-    }
-  
-    if (currentPassword.isEmpty && mounted || newPassword.isEmpty && mounted) {
-      _showSnackbar(context, "Password fields cannot be empty.");
-      return;
-    }
-  
-    setState(() => _isLoading = true);
-    try {
-      // 1. Refresh the token before attempting to change the password
-      await OidcAuth.refreshIfNeeded();
-    
-      // 2. Now call the changePassword method
-      await OidcAuth.changePassword(currentPassword, newPassword);
-    
-      if (!mounted) return;
-      _showSnackbar(context, "Password changed successfully.");
-
-    } catch (e, st) {
-      _logger.e('Failed to change password', error: e, stackTrace: st);
-      if (!mounted) return;
-      // Show a more user-friendly error message
-      _showSnackbar(context, "Failed to change password. Please check your current password and try again.");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
   }
 
   Future<void> _removePrayerRequest(String id) async {

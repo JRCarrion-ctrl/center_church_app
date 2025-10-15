@@ -578,5 +578,8 @@
   "how_q7": "Roles & Permissions",
   "how_a7": "Your role (User, Member, Admin, Leader, Supervisor, Owner) determines what you can access. You can view your role on your Profile page and any special permissions in the More tab.",
   "how_q8": "Settings & Customization",
-  "how_a8": "Go to the Settings page from the More tab to change your theme, notification preferences, language, accessibility options, and more."
+  "how_a8": "Go to the Settings page from the More tab to change your theme, notification preferences, language, accessibility options, and more.",
+  "Yesterday": "Yesterday",
+  "Today": "Today",
+  "key_download_file": "Download"
 }

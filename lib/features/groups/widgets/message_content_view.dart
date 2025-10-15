@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:open_filex/open_filex.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // ADDED for Network Image
 
 import '../media_cache_service.dart';
 import '../models/group_message.dart';
@@ -13,11 +14,19 @@ import 'package:flutter_link_previewer/flutter_link_previewer.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:easy_localization/easy_localization.dart';
 
+// --- Utility Extensions ---
+
 extension FileExtension on String {
-  bool get isImage => ['png', 'jpg', 'jpeg', 'webp', 'heic'].contains(toLowerCase());
-  bool get isVideo => ['mp4', 'mov', 'webm'].contains(toLowerCase());
-  bool get isGif => toLowerCase() == 'gif';
+  String get _ext => toLowerCase();
+  bool get isImage => ['png', 'jpg', 'jpeg', 'webp', 'heic'].contains(_ext);
+  bool get isVideo => ['mp4', 'mov', 'webm'].contains(_ext);
+  bool get isGif => _ext == 'gif';
+  bool get isViewableMedia => isImage || isGif || isVideo;
+  String get fileName => split('/').last;
+  String get extension => split('.').last;
 }
+
+// --- Main Widget ---
 
 class MessageContentView extends StatefulWidget {
   final GroupMessage message;
@@ -37,27 +46,31 @@ class MessageContentView extends StatefulWidget {
 
 class _MessageContentViewState extends State<MessageContentView> {
   dynamic _previewData;
-  static const _placeholders = {'[Image]', '[GIF]', '[File]'};
+  static const _placeholderTexts = {'[Image]', '[GIF]', '[File]'};
   Future<File?>? _mediaFuture;
 
   @override
   void initState() {
     super.initState();
-    _prepareAutoDownload();
+    _mediaFuture = _prepareAutoDownload();
   }
 
-  Future<void> _prepareAutoDownload() async {
-    final fileUrl = widget.message.fileUrl;
-    if (fileUrl == null) {
-      _mediaFuture = Future.value(null);
-      return;
-    }
+  // Helper to trigger download manually/retry
+  void _startManualDownload(String fileUrl) {
+    setState(() {
+      _mediaFuture = MediaCacheService().getMediaFile(fileUrl);
+    });
+  }
 
+  Future<File?> _prepareAutoDownload() async {
+    final fileUrl = widget.message.fileUrl;
+    if (fileUrl == null) return null; // No file, no action
+
+    final ext = fileUrl.extension;
     final prefs = await SharedPreferences.getInstance();
     final wifiOnly = prefs.getBool('mediaWifiOnly') ?? true;
     final autoDownloadImages = prefs.getBool('autoDownloadImages') ?? true;
     final autoDownloadVideos = prefs.getBool('autoDownloadVideos') ?? false;
-    final ext = fileUrl.split('.').last;
 
     final canAutoDownload = (ext.isImage && autoDownloadImages) ||
         (ext.isVideo && autoDownloadVideos) ||
@@ -65,17 +78,23 @@ class _MessageContentViewState extends State<MessageContentView> {
 
     if (canAutoDownload) {
       final connectivityResult = await Connectivity().checkConnectivity();
+      
+      // Check if we should download based on connectivity setting
       if (wifiOnly && !connectivityResult.contains(ConnectivityResult.wifi)) {
-        _mediaFuture = Future.value(null);
+        // Condition not met: Skip auto-download, resolve the future immediately to null.
+        return null;
       } else {
-        _mediaFuture = MediaCacheService().getMediaFile(fileUrl);
+        // Condition met: Initiate the full process (check cache OR fetch/cache).
+        // The FutureBuilder will show the loading indicator while this runs.
+        return MediaCacheService().getMediaFile(fileUrl);
       }
-    } else {
-      _mediaFuture = Future.value(null);
     }
-
-    if (mounted) setState(() {});
+    
+    // Auto-download preference is off for this file type, resolve immediately to null.
+    return null;
   }
+
+  // --- File Icon Helper ---
 
   IconData _getFileIcon(String extension) {
     switch (extension.toLowerCase()) {
@@ -95,20 +114,18 @@ class _MessageContentViewState extends State<MessageContentView> {
     }
   }
 
+  // --- Build Methods ---
+
   @override
   Widget build(BuildContext context) {
     final fileUrl = widget.message.fileUrl;
-
-    if (fileUrl != null) {
-      return _buildFileView(fileUrl);
-    }
-
-    return _buildTextAndLinkView();
+    return fileUrl != null ? _buildFileView(fileUrl) : _buildTextAndLinkView();
   }
 
   Widget _buildFileView(String fileUrl) {
     final content = widget.message.content.trim();
-    final extension = fileUrl.split('.').last;
+    final extension = fileUrl.extension;
+    final isViewableMedia = extension.isViewableMedia;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -116,23 +133,36 @@ class _MessageContentViewState extends State<MessageContentView> {
         FutureBuilder<File?>(
           future: _mediaFuture,
           builder: (context, snapshot) {
+            // 1. Still waiting for the initial auto-download check to resolve
             if (snapshot.connectionState == ConnectionState.waiting) {
               return _buildLoadingIndicator();
             }
+
             final file = snapshot.data;
-            if (file == null || !file.existsSync()) {
-              return _buildFileActionCard(fileUrl, extension, onTap: () {
-                setState(() {
-                  _mediaFuture = MediaCacheService().getMediaFile(fileUrl);
-                });
-              });
+            final isFileCached = file != null && file.existsSync();
+
+            // 2. If cached, show the media/file locally
+            if (isFileCached) {
+              return isViewableMedia
+                  ? _buildCachedMediaView(file, extension)
+                  : _buildFileCard(fileUrl, file, extension);
             }
-            return (extension.isImage || extension.isGif)
-                ? _buildCachedMediaView(file, extension)
-                : _buildFileCard(fileUrl, file, extension);
+            
+            // 3. If NOT cached AND it's an image/GIF, SHOW THE CDN CONTENT
+            if (extension.isImage || extension.isGif) {
+              return _buildNetworkMediaView(fileUrl, extension);
+            }
+
+            // 4. Fallback: If not cached and not viewable media (e.g., PDF, ZIP) 
+            //    or if video, show the dedicated download button/action card.
+            return _buildFileActionCard(
+              fileUrl, 
+              extension, 
+              onTap: () => _startManualDownload(fileUrl),
+            );
           },
         ),
-        if (content.isNotEmpty && !_placeholders.contains(content))
+        if (content.isNotEmpty && !_placeholderTexts.contains(content))
           Padding(
             padding: const EdgeInsets.only(top: 6),
             child: _buildLinkifiedText(content),
@@ -144,7 +174,7 @@ class _MessageContentViewState extends State<MessageContentView> {
   Widget _buildTextAndLinkView() {
     final content = widget.message.content.trim();
     final previewUrl = RegExp(r'https?:\/\/[^\s]+').firstMatch(content)?.group(0);
-    final remainingText = previewUrl != null ? content.replaceAll(previewUrl, '').trim() : content;
+    final remainingText = previewUrl != null ? content.replaceFirst(previewUrl, '').trim() : content;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -183,6 +213,40 @@ class _MessageContentViewState extends State<MessageContentView> {
       child: const Center(child: CircularProgressIndicator()),
     );
   }
+  
+  // --- NEW: View media from the CDN URL using CachedNetworkImage ---
+  Widget _buildNetworkMediaView(String fileUrl, String extension) {
+    // Tapping the network image should trigger the local download/cache
+    final onDoubleTapAction = () => _startManualDownload(fileUrl);
+    final onTapAction = () => _showFullscreenMedia(context, url: fileUrl);
+    
+    if (extension.isImage || extension.isGif) {
+      return GestureDetector(
+        onTap: onTapAction,
+        onDoubleTap: onDoubleTapAction,
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              CachedNetworkImage( // Use CachedNetworkImage for better performance/caching
+                imageUrl: fileUrl,
+                height: 200,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => _buildLoadingIndicator(),
+                errorWidget: (context, url, error) => const Center(child: Icon(Icons.error, color: Colors.red)),
+              ),
+              // Overlay a subtle icon to indicate it's not locally saved and tapping downloads it
+              const Icon(Icons.cloud_download, color: Colors.white70, size: 40),
+            ],
+          ),
+        ),
+      );
+    } 
+    // Fallback for non-image media (like video)
+    return _buildFileActionCard(fileUrl, extension, onTap: onTapAction);
+  }
+
 
   Widget _buildFileActionCard(
     String fileUrl,
@@ -190,6 +254,10 @@ class _MessageContentViewState extends State<MessageContentView> {
     required VoidCallback onTap,
   }) {
     final textColor = widget.isMe ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final themeColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color.fromARGB(64, 255, 255, 255)
+        : const Color.fromARGB(64, 0, 0, 0);
+
     return InkWell(
       onTap: onTap,
       child: ClipRRect(
@@ -199,9 +267,7 @@ class _MessageContentViewState extends State<MessageContentView> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color.fromARGB(64, 255, 255, 255)
-                  : const Color.fromARGB(64, 0, 0, 0),
+              color: themeColor,
               border: Border.all(color: Colors.white24),
               borderRadius: BorderRadius.circular(16),
             ),
@@ -211,7 +277,7 @@ class _MessageContentViewState extends State<MessageContentView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    "key_download_file".tr(args: [fileUrl.split('/').last]),
+                    "key_download_file".tr(args: [fileUrl.fileName]),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontWeight: FontWeight.w500, color: textColor),
                   ),
@@ -227,7 +293,7 @@ class _MessageContentViewState extends State<MessageContentView> {
   Widget _buildCachedMediaView(File file, String extension) {
     if (extension.isImage || extension.isGif) {
       return GestureDetector(
-        onTap: () => _showFullscreenImage(file),
+        onTap: () => _showFullscreenMedia(context, file: file, url: widget.message.fileUrl!), 
         child: ClipRRect(
           borderRadius: BorderRadius.circular(16),
           child: Image.file(file, height: 200, fit: BoxFit.cover),
@@ -242,6 +308,10 @@ class _MessageContentViewState extends State<MessageContentView> {
 
   Widget _buildFileCard(String fileUrl, File file, String extension) {
     final textColor = widget.isMe ? Colors.white : Theme.of(context).colorScheme.onSurface;
+    final themeColor = Theme.of(context).brightness == Brightness.dark
+        ? const Color.fromARGB(64, 255, 255, 255)
+        : const Color.fromARGB(64, 0, 0, 0);
+
     return InkWell(
       onTap: () async {
         try {
@@ -261,9 +331,7 @@ class _MessageContentViewState extends State<MessageContentView> {
           child: Container(
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
-              color: Theme.of(context).brightness == Brightness.dark
-                  ? const Color.fromARGB(64, 255, 255, 255)
-                  : const Color.fromARGB(64, 0, 0, 0),
+              color: themeColor,
               border: Border.all(color: Colors.white24),
               borderRadius: BorderRadius.circular(16),
             ),
@@ -273,7 +341,7 @@ class _MessageContentViewState extends State<MessageContentView> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    fileUrl.split('/').last,
+                    fileUrl.fileName,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(fontWeight: FontWeight.w500, color: textColor),
                   ),
@@ -304,7 +372,7 @@ class _MessageContentViewState extends State<MessageContentView> {
     );
   }
 
-  void _showFullscreenImage(File file) {
+  void _showFullscreenMedia(BuildContext context, {File? file, required String url}) {
     showDialog(
       context: context,
       builder: (_) => Stack(
@@ -316,7 +384,10 @@ class _MessageContentViewState extends State<MessageContentView> {
               minScale: 1,
               maxScale: 5,
               child: Center(
-                child: Image.file(file),
+                // Check if a local file exists, otherwise use the network URL
+                child: file != null 
+                    ? Image.file(file) 
+                    : CachedNetworkImage(imageUrl: url, fit: BoxFit.contain), // Use CachedNetworkImage for network URL
               ),
             ),
           ),
@@ -335,27 +406,29 @@ class _MessageContentViewState extends State<MessageContentView> {
     );
   }
 
+  // --- Text Style Helpers ---
+
+  // Extracted logic to determine text color based on theme and isMe flag
+  Color get _resolvedTextColor {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return widget.isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
+  }
+
   TextStyle _getTextStyle() {
     final scaleFactor = MediaQuery.textScalerOf(context).scale(1.0);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = widget.isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
     final effectiveFontSize = (widget.fontSize ?? 15) * scaleFactor;
-    return TextStyle(fontSize: effectiveFontSize, fontWeight: FontWeight.w400, color: textColor);
+    return TextStyle(fontSize: effectiveFontSize, fontWeight: FontWeight.w400, color: _resolvedTextColor);
   }
 
   TextStyle _getMetadataTextStyle() {
     final scaleFactor = MediaQuery.textScalerOf(context).scale(1.0);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = widget.isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
     return TextStyle(
       fontSize: (widget.fontSize ?? 13) * scaleFactor,
-      color: textColor.withAlpha((0.8 * 255).toInt()),
+      color: _resolvedTextColor.withAlpha((0.8 * 255).toInt()),
     );
   }
 
   TextStyle _getMetadataTitleStyle() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = widget.isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
-    return TextStyle(fontWeight: FontWeight.bold, color: textColor);
+    return TextStyle(fontWeight: FontWeight.bold, color: _resolvedTextColor);
   }
 }

@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -50,28 +49,112 @@ class GroupInfoPage extends StatefulWidget {
 }
 
 class _GroupInfoPageState extends State<GroupInfoPage> {
-  Group? group;
-  bool _isPageLoading = true;
-  bool _isEditing = false;
-  late TextEditingController _nameController;
-  late TextEditingController _descController;
-  GroupService? _groups;
+  late Future<GroupInfoData> _pageDataFuture;
+  late final GroupService _groupService;
+  bool _bootstrapped = false;
 
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _descController = TextEditingController();
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_groups == null) {
+    if (!_bootstrapped) {
+      _bootstrapped = true;
       final client = GraphProvider.of(context);
-      _groups = GroupService(client);
-      _loadGroup();
+      _groupService = GroupService(client);
+      _pageDataFuture = _groupService.getGroupInfoData(widget.groupId);
     }
+  }
+
+  Future<void> _refreshData() {
+    setState(() {
+      _pageDataFuture = _groupService.getGroupInfoData(widget.groupId);
+    });
+    return _pageDataFuture;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<GroupInfoData>(
+      future: _pageDataFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            appBar: AppBar(),
+            body: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text("key_086".tr()),
+                  const SizedBox(height: 8),
+                  ElevatedButton(onPressed: _refreshData, child: Text("Retry".tr())),
+                ],
+              ),
+            ),
+          );
+        }
+
+        final pageData = snapshot.data!;
+        return _GroupInfoView(
+          key: ValueKey(widget.groupId),
+          pageData: pageData,
+          isAdmin: widget.isAdmin,
+          isOwner: widget.isOwner,
+          onDataChange: _refreshData,
+        );
+      },
+    );
+  }
+}
+
+class _GroupInfoView extends StatefulWidget {
+  final GroupInfoData pageData;
+  final bool isAdmin;
+  final bool isOwner;
+  final Future<void> Function() onDataChange;
+
+  const _GroupInfoView({
+    super.key,
+    required this.pageData,
+    required this.isAdmin,
+    required this.isOwner,
+    required this.onDataChange,
+  });
+
+  @override
+  State<_GroupInfoView> createState() => _GroupInfoViewState();
+}
+
+class _GroupInfoViewState extends State<_GroupInfoView> {
+  bool _isEditing = false;
+  bool _isSaving = false;
+  late final TextEditingController _nameController;
+  late final TextEditingController _descController;
+  late final GroupService _groupService;
+  bool _isInitialized = false; // Flag to ensure one-time initialization
+
+  // ✅ FIX: Initialization moved from initState to here.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_isInitialized) {
+      _isInitialized = true;
+      _groupService = GroupService(GraphProvider.of(context));
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    // ✅ FIX: Service initialization is removed from here.
+    _nameController = TextEditingController(text: widget.pageData.group.name);
+    _descController = TextEditingController(text: widget.pageData.group.description ?? '');
   }
 
   @override
@@ -81,24 +164,22 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     super.dispose();
   }
 
-  Future<void> _loadGroup() async {
-    setState(() => _isPageLoading = true);
+  Future<void> _saveGroupEdits() async {
+    setState(() => _isSaving = true);
+    final messenger = ScaffoldMessenger.of(context);
     try {
-      group = await _groups!.getGroupById(widget.groupId);
-      if (group != null) {
-        _nameController.text = group!.name;
-        _descController.text = group!.description ?? '';
-      }
+      await _groupService.updateGroup(
+        groupId: widget.pageData.group.id,
+        name: _nameController.text.trim(),
+        description: _descController.text.trim(),
+      );
+      await widget.onDataChange();
+      if (mounted) setState(() => _isEditing = false);
+      messenger.showSnackBar(SnackBar(content: Text("key_084".tr())));
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load group info: $e')),
-        );
-      }
+      messenger.showSnackBar(SnackBar(content: Text('Failed to update: $e')));
     } finally {
-      if (mounted) {
-        setState(() => _isPageLoading = false);
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
   }
 
@@ -106,12 +187,14 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => InviteUserModal(groupId: widget.groupId),
+      builder: (ctx) => InviteUserModal(groupId: widget.pageData.group.id),
     );
   }
 
   Future<void> _leaveGroup() async {
     final uid = context.read<AppState>().profile?.id;
+    if (uid == null) return;
+
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -126,11 +209,9 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     if (confirm != true) return;
 
     try {
-      await _groups!.leaveGroup(groupId: widget.groupId, userId: uid);
+      await _groupService.leaveGroup(groupId: widget.pageData.group.id, userId: uid);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_082".tr())));
-      await Future<void>.delayed(const Duration(milliseconds: 200));
-      if (!mounted) return;
       context.go('/groups');
     } catch (e) {
       if (!mounted) return;
@@ -140,34 +221,33 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
     }
   }
 
-  Future<void> _saveGroupEdits() async {
-    setState(() => _isPageLoading = true);
-    final messenger = ScaffoldMessenger.of(context);
+  Future<void> _deleteGroup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("key_089".tr()),
+        content: Text("key_090".tr()),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_091".tr())),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_092".tr())),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
     try {
-      await _groups!.updateGroup(
-        groupId: widget.groupId,
-        name: _nameController.text.trim(),
-        description: _descController.text.trim(),
-      );
-      await _loadGroup(); // Re-fetch to ensure UI is in sync
-      setState(() => _isEditing = false);
-      messenger.showSnackBar(SnackBar(content: Text("key_084".tr())));
+      await _groupService.deleteGroup(widget.pageData.group.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_093".tr())));
+      context.go('/groups');
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Failed to update: $e')));
-    } finally {
-      if (mounted) setState(() => _isPageLoading = false);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete group: $e')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isPageLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
-    if (group == null) {
-      return Scaffold(body: Center(child: Text("key_086".tr())));
-    }
-
     return Scaffold(
       appBar: AppBar(
         title: Text("key_087".tr()),
@@ -179,548 +259,407 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
             ),
           if (_isEditing)
             IconButton(
-              icon: const Icon(Icons.check),
-              onPressed: _saveGroupEdits,
+              icon: _isSaving ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Icon(Icons.check),
+              onPressed: _isSaving ? null : _saveGroupEdits,
             ),
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: _loadGroup,
+        onRefresh: widget.onDataChange,
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            _buildGroupHeader(context),
+            _GroupHeader(
+              group: widget.pageData.group,
+              isAdmin: widget.isAdmin,
+              onPhotoChanged: widget.onDataChange,
+            ),
+            const SizedBox(height: 12),
+            _buildEditableGroupInfo(),
             const SizedBox(height: 24),
-            _buildSectionHeader("key_112a".tr()),
-            _buildPinnedMessages(context),
+            _SectionCard(title: "key_112a".tr(), child: _buildPinnedMessages(widget.pageData.pinnedMessage)),
             const SizedBox(height: 24),
-            _buildSectionHeader("key_112b".tr()),
-            _buildGroupEvents(context),
+            _SectionCard(title: "key_112b".tr(), child: _buildGroupEvents(widget.pageData.events)),
             const SizedBox(height: 24),
-            _buildSectionHeader("key_112c".tr()),
-            _buildGroupAnnouncements(context),
+            _SectionCard(title: "key_112c".tr(), child: _buildGroupAnnouncements(widget.pageData.announcements)),
             const SizedBox(height: 24),
-            _buildSectionHeader("key_112d".tr()),
-            _buildGroupMedia(context),
+            _SectionCard(title: "key_112d".tr(), child: _buildGroupMedia(widget.pageData.media)),
             const SizedBox(height: 24),
-            _buildSectionHeader("key_112e".tr()),
-            _buildGroupMembers(context),
-            if (!widget.isAdmin)
-              Padding(
-                padding: const EdgeInsets.only(top: 24),
-                child: TextButton.icon(
-                  onPressed: _leaveGroup,
-                  icon: const Icon(Icons.exit_to_app),
-                  label: Text("key_088".tr()),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                ),
-              ),
-            if (widget.isOwner)
-              Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: TextButton.icon(
-                  onPressed: () async {
-                    final messenger = ScaffoldMessenger.of(context);
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        title: Text("key_089".tr()),
-                        content: Text("key_090".tr()),
-                        actions: [
-                          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_091".tr())),
-                          TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_092".tr())),
-                        ],
-                      ),
-                    );
-                    if (confirmed != true) return;
-
-                    try {
-                      await _groups!.deleteGroup(widget.groupId);
-                      if (!mounted) return;
-                      messenger.showSnackBar(SnackBar(content: Text("key_093".tr())));
-                      if (context.mounted) context.go('/groups');
-                    } catch (e) {
-                      if (!mounted) return;
-                      messenger.showSnackBar(SnackBar(content: Text('Failed to delete group: $e')));
-                    }
-                  },
-                  icon: const Icon(Icons.delete),
-                  label: Text("key_095".tr()),
-                  style: TextButton.styleFrom(foregroundColor: Colors.red),
-                ),
-              ),
+            _SectionCard(title: "key_112e".tr(), child: _buildGroupMembers(widget.pageData.memberships)),
+            _buildActionButtons(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildGroupHeader(BuildContext context) {
+  Widget _buildEditableGroupInfo() {
     return Column(
       children: [
-        GestureDetector(
-          onTap: widget.isAdmin ? () => _changeGroupPhoto(context) : null,
-          child: CircleAvatar(
-            radius: 80,
-            child: (group?.photoUrl?.isNotEmpty ?? false)
-                ? ClipOval(
-                    child: CachedNetworkImage(
-                      imageUrl: group!.photoUrl!,
-                      width: 160,
-                      height: 160,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) =>
-                          const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                      errorWidget: (context, url, error) => const Icon(Icons.error, size: 40),
-                    ),
-                  )
-                : const Icon(Icons.group, size: 80),
-          ),
-        ),
-        const SizedBox(height: 12),
-        if (_isEditing && widget.isAdmin)
+        if (_isEditing)
           TextFormField(
             controller: _nameController,
-            decoration: InputDecoration(labelText: "key_068a".tr()),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            decoration: InputDecoration(labelText: "key_068a".tr(), border: const UnderlineInputBorder()),
           )
         else
-          Text(group?.name ?? '', style: const TextStyle(fontSize: 20)),
+          Text(widget.pageData.group.name, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
         const SizedBox(height: 8),
-        if (_isEditing && widget.isAdmin)
+        if (_isEditing)
           TextFormField(
             controller: _descController,
-            maxLines: 2,
-            decoration: InputDecoration(labelText: "key_068c".tr()),
+            maxLines: null,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyMedium,
+            decoration: InputDecoration(labelText: "key_068c".tr(), border: const UnderlineInputBorder()),
           )
         else
-          Text(group?.description ?? ''),
+          Text(widget.pageData.group.description ?? '', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
   }
 
-  Widget _buildSectionHeader(String title) =>
-      Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold));
+  Widget _buildPinnedMessages(Map<String, dynamic>? message) {
+    if (message == null) return Text("key_096".tr());
+    final sender = message['sender']?['display_name'] ?? 'Someone';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('📌 “${message['content']}”', maxLines: 2, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 4),
+        Text(
+          'Posted by $sender • ${message['created_at']}',
+          style: const TextStyle(color: Colors.grey, fontSize: 12),
+        ),
+      ],
+    );
+  }
 
-  Widget _buildPinnedMessages(BuildContext context) {
-    return FutureBuilder<Map<String, dynamic>?>(
-      future: _groups!.getPinnedMessage(widget.groupId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Card(child: Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()));
-        }
-        if (!snapshot.hasData || snapshot.data == null) {
-          return Card(child: Padding(padding: const EdgeInsets.all(12), child: Text("key_096".tr())));
-        }
-        final data = snapshot.data!;
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('📌 “${data['content']}”', maxLines: 2, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 4),
-                Text(
-                  'Posted by ${data['sender']} • ${_formatRelativeTime(data['created_at'])}',
-                  style: const TextStyle(color: Colors.grey),
+  Widget _buildGroupEvents(List<Map<String, dynamic>> events) {
+    if (events.isEmpty) {
+      return Column(
+        children: [
+          Text("key_097".tr()),
+          if (widget.isAdmin)
+            TextButton.icon(
+              label: Text("key_098".tr()),
+              onPressed: () => context.push('/groups/${widget.pageData.group.id}/events'),
+              icon: const Icon(Icons.event),
+            ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        ...events.map((event) => Text(event['title'] ?? '')),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/events'),
+            child: Text("See All".tr()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupAnnouncements(List<Map<String, dynamic>> announcements) {
+    if (announcements.isEmpty) {
+      return Column(
+        children: [
+          Text("key_100".tr()),
+          if (widget.isAdmin)
+            TextButton.icon(
+              label: Text("key_101".tr()),
+              onPressed: () => context.push('/groups/${widget.pageData.group.id}/announcements'),
+              icon: const Icon(Icons.campaign),
+            ),
+        ],
+      );
+    }
+    return Column(
+      children: [
+        ...announcements.map((a) => Text(a['title'] ?? '')),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/announcements'),
+            child: Text("See All".tr()),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildGroupMedia(List<Map<String, dynamic>> media) {
+    // Filter out messages that don't have a file URL or aren't easily previewable as images
+    final imageMedia = media.where((msg) {
+      final fileUrl = msg['file_url'] as String?;
+      if (fileUrl == null) return false;
+      // Simple check for common image extensions (adjust as needed for your backend)
+      final ext = fileUrl.split('?').first.split('.').last.toLowerCase();
+      return const {'jpg', 'jpeg', 'png', 'gif', 'webp'}.contains(ext);
+    }).toList();
+
+    if (imageMedia.isEmpty) {
+      return Column(
+        children: [
+          Text("key_102".tr()), // e.g., "No media has been shared yet."
+        ],
+      );
+    }
+
+    final displayMedia = imageMedia.take(6).toList();
+
+    return Column(
+      children: [
+        GridView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
+          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: 3,
+            crossAxisSpacing: 8.0,
+            mainAxisSpacing: 8.0,
+          ),
+          itemCount: displayMedia.length,
+          itemBuilder: (context, index) {
+            final fileUrl = displayMedia[index]['file_url'] as String;
+
+            return GestureDetector(
+              onTap: () {
+                // TODO: Implement a function to view the full image/media
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Viewing media is coming soon!')),
+                );
+              },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8.0),
+                child: CachedNetworkImage(
+                  imageUrl: fileUrl,
+                  fit: BoxFit.cover,
+                  placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 40),
                 ),
-              ],
-            ),
+              ),
+            );
+          },
+        ),
+        const SizedBox(height: 12),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/media'),
+            child: Text("key_104".tr()), // e.g., "See All Media"
           ),
-        );
-      },
+        ),
+      ],
     );
   }
 
-  String _formatRelativeTime(String isoString) {
-    final date = DateTime.parse(isoString).toLocal();
-    final now = DateTime.now();
-    final diff = now.difference(date);
-    if (diff.inDays >= 1) return '${diff.inDays} day${diff.inDays > 1 ? "s" : ""} ago';
-    if (diff.inHours >= 1) return '${diff.inHours} hour${diff.inHours > 1 ? "s" : ""} ago';
-    if (diff.inMinutes >= 1) return '${diff.inMinutes} minute${diff.inMinutes > 1 ? "s" : ""} ago';
-    return 'Just now';
-  }
-
-  Widget _buildGroupEvents(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _groups!.getGroupEvents(widget.groupId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Card(child: Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()));
-        }
-        final events = snapshot.data ?? [];
-        if (events.isEmpty) {
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(children: [
-                Text("key_097".tr()),
-                if (widget.isAdmin)
-                  TextButton.icon(
-                    label: Text("key_098".tr()),
-                    onPressed: () => context.push('/groups/${widget.groupId}/events'),
-                    icon: const Icon(Icons.event),
-                  ),
-              ]),
-            ),
-          );
-        }
-
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...events.map((event) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Flexible(
-                            child: Text(
-                              event['title'] ?? '',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          Text(
-                            _formatEventDate(event['event_date']),
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    )),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: () => context.push('/groups/${widget.groupId}/events'),
-                      child: Text("key_099".tr()),
-                    ),
-                  ],
-                )
-              ],
-            ),
+  Widget _buildGroupMembers(List<Map<String, dynamic>> members) {
+    if (members.isEmpty) return Text("key_105".tr());
+    return Column(
+      children: [
+        ...members.map((member) => Text(member['display_name'] ?? 'Unknown')),
+        if (widget.isAdmin || widget.isOwner)
+          TextButton.icon(
+            onPressed: _openInviteModal,
+            icon: const Icon(Icons.person_add),
+            label: Text("key_106".tr()),
           ),
-        );
-      },
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/members'),
+            child: Text("key_107".tr()),
+          ),
+        ),
+      ],
     );
   }
 
-  String _formatEventDate(dynamic isoString) {
-    if (isoString == null) return '';
-    final date = DateTime.parse(isoString).toLocal();
-    return '${date.month}/${date.day}/${date.year} ${date.hour}:${date.minute.toString().padLeft(2, "0")}';
-  }
-
-  Widget _buildGroupAnnouncements(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _groups!.getGroupAnnouncements(widget.groupId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Card(child: Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()));
-        }
-        final announcements = snapshot.data ?? [];
-        if (announcements.isEmpty) {
-          return Card(
-            child: Padding(
-              padding: const EdgeInsets.all(12),
-              child: Column(children: [
-                Text("key_100".tr()),
-                if (widget.isAdmin)
-                  TextButton.icon(
-                    label: Text("key_101".tr()),
-                    onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
-                    icon: const Icon(Icons.campaign),
-                  ),
-              ]),
-            ),
-          );
-        }
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...announcements.map((a) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (a['image_url'] != null && (a['image_url'] as String).isNotEmpty)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(a['image_url'], height: 100, fit: BoxFit.cover),
-                            ),
-                          if (a['title'] != null)
-                            Text(a['title'], style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          if (a['body'] != null && (a['body'] as String).trim().isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4.0),
-                              child: Text(a['body'], maxLines: 2, overflow: TextOverflow.ellipsis),
-                            ),
-                          Text(
-                            _formatAnnouncementDate(a['published_at'] ?? a['created_at']),
-                            style: const TextStyle(color: Colors.grey, fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    )),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: () => context.push('/groups/${widget.groupId}/announcements'),
-                      child: Text("key_102".tr()),
-                    ),
-                  ],
-                ),
-              ],
+  Widget _buildActionButtons() {
+    return Column(
+      children: [
+        if (!widget.isAdmin)
+          Padding(
+            padding: const EdgeInsets.only(top: 24),
+            child: TextButton.icon(
+              onPressed: _leaveGroup,
+              icon: const Icon(Icons.exit_to_app),
+              label: Text("key_088".tr()),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             ),
           ),
-        );
-      },
-    );
-  }
-
-  String _formatAnnouncementDate(dynamic isoString) {
-    if (isoString == null) return '';
-    final date = DateTime.parse(isoString).toLocal();
-    return '${date.month}/${date.day}/${date.year}';
-  }
-
-  Widget _buildGroupMedia(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _groups!.getRecentGroupMedia(widget.groupId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Card(child: Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()));
-        }
-        final images = snapshot.data ?? [];
-        if (images.isEmpty) {
-          return Card(child: Padding(padding: const EdgeInsets.all(12), child: Text("key_103".tr())));
-        }
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      ...images.map((img) => Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(6),
-                              child: Image.network(
-                                img['file_url'],
-                                width: 80,
-                                height: 80,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          )),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: () => context.push('/groups/${widget.groupId}/media'),
-                      child: Text("key_104".tr()),
-                    ),
-                  ],
-                )
-              ],
+        if (widget.isOwner)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: TextButton.icon(
+              onPressed: _deleteGroup,
+              icon: const Icon(Icons.delete),
+              label: Text("key_095".tr()),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
             ),
           ),
-        );
-      },
+      ],
     );
   }
+}
 
-  Widget _buildGroupMembers(BuildContext context) {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: _groups!.getGroupMembers(widget.groupId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Card(child: Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator()));
-        }
-        final members = snapshot.data ?? [];
-        if (members.isEmpty) {
-          return Card(child: Padding(padding: const EdgeInsets.all(12), child: Text("key_105".tr())));
-        }
-        return Card(
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: [
-                ...members.map((member) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(member['display_name'], style: Theme.of(context).textTheme.bodyMedium),
-                          Text(
-                            member['role'],
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                          ),
-                        ],
-                      ),
-                    )),
-                if (widget.isAdmin)
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _openInviteModal,
-                      icon: const Icon(Icons.person_add),
-                      label: Text("key_106".tr()),
-                    ),
-                  ),
-                const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    TextButton(
-                      onPressed: () => context.push('/groups/${widget.groupId}/members'),
-                      child: Text("key_107".tr()),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+class _GroupHeader extends StatefulWidget {
+  final Group group;
+  final bool isAdmin;
+  final VoidCallback onPhotoChanged;
+
+  const _GroupHeader({required this.group, required this.isAdmin, required this.onPhotoChanged});
+
+  @override
+  State<_GroupHeader> createState() => _GroupHeaderState();
+}
+
+class _GroupHeaderState extends State<_GroupHeader> {
+  bool _isUploading = false;
+
+  Future<void> _uploadAndSetPhoto(File file) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final groupService = GroupService(GraphProvider.of(context));
+
+    setState(() => _isUploading = true);
+    try {
+      final ext = file.path.split('.').last.toLowerCase();
+      final contentType = 'image/${(ext == 'jpg') ? 'jpeg' : ext}';
+      final objectKey = 'group_photos/${widget.group.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+      
+      final client = GraphProvider.of(context);
+      final presigned = await _presignViaHasura(client, objectKey, contentType);
+
+      final uploadRes = await http.put(
+        Uri.parse(presigned.uploadUrl),
+        headers: {'Content-Type': contentType},
+        body: await file.readAsBytes(),
+      );
+
+      if (uploadRes.statusCode >= 300) throw Exception('Upload failed with status code ${uploadRes.statusCode}');
+
+      await groupService.updateGroup(groupId: widget.group.id, photoUrl: presigned.finalUrl);
+      
+      widget.onPhotoChanged();
+      messenger.showSnackBar(SnackBar(content: Text("key_111".tr())));
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } finally {
+      if (mounted) setState(() => _isUploading = false);
+    }
   }
 
-  Future<({String uploadUrl, String finalUrl})> _presignViaHasura({
-    required GraphQLClient client,
-    required String objectKey,
-    required String contentType,
-  }) async {
+  Future<({String uploadUrl, String finalUrl})> _presignViaHasura(GraphQLClient client, String objectKey, String contentType) async {
     const q = r'''
       query Presign($path: String!, $contentType: String!) {
         get_presigned_upload(path: $path, contentType: $contentType) {
           uploadUrl
           finalUrl
-          expiresAt
         }
       }
     ''';
-    final res = await client.query(
-      QueryOptions(
-        document: gql(q),
-        fetchPolicy: FetchPolicy.noCache,
-        variables: {'path': objectKey, 'contentType': contentType},
-      ),
-    );
-    if (res.hasException) {
-      throw res.exception!;
-    }
+    final res = await client.query(QueryOptions(document: gql(q), variables: {'path': objectKey, 'contentType': contentType}));
+    if (res.hasException) throw res.exception!;
+    
     final data = res.data?['get_presigned_upload'];
     if (data == null || data['uploadUrl'] == null || data['finalUrl'] == null) {
-      throw Exception('Invalid presign response');
+      throw Exception('Invalid presign response from server');
     }
-    return (uploadUrl: data['uploadUrl'] as String, finalUrl: data['finalUrl'] as String);
-  }
-
-  Future<void> _changeGroupPhoto(BuildContext context) async {
-    showModalBottomSheet(
-      context: context,
-      builder: (_) {
-        return SafeArea(
-          child: Wrap(
-            children: [
-              ListTile(
-                leading: const Icon(Icons.photo_camera),
-                title: Text("key_108".tr()),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
-                  if (picked != null) {
-                    final file = await _compressImage(File(picked.path));
-                    await _uploadAndSetPhoto(file);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.photo_library),
-                title: Text("key_109".tr()),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
-                  if (picked != null) {
-                    final file = await _compressImage(File(picked.path));
-                    await _uploadAndSetPhoto(file);
-                  }
-                },
-              ),
-              ListTile(
-                leading: const Icon(Icons.insert_drive_file),
-                title: Text("key_110".tr()),
-                onTap: () async {
-                  Navigator.pop(context);
-                  final result = await FilePicker.platform.pickFiles(type: FileType.image);
-                  if (result != null && result.files.single.path != null) {
-                    final file = await _compressImage(File(result.files.single.path!));
-                    await _uploadAndSetPhoto(file);
-                  }
-                },
-              ),
-            ],
-          ),
-        );
-      },
+    return (
+      uploadUrl: data['uploadUrl'] as String,
+      finalUrl: data['finalUrl'] as String,
     );
   }
 
-  Future<void> _uploadAndSetPhoto(File file) async {
-    setState(() => _isPageLoading = true);
-    final messenger = ScaffoldMessenger.of(context);
-    try {
-      final ext = file.path.split('.').last.toLowerCase();
-      final normalizedExt = (ext == 'jpg') ? 'jpeg' : ext;
-      final contentType = 'image/$normalizedExt';
-      final objectKey = 'group_photos/${widget.groupId}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      final client = GraphProvider.of(context);
-      final presigned = await _presignViaHasura(
-        client: client,
-        objectKey: objectKey,
-        contentType: contentType,
-      );
+  void _showImagePicker() {
+    showModalBottomSheet(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_camera),
+              title: Text("key_108".tr()),
+              onTap: () async {
+                Navigator.pop(context);
+                final picked = await ImagePicker().pickImage(source: ImageSource.camera);
+                if (picked != null) {
+                  final compressed = await _compressImage(File(picked.path));
+                  await _uploadAndSetPhoto(compressed);
+                }
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: Text("key_109".tr()),
+              onTap: () async {
+                Navigator.pop(context);
+                final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+                if (picked != null) {
+                   final compressed = await _compressImage(File(picked.path));
+                  await _uploadAndSetPhoto(compressed);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
-      final bytes = await file.readAsBytes();
-      final uploadRes = await http.put(
-        Uri.parse(presigned.uploadUrl),
-        headers: {'Content-Type': contentType},
-        body: bytes,
-      );
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.isAdmin && !_isUploading ? _showImagePicker : null,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CircleAvatar(
+            radius: 80,
+            backgroundImage: (widget.group.photoUrl?.isNotEmpty ?? false)
+                ? CachedNetworkImageProvider(widget.group.photoUrl!)
+                : null,
+            child: (widget.group.photoUrl?.isEmpty ?? true)
+                ? const Icon(Icons.group, size: 80)
+                : null,
+          ),
+          if (_isUploading) const CircularProgressIndicator(),
+        ],
+      ),
+    );
+  }
+}
 
-      if (uploadRes.statusCode < 200 || uploadRes.statusCode >= 300) {
-        throw Exception('Failed to upload (${uploadRes.statusCode})');
-      }
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final Widget child;
 
-      await _groups!.updateGroup(
-        groupId: widget.groupId,
-        photoUrl: presigned.finalUrl,
-      );
+  const _SectionCard({required this.title, required this.child});
 
-      await _loadGroup();
-      messenger.showSnackBar(SnackBar(content: Text("key_111".tr())));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text("key_112".tr())));
-    } finally {
-      if (mounted) setState(() => _isPageLoading = false);
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 8),
+        Card(
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: SizedBox(
+              width: double.infinity,
+              child: child,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

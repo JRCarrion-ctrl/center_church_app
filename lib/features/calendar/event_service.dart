@@ -55,14 +55,6 @@ class _EventQueries {
   ''';
 
   // ... (Group Membership and Event Queries)
-
-  static const myApprovedMemberships = r'''
-    query MyApprovedMemberships($uid: String!) {
-      group_memberships(where: {user_id: {_eq: $uid}, status: {_eq: "approved"}}) {
-        group_id
-      }
-    }
-  ''';
   
   // NEW: Query to check a member's role in a specific group
   static const checkGroupMemberRole = r'''
@@ -74,10 +66,18 @@ class _EventQueries {
     }
   ''' ;
 
-  static const upcomingGroupEvents = r'''
-    query FetchUpcomingGroupEvents($groupIds: [uuid!]!, $from: timestamptz!) {
+  static const fetchMyUpcomingGroupEvents = r'''
+    query FetchMyUpcomingGroupEvents($uid: String!, $from: timestamptz!) {
       group_events(
-        where: { group_id: { _in: $groupIds }, event_date: { _gte: $from } }
+        where: {
+          event_date: { _gte: $from },
+          group: {
+            group_memberships: {
+              user_id: { _eq: $uid },
+              status: { _eq: "approved" }
+            }
+          }
+        },
         order_by: { event_date: asc }
       ) {
         id
@@ -91,12 +91,10 @@ class _EventQueries {
     }
   ''';
 
+
   static const fetchGroupEvents = r'''
     query FetchGroupEvents($groupId: uuid!, $from: timestamptz!) {
-      group_events(
-        where: { group_id: { _eq: $groupId }, event_date: { _gte: $from } }
-        order_by: { event_date: asc }
-      ) {
+      group_events(where: {group_id: {_eq: $groupId}, event_date: {_gte: $from}}, order_by: {event_date: asc}) {
         id
         group_id
         title
@@ -104,6 +102,13 @@ class _EventQueries {
         image_url
         event_date
         location
+        rsvps_aggregate {
+          aggregate {
+            sum {
+              attending_count
+            }
+          }
+        }
       }
     }
   ''';
@@ -282,6 +287,48 @@ class EventService {
     return DateTime.utc(now.year, now.month, now.day);
   }
 
+  Future<bool> isUserAdminInGroup({
+    required String groupId,
+    required String userId,
+  }) async {
+    const qRole = r'''
+      query MyGroupRole($gid: uuid!, $uid: String!) {
+        group_memberships(
+          where: {
+            group_id: { _eq: $gid },
+            user_id: { _eq: $uid },
+            status: { _eq: "approved" }
+          }
+          limit: 1
+        ) { role }
+      }
+    ''';
+
+    try {
+      final res = await _gql.query(QueryOptions(
+        document: gql(qRole),
+        variables: {'gid': groupId, 'uid': userId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      if (res.hasException) {
+        return false;
+      }
+
+      String? role;
+      final rows = (res.data?['group_memberships'] as List?) ?? const [];
+      if (rows.isNotEmpty) {
+        role = rows.first['role'] as String?;
+      }
+
+      const adminRoles = {'admin', 'leader', 'supervisor', 'owner'};
+      return adminRoles.contains(role);
+
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Helper method to handle query boilerplate
   Future<List<T>> _fetchEvents<T>(
     String document,
@@ -388,22 +435,16 @@ class EventService {
   Future<List<GroupEvent>> fetchUpcomingGroupEvents() async {
     final userId = _currentUserId;
     if (userId == null) throw Exception('User not logged in');
-    
-    final res1 = await _gql.query(
-      QueryOptions(document: gql(_EventQueries.myApprovedMemberships), variables: {'uid': userId}, fetchPolicy: FetchPolicy.networkOnly),
-    );
-    if (res1.hasException) throw res1.exception!;
-    final groupIds = (res1.data?['group_memberships'] as List<dynamic>? ?? [])
-        .map((e) => (e as Map<String, dynamic>)['group_id'] as String)
-        .toList();
-    
-    if (groupIds.isEmpty) return [];
 
+    // ✅ Now makes only ONE network call
     return _fetchEvents(
-      _EventQueries.upcomingGroupEvents,
+      _EventQueries.fetchMyUpcomingGroupEvents,
       'group_events',
       GroupEvent.fromMap,
-      {'groupIds': groupIds, 'from': _startOfTodayUtc.toIso8601String()},
+      {
+        'uid': userId,
+        'from': _startOfTodayUtc.toIso8601String(),
+      },
     );
   }
 

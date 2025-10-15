@@ -123,7 +123,7 @@ class GroupMessageBubble extends StatelessWidget {
               ),
               if (reactions.isNotEmpty)
                 Transform.translate(
-                  offset: const Offset(12, -4),
+                  offset: isMe ? const Offset(-12, -4) : const Offset(12, -4),
                   child: Wrap(
                     spacing: 6,
                     children: _groupedReactions(reactions).entries.map((entry) {

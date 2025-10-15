@@ -4,8 +4,6 @@ import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
-// REMOVED: import 'package:graphql_flutter/graphql_flutter.dart'; // No longer needed in the widget
-
 import 'package:ccf_app/routes/router_observer.dart';
 import 'package:ccf_app/core/time_service.dart';
 import '../../../core/graph_provider.dart';
@@ -22,21 +20,17 @@ class GroupEventDetailsPage extends StatefulWidget {
 }
 
 class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with RouteAware {
-  // CORRECTED: Late initialization in didChangeDependencies
   late EventService _eventService; 
   int _attendingCount = 1;
   bool _saving = false;
   bool _isSupervisor = false;
   List<Map<String, dynamic>> _rsvps = [];
-
-  // REMOVED: late GraphQLClient _gql;
   bool _inited = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     
-    // Subscribe/Unsubscribe logic for RouteAware (Memory Leak Fix)
     routeObserver.unsubscribe(this);
     final route = ModalRoute.of(context);
     if (route is PageRoute) routeObserver.subscribe(this, route);
@@ -44,7 +38,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
     if (!_inited) {
       _inited = true;
       
-      // Initialize EventService using Provider/GraphProvider
       final client = GraphProvider.of(context);
       final userId = context.read<AppState>().profile?.id;
       _eventService = EventService(client, currentUserId: userId);
@@ -62,18 +55,14 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
   @override
   void didPopNext() {
-    // Refresh when returning to this page
     _loadRSVPs();
     _checkRole();
   }
 
-  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _checkRole() async {
     final uid = context.read<AppState>().profile?.id;
     if (uid == null || uid.isEmpty) return;
     
-    // NOTE: This assumes EventService has a checkGroupMemberRole method now
-    // that encapsulates the GraphQL query.
     try {
       final role = await _eventService.checkGroupMemberRole(
         groupId: widget.event.groupId,
@@ -89,14 +78,12 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
     }
   }
 
-  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _removeRSVP() async {
     final uid = context.read<AppState>().profile?.id;
     if (uid == null || uid.isEmpty) return;
 
     setState(() => _saving = true);
-    
-    // NOTE: This assumes EventService has a removeGroupEventRSVP method
+
     try {
       await _eventService.removeGroupEventRSVP(widget.event.id);
       if (!mounted) return;
@@ -106,7 +93,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
       _loadRSVPs();
     } catch (e) {
       if (!mounted) return;
-      // We rely on the service to provide an informative exception
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')), 
       );
@@ -118,20 +104,35 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
   Future<void> _loadRSVPs() async {
     try {
       final data = await _eventService.fetchGroupEventRSVPs(widget.event.id);
-      if (mounted) {
-        final currentUserId = context.read<AppState>().profile?.id;
-        final existingRsvp = data.firstWhere(
-          (r) => r['user_id'] == currentUserId,
-        );
+      if (!mounted) return;
 
-        setState(() {
-          _rsvps = data;
-          // FIX: Initialize _attendingCount with existing value, or default to 1
-          _attendingCount = existingRsvp['attending_count'] as int? ?? 1;
-        });
+      final currentUserId = context.read<AppState>().profile?.id;
+      int currentAttendingCount = 1; // Default to 1 if no RSVP is found
+
+      if (currentUserId != null) {
+        try {
+          // Use a try-catch block to safely find the existing RSVP
+          final existingRsvp = data.firstWhere(
+            (r) => r['user_id'] == currentUserId,
+          );
+          currentAttendingCount = existingRsvp['attending_count'] as int? ?? 1;
+        } catch (e) {
+          // StateError means no element was found, which is okay.
+          // We just proceed with the default count of 1.
+        }
       }
-    } catch (_) {
-      // no-op
+
+      setState(() {
+        _rsvps = data;
+        _attendingCount = currentAttendingCount;
+      });
+    } catch (e) {
+      // Handle potential errors from the network request itself
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to load RSVP data: $e")),
+        );
+      }
     }
   }
 
