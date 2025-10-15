@@ -16,6 +16,25 @@ class GroupArchivedException implements Exception {
   String toString() => 'Group $groupId is archived';
 }
 
+class GroupInfoData {
+  final Group group;
+  final List<Map<String, dynamic>> memberships;
+  final List<Map<String, dynamic>> events;
+  final List<Map<String, dynamic>> announcements;
+  final List<Map<String, dynamic>> media;
+  final Map<String, dynamic>? pinnedMessage;
+  // Add other data points as needed
+
+  GroupInfoData({
+    required this.group,
+    required this.memberships,
+    required this.events,
+    required this.announcements,
+    required this.media,
+    this.pinnedMessage,
+  });
+}
+
 class GroupService {
   final GraphQLClient client;
   GroupService(this.client);
@@ -40,6 +59,74 @@ class GroupService {
   }
 
   // ---------- Reads ----------
+
+  Future<GroupInfoData> getGroupInfoData(String groupId) async {
+    const consolidatedQuery = r'''
+      query GetGroupInfoData($groupId: uuid!) {
+        groups_by_pk(id: $groupId) {
+          id
+          name
+          description
+          photo_url
+          visibility
+          created_at
+          pinned_message_id
+          archived
+          group_memberships(limit: 5, order_by: {profile: {display_name: asc}}) {
+            user_id
+            role
+            profile {
+              display_name
+            }
+          }
+          group_events(limit: 3, order_by: {event_date: asc}) {
+            title
+            event_date
+          }
+          group_announcements(limit: 2, order_by: {published_at: desc}) {
+            title
+            body
+            image_url
+            published_at
+          }
+          group_messages(
+            where: {file_url: {_is_null: false}},
+            order_by: {created_at: desc},
+            limit: 6
+          ) {
+            id
+            file_url
+            created_at
+          }
+        }
+      }
+    ''';
+    
+    final result = await client.query(QueryOptions(
+      document: gql(consolidatedQuery),
+      variables: {'groupId': groupId},
+      fetchPolicy: FetchPolicy.networkOnly, // Ensures you get fresh data
+    ));
+
+    if (result.hasException) {
+      throw result.exception!;
+    }
+    
+    final groupData = result.data?['groups_by_pk'];
+    if (groupData == null) {
+      throw Exception('Group not found');
+    }
+
+    // Parse the single, nested response into your new data model
+    return GroupInfoData(
+      group: Group.fromMap(groupData),
+      memberships: List<Map<String, dynamic>>.from(groupData['group_memberships'] ?? []),
+      events: List<Map<String, dynamic>>.from(groupData['group_events'] ?? []),
+      announcements: List<Map<String, dynamic>>.from(groupData['group_announcements'] ?? []),
+      media: List<Map<String, dynamic>>.from(groupData['group_messages'] ?? []),
+      pinnedMessage: groupData['pinned_message'],
+    );
+  }
 
   Future<Group?> getGroupById(String groupId) async {
     const q = r'''

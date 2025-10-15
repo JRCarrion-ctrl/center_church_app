@@ -219,7 +219,7 @@ class _InputRowState extends State<InputRow> {
       // Optional: show a SnackBar / toast here
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('key_message_send_failed'))),
+          SnackBar(content: Text('Failed to send')),
         );
       }
     }

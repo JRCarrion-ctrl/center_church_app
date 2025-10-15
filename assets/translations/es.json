@@ -580,5 +580,8 @@
   "how_q7": "Roles y Permisos",
   "how_a7": "Tu rol (Usuario, Miembro, Administrador, Líder, Supervisor, Propietario) determina a qué funciones puedes acceder. Puedes ver tu rol en tu perfil y cualquier permiso especial en la pestaña 'Más'.",
   "how_q8": "Configuración y Personalización",
-  "how_a8": "Ve a la página de Configuración desde la pestaña 'Más' para cambiar tema, preferencias de notificaciones, idioma, opciones de accesibilidad y más."
+  "how_a8": "Ve a la página de Configuración desde la pestaña 'Más' para cambiar tema, preferencias de notificaciones, idioma, opciones de accesibilidad y más.",
+  "Yesterday": "Ayer",
+  "Today": "Hoy",
+  "key_download_file": "Descargar"
 }

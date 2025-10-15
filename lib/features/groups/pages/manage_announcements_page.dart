@@ -151,7 +151,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
           variables: {'gid': widget.groupId},
         ));
         if (res.hasException) throw res.exception!;
-        final list = ((res.data?['announcements'] as List?) ?? [])
+        final list = ((res.data?['group_announcements'] as List?) ?? [])
             .cast<Map<String, dynamic>>()
             .map(GroupAnnouncement.fromMap)
             .toList();
@@ -184,7 +184,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
           variables: {'gid': widget.groupId, 'now': _nowUtc.toIso8601String()},
         ));
         if (res.hasException) throw res.exception!;
-        final list = ((res.data?['announcements'] as List?) ?? [])
+        final list = ((res.data?['group_announcements'] as List?) ?? [])
             .cast<Map<String, dynamic>>()
             .map(GroupAnnouncement.fromMap)
             .toList();

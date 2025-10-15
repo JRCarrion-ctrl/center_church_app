@@ -2,11 +2,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
-import '../../app_state.dart'; // adjust relative path if needed
+import '../../app_state.dart';
 import 'models/group.dart';
 import 'widgets/group_chat_tab.dart';
 import 'pages/group_info_page.dart';
+import '../../shared/user_roles.dart'; // Ensure UserRole is imported
 
 class GroupPage extends StatefulWidget {
   final String groupId;
@@ -18,136 +20,154 @@ class GroupPage extends StatefulWidget {
 }
 
 class _GroupPageState extends State<GroupPage> {
-  Future<void>? _initFuture;
-
+  bool _isLoading = true;
   Group? _group;
+  
+  // REFACTORED: These are now derived from AppState, not fetched from the server.
   bool _isAdmin = false;
   bool _isOwner = false;
 
   @override
   void initState() {
     super.initState();
-    _initFuture = _initialize();
+    // Use didChangeDependencies for context-aware initialization.
+  }
+  
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Ensure this only runs once.
+    if (_group == null && _isLoading) {
+      _initialize();
+    }
   }
 
   Future<void> _initialize() async {
-    // Prefer GroupService from AppState (so it reuses the same GraphQLClient),
-    // but fall back to constructing one from GraphProvider if needed.
     final appState = context.read<AppState>();
-    final userId = appState.profile?.id ?? '';
     final service = appState.groupService;
 
-    final group = await service.getGroupById(widget.groupId);
-    final isAdmin = userId.isEmpty ? false : await service.isUserGroupAdmin(widget.groupId, userId);
-    final isOwner = userId.isEmpty ? false : await service.isUserGroupOwner(widget.groupId, userId);
+    try {
+      final group = await service.getGroupById(widget.groupId);
 
-    if (!mounted) return;
-    setState(() {
-      _group = group;
-      _isAdmin = isAdmin;
-      _isOwner = isOwner;
-    });
+      if (!mounted) return;
+
+      final userRole = appState.userRole;
+      _isAdmin = (userRole == UserRole.supervisor || userRole == UserRole.owner);
+
+      // Ownership might still need a specific check if it's per-group.
+      // If `group.ownerId` is available, this is the most efficient check.
+      // For now, we'll assume a global owner role.
+      _isOwner = (userRole == UserRole.owner);
+      
+      // If ownership is per-group and stored on the group object:
+      // final userId = appState.profile?.id;
+      // _isOwner = (group != null && group.ownerId == userId);
+      
+      setState(() {
+        _group = group;
+      });
+    } catch (e) {
+      debugPrint("Failed to initialize GroupPage: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+  
+  Widget _buildTopBar(BuildContext context, Group group) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        boxShadow: [
+          BoxShadow(
+            color: theme.shadowColor.withAlpha(40),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          )
+        ],
+      ),
+      child: SafeArea(
+        top: true,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const BackButton(),
+              InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => GroupInfoPage(
+                      groupId: widget.groupId,
+                      isAdmin: _isAdmin,
+                      isOwner: _isOwner,
+                    ),
+                  ),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    CircleAvatar(
+                      radius: 22,
+                      backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                      child: ClipOval(
+                        child: CachedNetworkImage(
+                          imageUrl: group.photoUrl ?? '',
+                          placeholder: (context, url) => const SizedBox.shrink(),
+                          errorWidget: (context, url, error) => const Icon(Icons.group, size: 22),
+                          fit: BoxFit.cover,
+                          width: 44,
+                          height: 44,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      group.name,
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 48), // Spacer to balance the BackButton
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    if (_isLoading) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
 
-    return FutureBuilder<void>(
-      future: _initFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
+    final group = _group;
+    if (group == null) {
+      return Scaffold(
+        appBar: AppBar(),
+        body: Center(child: Text("key_051".tr())),
+      );
+    }
 
-        final group = _group;
-
-        if (group == null || snapshot.hasError) {
-          return Scaffold(
-            body: Center(child: Text("key_051".tr())), // "Group not found"
-          );
-        }
-
-        return Scaffold(
-          body: Column(
-            children: [
-              // Top bar with SafeArea and consistent background
-              Container(
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.surface.withAlpha(220),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withAlpha(220),
-                      blurRadius: 4,
-                      offset: const Offset(0, 2),
-                    )
-                  ],
-                ),
-                child: SafeArea(
-                  top: true,
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    child: Stack(
-                      alignment: Alignment.center,
-                      children: [
-                        Align(
-                          alignment: Alignment.centerLeft,
-                          child: IconButton(
-                            icon: const Icon(Icons.arrow_back),
-                            onPressed: () => Navigator.of(context).pop(),
-                          ),
-                        ),
-                        InkWell(
-                          borderRadius: BorderRadius.circular(8),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => GroupInfoPage(
-                                groupId: widget.groupId,
-                                isAdmin: _isAdmin,
-                                isOwner: _isOwner,
-                              ),
-                            ),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircleAvatar(
-                                radius: 22,
-                                backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                                    ? NetworkImage(group.photoUrl!)
-                                    : null,
-                                child: (group.photoUrl?.isEmpty ?? true)
-                                    ? const Icon(Icons.group, size: 22)
-                                    : null,
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                group.name,
-                                style: const TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-
-              // Chat body
-              Expanded(
-                child: GroupChatTab(groupId: widget.groupId, isAdmin: _isAdmin),
-              ),
-            ],
+    return Scaffold(
+      body: Column(
+        children: [
+          _buildTopBar(context, group),
+          Expanded(
+            child: GroupChatTab(groupId: widget.groupId, isAdmin: _isAdmin),
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }

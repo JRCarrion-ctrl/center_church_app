@@ -1,4 +1,5 @@
 // File: lib/features/groups/widgets/message_list_view.dart
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:developer' as dev;
@@ -40,44 +41,24 @@ class MessageListView extends StatefulWidget {
 }
 
 class _MessageListViewState extends State<MessageListView> {
-  static const _pageSize = 30;
+  static const _pageSize = 50;
   static const _cacheCap = 200;
   static const _scrollLoadThreshold = 200.0;
 
-  late GroupChatService _chatService;
-  StreamSubscription<GroupMessage>? _newMsgSub;
-
+  // Source of truth for messages, ordered newest to oldest.
   final List<GroupMessage> _messages = [];
+  // ✅ FIX: List for rendering, includes GroupMessage objects and String date headers.
+  final List<dynamic> _displayList = [];
+
   bool _isLoading = false;
   bool _hasMore = true;
-  int _currentOffset = 0; // New variable to track the offset
+  StreamSubscription<List<GroupMessage>>? _newMsgSub;
 
   @override
   void initState() {
     super.initState();
     widget.scrollController.addListener(_onScroll);
-    _chatService = widget.chatService;
-
     _initialize();
-  }
-
-  void _initialize() async {
-    final cached = await _loadCachedMessages();
-    _messages.addAll(cached);
-    _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-    if (_messages.isEmpty) {
-      setState(() => _isLoading = true);
-    }
-    
-    _currentOffset = _messages.length; // Initialize offset with cached messages
-    await _loadMessages(limit: _pageSize, offset: _currentOffset, isInitial: true);
-    
-    _listenToNewMessages(
-      since: _messages.isNotEmpty
-          ? _messages.last.createdAt.toUtc()
-          : DateTime.now().toUtc().subtract(const Duration(minutes: 10)),
-    );
   }
 
   @override
@@ -85,12 +66,7 @@ class _MessageListViewState extends State<MessageListView> {
     super.didUpdateWidget(oldWidget);
     if (widget.groupId != oldWidget.groupId) {
       dev.log('Group ID changed. Reinitializing message list.');
-      _messages.clear();
-      _isLoading = false;
-      _hasMore = true;
-      _currentOffset = 0; // Reset offset on group change
-      _newMsgSub?.cancel();
-      _initialize();
+      _resetAndInitialize();
     }
   }
 
@@ -101,142 +77,171 @@ class _MessageListViewState extends State<MessageListView> {
     super.dispose();
   }
 
-  void _listenToNewMessages({required DateTime since}) {
+  void _resetAndInitialize() {
     _newMsgSub?.cancel();
-    _newMsgSub = _chatService
-        .streamNewMessages(widget.groupId, since: since)
-        .listen((newMessage) {
-          if (!mounted) return;
-
-          dev.log('[UI] newMessage arrived id=${newMessage.id} createdAt=${newMessage.createdAt} content=${newMessage.content}', name: 'UI');
-
-          final existingIndex = _messages.indexWhere((m) => m.id == newMessage.id);
-          if (existingIndex != -1) {
-            _messages[existingIndex] = newMessage;
-            dev.log('[UI] replaced existing message at index $existingIndex', name: 'UI');
-          } else {
-            _messages.add(newMessage);
-            dev.log('[UI] appended message; _messages length=${_messages.length}', name: 'UI');
-          }
-
-          _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-          setState(() {});
-          unawaited(_cacheMessages());
-        }, onError: (e, st) => dev.log('STREAM ERR: $e', stackTrace: st));
+    _messages.clear();
+    _displayList.clear();
+    _isLoading = false;
+    _hasMore = true;
+    setState(() {}); // Clear the view immediately
+    _initialize();
   }
-  
+
+  Future<void> _initialize() async {
+    setState(() => _isLoading = true);
+    final cached = await _loadCachedMessages();
+    if (mounted && cached.isNotEmpty) {
+      _messages.addAll(cached);
+      _rebuildDisplayList();
+      setState(() {}); // Render cached messages immediately
+    }
+    // ✅ FIX: This function now handles the race condition.
+    await _fetchAndSubscribe();
+  }
+
+  /// ✅ FIX: This function atomically fetches initial messages and subscribes to new ones.
+  Future<void> _fetchAndSubscribe() async {
+    final syncTime = DateTime.now().toUtc();
+    _listenToNewMessages(since: syncTime);
+    await _loadMessages(isInitial: true, upTo: syncTime);
+  }
+
   void _onScroll() {
     if (_isLoading || !_hasMore || !widget.scrollController.hasClients) return;
-    
-    // Check if user is near the top of the list to load older messages
-    if (widget.scrollController.offset >=
-        widget.scrollController.position.maxScrollExtent - _scrollLoadThreshold) {
-      _loadMoreMessages();
+    if (widget.scrollController.position.pixels <= _scrollLoadThreshold) {
+      _loadMessages();
     }
   }
 
-  Future<void> _loadMoreMessages() async {
-    setState(() => _isLoading = true);
-    await _loadMessages(limit: _pageSize, offset: _currentOffset);
+  /// Optimistically adds a sent message to the top of the list.
+  void addSentMessage(GroupMessage message) {
+    if (!mounted || _messages.any((m) => m.id == message.id)) return;
+    setState(() {
+      _messages.insert(0, message);
+      _rebuildDisplayList();
+    });
   }
-  
-  Future<void> _loadMessages({
-    required int limit,
-    required int offset,
-    bool isInitial = false,
-  }) async {
+
+  void _listenToNewMessages({required DateTime since}) {
+    _newMsgSub?.cancel();
+    _newMsgSub = widget.chatService.streamNewMessages(
+      groupId: widget.groupId,
+      since: since,
+    ).listen((newMessages) {
+      if (!mounted || newMessages.isEmpty) return;
+      final existingIds = _messages.map((m) => m.id).toSet();
+      final uniqueNewMessages = newMessages.where((m) => !existingIds.contains(m.id)).toList();
+
+      if (uniqueNewMessages.isEmpty) return;
+      
+      setState(() {
+        _messages.insertAll(0, uniqueNewMessages);
+        _rebuildDisplayList();
+      });
+    }, onError: (err) {
+      dev.log("[STREAM] Error in message stream listener", error: err);
+    });
+  }
+
+  Future<void> _loadMessages({bool isInitial = false, DateTime? upTo}) async {
+    if (_isLoading && !isInitial) return;
+    setState(() => _isLoading = true);
+
     try {
-      final serverMessages = await _chatService.getMessagesPaginated(
-        widget.groupId,
-        limit: limit,
+      final offset = isInitial ? 0 : _messages.length;
+      final serverMessages = await widget.chatService.getMessagesPaginated(
+        groupId: widget.groupId,
+        limit: _pageSize,
         offset: offset,
+        upTo: upTo, // Pass the sync timestamp for the initial fetch
       );
 
       if (!mounted) return;
 
-      final messageMap = <String, GroupMessage>{
-        for (final m in _messages) m.id: m,
-      };
-      for (final m in serverMessages) {
-        messageMap[m.id] = m;
-      }
-
-      _messages.clear();
-      _messages.addAll(messageMap.values);
-      _messages.sort((a, b) => a.createdAt.compareTo(b.createdAt));
-
-      _currentOffset = _messages.length; // Update the offset after loading
-      _hasMore = serverMessages.length == limit;
-      
-      setState(() {});
-
       if (isInitial) {
+        _messages.clear();
+      }
+      
+      final existingIds = _messages.map((m) => m.id).toSet();
+      _messages.addAll(serverMessages.where((m) => !existingIds.contains(m.id)));
+      _hasMore = serverMessages.length == _pageSize;
+      _rebuildDisplayList();
+
+      if (isInitial && widget.onMessagesRendered != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          widget.onMessagesRendered?.call();
+          widget.onMessagesRendered!();
         });
       }
       unawaited(_cacheMessages());
     } catch (e, st) {
-      dev.log('Failed to load messages: $e', error: e, stackTrace: st);
+      dev.log('Failed to load messages in ListView', error: e, stackTrace: st);
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
+  /// ✅ FIX: Fetches the latest messages by resetting and re-initializing, bypassing cache.
+  Future<void> _handleRefresh() async {
+    _newMsgSub?.cancel();
+    _messages.clear();
+    _displayList.clear();
+    _hasMore = true;
+    setState(() {}); // Show loading indicator
+    await _fetchAndSubscribe();
+  }
+  
+  /// ✅ FIX: Pre-processes messages to insert date headers for efficient rendering.
+  void _rebuildDisplayList() {
+    _displayList.clear();
+    if (_messages.isEmpty) return;
+
+    for (int i = 0; i < _messages.length; i++) {
+      final message = _messages[i];
+      final isLastMessage = i == _messages.length - 1;
+      bool showHeader = false;
+
+      if (isLastMessage) {
+        showHeader = true;
+      } else {
+        final nextMessage = _messages[i + 1];
+        final msgDate = DateUtils.dateOnly(message.createdAt.toLocal());
+        final nextMsgDate = DateUtils.dateOnly(nextMessage.createdAt.toLocal());
+        showHeader = !DateUtils.isSameDay(msgDate, nextMsgDate);
+      }
+      
+      // Add the message bubble first because the list is reversed.
+      _displayList.add(message);
+      if (showHeader) {
+        _displayList.add(_formatDateHeader(message.createdAt.toLocal()));
+      }
+    }
+  }
+
   Future<List<GroupMessage>> _loadCachedMessages() async {
-    final prefs = await SharedPreferences.getInstance();
-    final cached = prefs.getString('cached_messages_${widget.groupId}');
-    if (cached == null) return [];
     try {
+      final prefs = await SharedPreferences.getInstance();
+      final cached = prefs.getString('cached_messages_${widget.groupId}');
+      if (cached == null) return [];
+
       final decoded = jsonDecode(cached) as List;
-      return decoded
-          .map((m) => GroupMessage.fromMap(m as Map<String, dynamic>))
-          .toList();
+      return decoded.map((m) => GroupMessage.fromMap(m as Map<String, dynamic>)).toList();
     } catch (e, st) {
-      dev.log('Failed to load cached messages: $e', error: e, stackTrace: st);
+      dev.log('Failed to load cached messages', error: e, stackTrace: st);
       return [];
     }
   }
 
   Future<void> _cacheMessages() async {
-    final toCache = _messages
-        .where((m) => !m.deleted)
-        .toList();
-
-    final start = toCache.length > _cacheCap ? toCache.length - _cacheCap : 0;
-    final sliced = toCache.sublist(start);
-
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'cached_messages_${widget.groupId}',
-      jsonEncode(sliced.map((m) => m.toMap()).toList()),
-    );
-  }
-
-  List<_ListItem> _buildListItems() {
-    final listItems = <_ListItem>[];
-    String? lastDate;
-
-    // Add loading indicator at the top for "load more" functionality
-    if (_isLoading) {
-      listItems.add(_ListItem(type: _ItemType.loading));
+    try {
+      final toCache = _messages.take(_cacheCap).toList();
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+        'cached_messages_${widget.groupId}',
+        jsonEncode(toCache.map((m) => m.toMap()).toList()),
+      );
+    } catch (e, st) {
+      dev.log('Failed to cache messages', error: e, stackTrace: st);
     }
-    
-    for (int i = 0; i < _messages.length; i++) {
-      final message = _messages[i];
-      final date = message.createdAt.toLocal();
-      final formattedDate = _formatDateHeader(date);
-      
-      // Add date header if the date has changed
-      if (formattedDate != lastDate) {
-        listItems.add(_ListItem(type: _ItemType.dateHeader, data: formattedDate));
-        lastDate = formattedDate;
-      }
-      
-      listItems.add(_ListItem(type: _ItemType.message, data: message));
-    }
-
-    return listItems;
   }
 
   String _formatDateHeader(DateTime date) {
@@ -245,119 +250,71 @@ class _MessageListViewState extends State<MessageListView> {
     final yesterday = today.subtract(const Duration(days: 1));
     final msgDay = DateTime(date.year, date.month, date.day);
 
-    if (msgDay == today) return 'Today';
-    if (msgDay == yesterday) return 'Yesterday';
-    return '${date.month}/${date.day}/${date.year}';
+    if (msgDay == today) return 'Today'.tr();
+    if (msgDay == yesterday) return 'Yesterday'.tr();
+    return DateFormat.yMMMd().format(date);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_messages.isEmpty && _isLoading) {
+    if (_displayList.isEmpty && _isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
-    
-    final listItems = _buildListItems();
 
-    return ListView.builder(
-      controller: widget.scrollController,
-      padding: const EdgeInsets.all(12),
-      reverse: true,
-      itemCount: listItems.length,
-      itemBuilder: (context, index) {
-        final item = listItems[index];
+    if (_displayList.isEmpty && !_isLoading) {
+      return Center(
+        child: Text(
+          'Be the first to say something!'.tr(),
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
 
-        switch (item.type) {
-          case _ItemType.loading:
-            return const Center(
-              child: Padding(
-                padding: EdgeInsets.all(8),
-                child: CircularProgressIndicator(),
-              ),
+    return RefreshIndicator(
+      onRefresh: _handleRefresh,
+      child: ListView.builder(
+        controller: widget.scrollController,
+        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+        reverse: true,
+        itemCount: _displayList.length + (_hasMore ? 1 : 0),
+        itemBuilder: (context, index) {
+          if (index >= _displayList.length) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Center(child: CircularProgressIndicator()),
             );
+          }
 
-          case _ItemType.dateHeader:
+          final item = _displayList[index];
+
+          // ✅ FIX: Render either a date header or a message bubble
+          if (item is String) {
             return Padding(
-              key: ValueKey('header-${item.data}'),
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Center(
-                child: Text(
-                  '— ${item.data} —',
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey,
-                  ),
-                ),
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: Text(
+                item,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
               ),
             );
-
-          case _ItemType.message:
-            final message = item.data as GroupMessage;
+          }
+          
+          if (item is GroupMessage) {
+            final message = item;
             final isMe = message.senderId == widget.userId;
-            final isHighlighted = message.id == widget.highlightMessageId;
-
-            return Container(
-              key: ValueKey(message.id),
-              decoration: isHighlighted
-                  ? BoxDecoration(
-                      border: Border.all(color: Colors.amber, width: 2),
-                      borderRadius: BorderRadius.circular(8),
-                    )
-                  : null,
-              margin: isHighlighted
-                  ? const EdgeInsets.symmetric(vertical: 4)
-                  : null,
-              child: Column(
-                crossAxisAlignment:
-                    isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-                children: [
-                  if (!isMe && !message.deleted)
-                    Padding(
-                      padding: const EdgeInsets.only(left: 12, bottom: 4),
-                      child: Text(
-                        (message.senderName != null &&
-                                message.senderName!.isNotEmpty)
-                            ? message.senderName!
-                            : 'Unknown',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ),
-                  GroupMessageBubble(
-                    message: message,
-                    isMe: isMe,
-                    onLongPress: () => widget.onLongPress(message),
-                    contentBuilder: () {
-                      if (message.deleted) {
-                        return Text(
-                          "key_174b".tr(),
-                          style: const TextStyle(
-                            color: Color.fromARGB(255, 135, 59, 0),
-                          ),
-                        );
-                      }
-                      return MessageContentView(message: message, isMe: isMe);
-                    },
-                    formattedTimestamp:
-                        widget.formatTimestamp(message.createdAt),
-                    reactions: widget.reactionMap[message.id] ?? [],
-                  ),
-                ],
-              ),
+            return GroupMessageBubble(
+              message: message,
+              isMe: isMe,
+              onLongPress: () => widget.onLongPress(message),
+              contentBuilder: () => MessageContentView(message: message, isMe: isMe),
+              formattedTimestamp: widget.formatTimestamp(message.createdAt),
+              reactions: widget.reactionMap[message.id] ?? [],
             );
-        }
-      },
+          }
+
+          return const SizedBox.shrink(); // Should not happen
+        },
+      ),
     );
   }
-}
-
-enum _ItemType { loading, dateHeader, message }
-
-class _ListItem {
-  final _ItemType type;
-  final dynamic data;
-  _ListItem({required this.type, this.data});
 }
