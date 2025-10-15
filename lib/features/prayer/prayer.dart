@@ -20,7 +20,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   bool _loading = true;
   bool _bootstrapped = false;
   
-  // Store a reference to the AppState object
   AppState? _appState;
   VoidCallback? _authSub;
 
@@ -39,14 +38,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     if (!_bootstrapped) {
       _bootstrapped = true;
       _loadRoleAndRequests();
-      // react to login/logout
 
-      // Safely read the provider here and save it to the field.
-      // The listen: false is important here.
       _appState = context.read<AppState>(); 
       
       _authSub = () {
-        // when auth flips, reload everything
         _loadRoleAndRequests();
       };
       _appState!.authChangeNotifier.addListener(_authSub!);
@@ -56,7 +51,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
-    // Use the saved reference to remove the listener
     if (_authSub != null && _appState != null) {
       _appState!.authChangeNotifier.removeListener(_authSub!);
     }
@@ -157,17 +151,40 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   }
 
   Future<void> _confirmAndClosePrayer(String prayerId) async {
+    final colorScheme = Theme.of(context).colorScheme;
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("key_332".tr()),
-        content: Text("key_333".tr()),
+        // MODERN DIALOG STYLING
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          // CHANGE: Hardcoded the title text
+          "Delete Prayer Request", 
+          style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
+        ),
+        content: Text("key_333".tr()), // Are you sure? (Still uses key for content)
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text("key_334".tr())),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text("key_335".tr())),
+          // CANCEL BUTTON
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text("Cancel"), 
+          ),
+          // DELETE/CLOSE BUTTON
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: colorScheme.error, // Red color for "Delete" or "Close" action
+              foregroundColor: colorScheme.onError,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text("Delete Prayer Request"),
+          ),
         ],
+        actionsPadding: const EdgeInsets.all(16),
+        actionsAlignment: MainAxisAlignment.end,
       ),
     );
+    
     if (confirmed != true || !mounted) return;
 
     final client = _client(context);
@@ -216,7 +233,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
             insert_prayer_requests_one(object: {
               user_id: $user_id,
               request: $request,
-              include_name: $include_name,
+              include_name: $includeName,
               status: "open"
             }) { id }
           }
@@ -249,49 +266,116 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   Widget build(BuildContext context) {
     final currentUserId = _userId(context);
     final isSupervisorOrOwner = _userRole == 'supervisor' || _userRole == 'owner';
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
           : _prayerRequests.isEmpty
-              ? Center(child: Text("key_341".tr()))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24.0),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.thumb_up_alt_outlined, size: 48, color: colorScheme.outline),
+                        const SizedBox(height: 16),
+                        Text(
+                          "key_341".tr(),
+                          textAlign: TextAlign.center,
+                          style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                        ),
+                        const SizedBox(height: 8),
+                        const Text(
+                          "No open requests right now. Press the button below to submit one.",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Colors.grey),
+                        )
+                      ],
+                    ),
+                  ),
+                )
               : RefreshIndicator(
                   onRefresh: _loadPrayerRequests,
+                  color: colorScheme.primary,
                   child: ListView.builder(
                     physics: const AlwaysScrollableScrollPhysics(),
                     itemCount: _prayerRequests.length,
                     itemBuilder: (context, index) {
                       final item = _prayerRequests[index];
-                      final isAnonymous = item['include_name'] == false;
-                      final name = isAnonymous
-                          ? 'Anonymous'
-                          : ((item['profiles']?['display_name'] ?? 'Someone') as String);
-
+                      
                       final prayerUserId = item['user_id'] as String?;
                       final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
                       final canClose = isSupervisorOrOwner || isPrayerOwner;
+                      final createdAt = item['created_at'] != null 
+                          ? DateFormat('MMM d, h:mm a').format(DateTime.parse(item['created_at'])) 
+                          : '';
 
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        child: ListTile(
-                          title: Text((item['request'] ?? '') as String),
-                          subtitle: Text("key_342".tr(args: [name])),
-                          trailing: canClose
-                              ? IconButton(
-                                  icon: const Icon(Icons.close),
-                                  tooltip: 'Mark as closed',
-                                  onPressed: () => _confirmAndClosePrayer(item['id'] as String),
-                                )
-                              : null,
+                      final includeName = item['include_name'] == true;
+                      
+                      final shouldShowName = includeName || canClose;
+
+                      final name = ((item['profiles']?['display_name'] ?? 'Someone') as String);
+
+                      // Subtitle text construction (Hardcoded English)
+                      String subtitleText;
+                      if (!shouldShowName) {
+                        subtitleText = 'Posted on $createdAt'; 
+                      } else if (!includeName && canClose) {
+                        subtitleText = 'Posted by $name (Anon) on $createdAt';
+                      } else {
+                        subtitleText = 'Posted by $name on $createdAt';
+                      }
+
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        child: Card.filled( 
+                          elevation: 0,
+                          // 🎨 MODIFICATION HERE: Changed to use surfaceContainerHigh for better visual separation in light mode
+                          color: colorScheme.surfaceContainerHigh,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          child: ListTile(
+                            contentPadding: const EdgeInsets.all(16),
+                            leading: Icon(
+                              Icons.menu_book_outlined,
+                              color: colorScheme.primary,
+                              size: 32,
+                            ),
+                            title: Padding(
+                              padding: const EdgeInsets.only(bottom: 8.0),
+                              child: Text(
+                                (item['request'] ?? '') as String,
+                                style: textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: colorScheme.onSurface,
+                                ),
+                              ),
+                            ),
+                            subtitle: Text(
+                              subtitleText,
+                              style: textTheme.bodySmall?.copyWith(color: colorScheme.outline),
+                            ),
+                            trailing: canClose
+                                ? IconButton(
+                                      icon: Icon(Icons.close, color: colorScheme.error),
+                                      tooltip: 'Mark as Closed',
+                                      onPressed: () => _confirmAndClosePrayer(item['id'] as String),
+                                    )
+                                : null,
+                          ),
                         ),
                       );
                     },
                   ),
                 ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
+        backgroundColor: colorScheme.primary,
+        foregroundColor: colorScheme.onPrimary,
         onPressed: _showPrayerRequestForm,
-        tooltip: "key_342a".tr(),
-        child: const Icon(Icons.add),
+        tooltip: "Submit a Prayer Request",
+        icon: const Icon(Icons.add_comment_outlined),
+        label: const Text("Add Prayer"),
       ),
     );
   }
@@ -308,50 +392,118 @@ class PrayerRequestForm extends StatefulWidget {
 
 class _PrayerRequestFormState extends State<PrayerRequestForm> {
   final _formKey = GlobalKey<FormState>();
+  final TextEditingController _requestController = TextEditingController();
+  
   String _request = '';
   bool _includeName = true;
 
   @override
+  void initState() {
+    super.initState();
+    _requestController.addListener(_updateRequest);
+    _request = _requestController.text;
+  }
+
+  @override
+  void dispose() {
+    _requestController.removeListener(_updateRequest);
+    _requestController.dispose();
+    super.dispose();
+  }
+
+  void _updateRequest() {
+    _request = _requestController.text;
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-        top: 16,
-        left: 16,
-        right: 16,
-      ),
-      child: Form(
-        key: _formKey,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              "key_342a".tr(),
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            TextFormField(
-              decoration: InputDecoration(labelText: "key_342b".tr()),
-              maxLines: 3,
-              validator: (val) => val == null || val.isEmpty ? "key_047d".tr() : null,
-              onChanged: (val) => _request = val,
-            ),
-            SwitchListTile(
-              title: Text("key_343".tr()),
-              value: _includeName,
-              onChanged: (val) => setState(() => _includeName = val),
-            ),
-            const SizedBox(height: 8),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.send),
-              label: Text("key_344".tr()),
-              onPressed: () {
-                if (_formKey.currentState?.validate() ?? false) {
-                  widget.onSubmit(_request, _includeName);
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final primaryColor = colorScheme.primary;
+    
+    final buttonStyle = ElevatedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
+        textStyle: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        shape: const StadiumBorder(),
+        foregroundColor: colorScheme.onPrimary, 
+    );
+
+    return SingleChildScrollView(
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+          top: 24,
+          left: 20,
+          right: 20,
+        ),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Submit a Prayer Request",
+                style: TextStyle(
+                  fontSize: 20, 
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black, 
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _requestController,
+                maxLines: 5,
+                style: textTheme.bodyLarge,
+                decoration: InputDecoration(
+                    labelText: "Your Prayer Request",
+                    hintText: "Lord, please help me with...",
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    filled: true,
+                    fillColor: colorScheme.surfaceContainerHighest.withAlpha(77),
+                    alignLabelWithHint: true,
+                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                ),
+                validator: (val) => val == null || val.trim().isEmpty ? "Request cannot be empty" : null,
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                title: Text("Include my name", style: textTheme.bodyLarge),
+                subtitle: Text("If turned off, your name will not be publicly visible.", style: textTheme.bodySmall),
+                value: _includeName,
+                onChanged: (val) => setState(() => _includeName = val),
+                activeThumbColor: Colors.white,
+                activeTrackColor: Colors.green,
+                inactiveThumbColor: primaryColor,
+                inactiveTrackColor: Colors.white,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: Material(
+                  color: Theme.of(context).colorScheme.primary,
+                  shape: const StadiumBorder(),
+                  elevation: 8,
+                  shadowColor: primaryColor.withAlpha(200),
+                  child: ElevatedButton.icon(
+                    icon: const Icon(Icons.local_library_outlined),
+                    label: const Text("Submit"), 
+                    style: buttonStyle.copyWith(
+                      backgroundColor: WidgetStateProperty.all(Colors.transparent),
+                      overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withAlpha(30)),
+                      elevation: WidgetStateProperty.all(0),
+                    ),
+                    onPressed: () {
+                      if (_formKey.currentState?.validate() ?? false) {
+                        widget.onSubmit(_request, _includeName);
+                      }
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

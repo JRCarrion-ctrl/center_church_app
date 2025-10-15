@@ -24,11 +24,11 @@ class HomePage extends StatelessWidget {
                   children: const [
                     WelcomeHeader(),
                     SizedBox(height: 24),
+                     ChurchInfoCard(),
+                    SizedBox(height: 24),
                     AnnouncementsSection(),
                     SizedBox(height: 24),
                     LivestreamPreview(),
-                    SizedBox(height: 24),
-                    ChurchInfoCard(),
                     SizedBox(height: 24),
                     QuickLinksFooter()
                   ],

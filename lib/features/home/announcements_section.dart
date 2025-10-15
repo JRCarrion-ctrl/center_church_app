@@ -146,7 +146,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
             ),
           );
           if (groupsRes.hasException) throw groupsRes.exception!;
-          groups = (groupsRes.data?['announcements'] as List<dynamic>? ?? [])
+          groups = (groupsRes.data?['group_announcements'] as List<dynamic>? ?? []) 
               .cast<Map<String, dynamic>>();
         }
 
@@ -179,168 +179,338 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final showGroupAnnouncements = appState.showGroupAnnouncements;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
 
     final hasMain = mainAnnouncements.isNotEmpty;
     final hasGroup = groupAnnouncements.isNotEmpty;
 
     if (loading) {
-      return const Center(
+      return Center(
         child: Padding(
-          padding: EdgeInsets.symmetric(vertical: 40),
-          child: CircularProgressIndicator(),
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: CircularProgressIndicator(color: colorScheme.primary),
         ),
       );
     }
 
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 600),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Card(
+        // The main container for the announcements section
+        elevation: 4, // Professional shadow
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        color: colorScheme.surface, // Use surface color for a clean white/light background
+        child: Padding(
+          padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // --- HEADER BLOCK (Announcements Title + Manage Button) ---
+              _buildHeader(context),
+              
+              const SizedBox(height: 8),
+
+              // --- EMPTY STATE ---
+              if (!hasMain && !hasGroup)
+                _buildEmptyState(context),
+
+              // --- GLOBAL ANNOUNCEMENTS LIST ---
+              if (hasMain)
+                _buildAnnouncementList(
+                  context: context,
+                  announcements: mainAnnouncements,
+                  textTheme: textTheme,
+                  colorScheme: colorScheme,
+                ),
+
+              // --- GROUP ANNOUNCEMENTS ---
+              if (showGroupAnnouncements && hasGroup) ...[
+                const SizedBox(height: 24),
+                
+                // Group Section Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      // FIX: Wrap the Text widget in Expanded to prevent overflow when the translated title is long.
+                      Expanded(
+                        child: Text(
+                          "key_175b".tr(), // Group Announcements
+                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                          overflow: TextOverflow.ellipsis, // Add overflow handling just in case
+                          maxLines: 1,
+                        ),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => GoRouter.of(context).push('/group-announcements'),
+                        icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
+                        label: Text("key_176".tr()), // View All
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Horizontal list
+                Padding(
+                  padding: const EdgeInsets.only(left: 16), // Padding on left for starting item
+                  child: _buildGroupList(textTheme, colorScheme),
+                ),
+                const SizedBox(height: 8), // Extra space at the bottom of the card
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.campaign_outlined, size: 36, color: colorScheme.outline),
+          const SizedBox(height: 12),
+          Text(
+            "key_175".tr(), // No current announcements
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          if (_userId == null) ...[
+            const SizedBox(height: 8),
+            Text(
+              "key_175a".tr(), // Log in to see group announcements
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.outline),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            // 💡 MODIFICATION: Centering the Row content
+            mainAxisAlignment: isAdmin ? MainAxisAlignment.spaceBetween : MainAxisAlignment.center,
+            children: [
+              Text(
+                "key_112c".tr(), // Announcements
+                style: textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w800, // Very bold
+                  color: colorScheme.primary,
+                ),
+              ),
+              if (isAdmin)
+                TextButton.icon(
+                  onPressed: () => GoRouter.of(context).push('/manage-app-announcements'),
+                  icon: const Icon(Icons.edit_note_outlined, size: 20),
+                  label: Text("key_177".tr()), // Manage Announcements
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementList({
+    required BuildContext context,
+    required List<Map<String, dynamic>> announcements,
+    required TextTheme textTheme,
+    required ColorScheme colorScheme,
+  }) {
+    // A clean, separated vertical list for prominent global announcements
+    return ListView.separated(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      itemCount: announcements.length,
+      separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1), // Thin divider for separation
+      itemBuilder: (context, index) {
+        final a = announcements[index];
+        return _buildAnnouncementListItem(a, textTheme, colorScheme, context);
+      },
+    );
+  }
+
+  Widget _buildAnnouncementListItem(
+    Map<String, dynamic> a, 
+    TextTheme textTheme, 
+    ColorScheme colorScheme, 
+    BuildContext context
+  ) {
+    // --- MODERN LIST ITEM DESIGN ---
+    final hasBody = (a['body'] ?? '') is String && (a['body'] as String).isNotEmpty;
+
+    return InkWell(
+      onTap: () {
+        // Show full content dialog
+        showDialog(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
+            content: SingleChildScrollView(
+              child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: Text("key_178".tr()), // Close
+              ),
+            ],
+          ),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildHeader(context),
-            const SizedBox(height: 12),
-            if (!hasMain && !hasGroup)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 24),
-                child: Column(
-                  children: [
-                    Text("key_175".tr()),
-                    if (_userId == null)
-                      Text(
-                        "key_175a".tr(),
-                        style: const TextStyle(color: Colors.grey),
-                      ),
-                  ],
+            // TITLE (Bold, primary color)
+            Text(
+              (a['title'] ?? '') as String,
+              style: textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: colorScheme.primary, 
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+
+            // SUBTITLE (Body/Excerpt)
+            if (hasBody)
+              Text(
+                a['body'] as String,
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
                 ),
+                maxLines: 2, 
+                overflow: TextOverflow.ellipsis,
               ),
-            if (hasMain)
-              ...mainAnnouncements.map(
-                (a) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: _buildAnnouncementCard(a),
-                ),
+            const SizedBox(height: 8),
+
+            // PUBLISHED DATE (Subtle label)
+            Text(
+              _formatDate(a['published_at'] as String),
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.outline,
+                fontWeight: FontWeight.w500,
               ),
-            if (showGroupAnnouncements && hasGroup) ...[
-              const SizedBox(height: 20),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    "key_175b".tr(),
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-                  ),
-                  TextButton(
-                    onPressed: () => GoRouter.of(context).push('/group-announcements'),
-                    child: Text("key_176".tr()),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              _buildGroupList(),
-            ],
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          "key_112c".tr(),
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        if (isAdmin)
-          TextButton(
-            onPressed: () => GoRouter.of(context).push('/manage-app-announcements'),
-            child: Text("key_177".tr()),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildAnnouncementCard(Map<String, dynamic> a) {
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: ExpansionTile(
-        title: Text(
-          (a['title'] ?? '') as String,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        childrenPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        children: [
-          if ((a['body'] ?? '') is String && (a['body'] as String).isNotEmpty)
-            Text(a['body'] as String),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildGroupList() {
-    return Center(
-      child: SizedBox(
-        height: 100,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          itemCount: groupAnnouncements.length,
-          separatorBuilder: (_, _) => const SizedBox(width: 12),
-          itemBuilder: (context, index) {
-            final a = groupAnnouncements[index];
-            final isDark = Theme.of(context).brightness == Brightness.dark;
-            final backgroundColor = isDark ? Colors.blueGrey[900] : Colors.blue[50];
-
-            return Material(
-              color: backgroundColor,
-              borderRadius: BorderRadius.circular(8),
+  Widget _buildGroupList(TextTheme textTheme, ColorScheme colorScheme) {
+    // Horizontal list for less prominent group announcements
+    return SizedBox(
+      height: 180, 
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: groupAnnouncements.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (context, index) {
+          final a = groupAnnouncements[index];
+          
+          return SizedBox(
+            width: 200, 
+            child: Card(
+              elevation: 0, 
+              color: colorScheme.surfaceContainerHigh, // Use a distinct color for separation
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: InkWell(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(16),
                 onTap: () {
-                  if (!mounted) return;
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    showDialog(
-                      context: context,
-                      useRootNavigator: false,
-                      builder: (dialogContext) => AlertDialog(
-                        title: Text((a['title'] ?? '') as String),
-                        content: Text((a['body'] ?? '') as String),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.of(dialogContext).pop(),
-                            child: Text("key_178".tr()),
-                          ),
-                        ],
+                  // Show the full announcement content in a modern dialog
+                  showDialog(
+                    context: context,
+                    builder: (dialogContext) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
+                      content: SingleChildScrollView(
+                        child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
                       ),
-                    );
-                  });
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.of(dialogContext).pop(),
+                          child: Text("key_178".tr()), // Close
+                        ),
+                      ],
+                    ),
+                  );
                 },
-                child: Container(
-                  width: 180,
-                  padding: const EdgeInsets.all(12),
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      // 🎨 Changed icon color to tertiary
+                      Icon(Icons.groups_2_outlined, color: colorScheme.tertiary, size: 28),
+                      const SizedBox(height: 8),
                       Text(
                         (a['title'] ?? '') as String,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      const SizedBox(height: 6),
-                      if ((a['body'] ?? '') is String && (a['body'] as String).isNotEmpty)
-                        Text(
-                          a['body'] as String,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                        style: textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _formatDate(a['published_at'] as String),
+                        style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                      ),
+                      const Spacer(),
+                      Text(
+                        'Read More', 
+                        // 🎨 Changed "Read More" text color to tertiary
+                        style: textTheme.labelLarge?.copyWith(color: colorScheme.tertiary, fontWeight: FontWeight.bold),
+                      )
                     ],
                   ),
                 ),
               ),
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
+  }
+
+  String _formatDate(String isoString) {
+    try {
+      final dateTime = DateTime.parse(isoString).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      if (difference.inDays == 0) {
+        return 'Today at ${DateFormat.jm().format(dateTime)}';
+      } else if (difference.inDays == 1) {
+        return 'Yesterday at ${DateFormat.jm().format(dateTime)}';
+      }
+      return DateFormat('MMM d, yyyy').format(dateTime);
+    } catch (_) {
+      return '';
+    }
   }
 }

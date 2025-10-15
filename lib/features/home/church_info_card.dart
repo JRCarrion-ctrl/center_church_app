@@ -28,7 +28,8 @@ class ChurchInfoCard extends StatelessWidget {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 600),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
+          // ✨ CHANGE: Increased the outer border radius for a more curved look.
+          borderRadius: BorderRadius.circular(20),
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -54,7 +55,8 @@ class ChurchInfoCard extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       decoration: BoxDecoration(
                         color: overlayColor,
-                        borderRadius: BorderRadius.circular(8),
+                        // ✨ CHANGE: Increased the inner border radius to complement the outer curve.
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
                         "key_178a".tr(), 
@@ -68,7 +70,6 @@ class ChurchInfoCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     
                     // Column for vertical stacking of buttons
-                    // FIX: Changed crossAxisAlignment to center to prevent horizontal stretching
                     Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       crossAxisAlignment: CrossAxisAlignment.center, 
@@ -77,13 +78,10 @@ class ChurchInfoCard extends StatelessWidget {
                         ElevatedButton(
                           onPressed: () => _launchChurchSite(_spanishUrl),
                           style: ElevatedButton.styleFrom(
-                            // Setting padding explicitly for tight wrapping
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
-                            // INCREASED circular border radius
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20), 
                             ),
-                            // REMOVED minimumSize and .copyWith(padding) as padding is now explicit
                           ),
                           child: const Text('centrocristianofrederick.com'),
                         ),
@@ -92,13 +90,10 @@ class ChurchInfoCard extends StatelessWidget {
                         ElevatedButton(
                           onPressed: () => _launchChurchSite(_englishUrl),
                           style: ElevatedButton.styleFrom(
-                            // Setting padding explicitly for tight wrapping
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), 
-                            // INCREASED circular border radius
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(20), 
                             ),
-                            // REMOVED minimumSize and .copyWith(padding) as padding is now explicit
                           ),
                           child: const Text('tccf.church'),
                         ),

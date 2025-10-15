@@ -1,3 +1,4 @@
+// File: lib/main_app.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
@@ -8,12 +9,12 @@ import '../../app_state.dart';
 class MainApp extends StatelessWidget {
   final Widget child;
 
-  // store keys, not translated strings
+  // Icons updated to use outlined versions for a cleaner, modern look
   static const tabs = [
-    _TabItem(path: '/groups', icon: Icons.group, labelKey: 'main_1'),
-    _TabItem(path: '/calendar', icon: Icons.calendar_today, labelKey: 'main_2'),
-    _TabItem(path: '/', icon: Icons.home, labelKey: 'main_3'),
-    _TabItem(path: '/prayer', icon: Icons.book, labelKey: 'main_4'),
+    _TabItem(path: '/groups', icon: Icons.group_outlined, labelKey: 'main_1'),
+    _TabItem(path: '/calendar', icon: Icons.calendar_today_outlined, labelKey: 'main_2'),
+    _TabItem(path: '/', icon: Icons.home_outlined, labelKey: 'main_3'),
+    _TabItem(path: '/prayer', icon: Icons.menu_book_outlined, labelKey: 'main_4'),
     _TabItem(path: '/more', icon: Icons.more_horiz, labelKey: 'main_5'),
   ];
 
@@ -29,8 +30,7 @@ class MainApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-    final textColor = theme.textTheme.bodyLarge?.color;
+    final colorScheme = theme.colorScheme;
 
     return Consumer<AppState>(
       builder: (context, appState, _) {
@@ -38,59 +38,66 @@ class MainApp extends StatelessWidget {
         final selectedIndex = _resolveTabIndex(currentLocation);
 
         return Scaffold(
+          // ====================================================================
+          // MODERN TOP BANNER (AppBar)
+          // ====================================================================
           appBar: AppBar(
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            leadingWidth: 120,
-            leading: Padding(
-              padding: const EdgeInsets.only(left: 1.0),
-              child: Center(
-                child: Text(
-                  'CCF',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
+            // Use M3 surface and rely on shadow for separation
+            backgroundColor: colorScheme.surface, 
+            elevation: 0,
+            scrolledUnderElevation: 4.0, // Shows subtle shadow when content scrolls under
+            
+            // Layout is now asymmetric (branding to the left)
+            leadingWidth: 0,
+            centerTitle: false, 
+
+            title: Padding(
+              padding: const EdgeInsets.only(left: 8.0),
+              child: Image.asset(
+                'assets/logo_light.png', 
+                height: 36,
+                fit: BoxFit.contain,
+                color: colorScheme.onSurface, // Use M3 color for tinting
               ),
             ),
-            title: Image.asset(
-              'assets/logo_light.png',
-              height: 40,
-              fit: BoxFit.contain,
-              color: isDark ? Colors.white : Colors.black,
-            ),
-            centerTitle: true,
+            
             actions: [
               IconButton(
-                icon: Icon(Icons.notifications, color: textColor),
+                icon: Icon(Icons.notifications_outlined, color: colorScheme.onSurface),
                 onPressed: () => context.push('/notifications'),
               ),
+              // Added profile icon for better user navigation structure
+              IconButton(
+                icon: Icon(Icons.account_circle_outlined, color: colorScheme.onSurface),
+                onPressed: () => context.push('/more/profile'), 
+              ),
+              const SizedBox(width: 8),
             ],
-            bottom: PreferredSize(
-              preferredSize: const Size.fromHeight(1.0),
-              child: Container(color: theme.dividerColor, height: 1),
-            ),
+            // Removed the explicit bottom divider line (PreferredSize)
           ),
 
           body: child,
 
-          bottomNavigationBar: BottomNavigationBar(
-            backgroundColor: theme.colorScheme.surfaceContainerHighest,
-            currentIndex: selectedIndex,
-            onTap: (index) {
+          // ====================================================================
+          // MODERN BOTTOM BANNER (NavigationBar - M3)
+          // ====================================================================
+          bottomNavigationBar: NavigationBar(
+            backgroundColor: colorScheme.surfaceContainer, // Soft M3 surface
+            elevation: 2, // Subtle lift/shadow
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (index) {
               if (index != selectedIndex) {
                 appState.updateTabIndex(index);
                 context.go(tabs[index].path);
               }
             },
-            selectedItemColor: theme.colorScheme.primary,
-            unselectedItemColor: theme.unselectedWidgetColor,
-            items: tabs
-                .map((t) => BottomNavigationBarItem(
+            // Map _TabItem data to NavigationDestination widgets
+            destinations: tabs
+                .map((t) => NavigationDestination(
+                      // NavigationDestination handles M3 styling (rounded indicator)
                       icon: Icon(t.icon),
-                      label: t.labelKey.tr(), // translate at build time
+                      selectedIcon: Icon(t.icon), 
+                      label: t.labelKey.tr(), 
                     ))
                 .toList(),
           ),
