@@ -45,7 +45,7 @@ final ccfLightTheme = ThemeData(
     backgroundColor: kSurfaceLightBase, 
     foregroundColor: kBlack,
     elevation: 0.5, 
-    shadowColor: kBlack.withOpacity(0.1),
+    shadowColor: kBlack.withValues(alpha: 0.1),
   ),
   floatingActionButtonTheme: FloatingActionButtonThemeData(
     backgroundColor: kBrandPrimary, 
@@ -73,14 +73,14 @@ final ccfDarkTheme = ThemeData(
     onSurface: kWhite,
     surfaceContainerHighest: kSurfaceDarkHigh, 
     surfaceContainer: kSurfaceDarkContainer, // Used for containers/cards
-    outline: kSurfaceLightContrast.withOpacity(0.5), // Muted light gray outline
+    outline: kSurfaceLightContrast.withValues(alpha: 0.5), // Muted light gray outline
   ),
   scaffoldBackgroundColor: kSurfaceDarkBase,
   appBarTheme: AppBarTheme(
-    backgroundColor: kSurfaceDarkHigh.withOpacity(0.9), 
+    backgroundColor: kSurfaceDarkHigh.withValues(alpha: 0.9), 
     foregroundColor: kWhite,
     elevation: 0.5,
-    shadowColor: kBlack.withOpacity(0.5),
+    shadowColor: kBlack.withValues(alpha: 0.5),
   ),
   floatingActionButtonTheme: FloatingActionButtonThemeData(
     backgroundColor: kBrandPrimary, 

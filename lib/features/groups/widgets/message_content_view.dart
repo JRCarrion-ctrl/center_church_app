@@ -217,8 +217,8 @@ class _MessageContentViewState extends State<MessageContentView> {
   // --- NEW: View media from the CDN URL using CachedNetworkImage ---
   Widget _buildNetworkMediaView(String fileUrl, String extension) {
     // Tapping the network image should trigger the local download/cache
-    final onDoubleTapAction = () => _startManualDownload(fileUrl);
-    final onTapAction = () => _showFullscreenMedia(context, url: fileUrl);
+    void onDoubleTapAction() => _startManualDownload(fileUrl);
+    void onTapAction() => _showFullscreenMedia(context, url: fileUrl);
     
     if (extension.isImage || extension.isGif) {
       return GestureDetector(

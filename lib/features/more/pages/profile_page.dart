@@ -424,7 +424,7 @@ class _ProfilePageState extends State<ProfilePage> {
               try {
                 await OidcAuth.refreshIfNeeded();
                 await OidcAuth.changePassword(currentPassword, newPassword);
-                if (mounted) {
+                if (context.mounted) {
                   Navigator.of(context).pop(); // Close dialog on success
                   _showSnackbar(context, "Password changed successfully.");
                 }
