@@ -597,5 +597,7 @@
   "Yesterday": "Ayer",
   "Today": "Hoy",
   "key_prayer_form_hint": "Escribe tu peticion de oracion aqui",
-  "key_download_file": "Descargar"
+  "key_download_file": "Descargar",
+  "key_posted_on": "Publicado el {}",
+  "key_posted_by_on": "Publicado por {} el {}"
 }

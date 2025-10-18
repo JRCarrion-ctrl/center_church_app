@@ -597,5 +597,7 @@
   "how_a8": "Go to the Settings page from the More tab to change your theme, notification preferences, language, accessibility options, and more.",
   "Yesterday": "Yesterday",
   "Today": "Today",
-  "key_download_file": "Download"
+  "key_download_file": "Download",
+  "key_posted_on": "Posted on {}",
+  "key_posted_by_on": "Posted by {} on {}"
 }
