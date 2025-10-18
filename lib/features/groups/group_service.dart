@@ -22,7 +22,6 @@ class GroupInfoData {
   final List<Map<String, dynamic>> events;
   final List<Map<String, dynamic>> announcements;
   final List<Map<String, dynamic>> media;
-  final Map<String, dynamic>? pinnedMessage;
   // Add other data points as needed
 
   GroupInfoData({
@@ -31,7 +30,6 @@ class GroupInfoData {
     required this.events,
     required this.announcements,
     required this.media,
-    this.pinnedMessage,
   });
 }
 
@@ -57,6 +55,22 @@ class GroupService {
     if (row == null) throw Exception('Group not found');
     if (row['archived'] == true) throw GroupArchivedException(groupId);
   }
+  
+  // HELPER: Dart function to calculate the unread count
+  int _calculateUnreadCount(DateTime? lastSeen, List<DateTime> messageTimestamps) {
+    if (lastSeen == null) {
+      // If the user has never seen the chat, treat all messages as unread (capped at 99)
+      return messageTimestamps.length > 99 ? 99 : messageTimestamps.length; 
+    }
+    
+    // Count how many messages have a creation time strictly AFTER the lastSeen time.
+    final count = messageTimestamps.where((messageTime) => 
+        messageTime.isAfter(lastSeen)
+    ).length;
+    
+    // Cap the count for display purposes
+    return count > 99 ? 99 : count;
+  }
 
   // ---------- Reads ----------
 
@@ -70,13 +84,15 @@ class GroupService {
           photo_url
           visibility
           created_at
-          pinned_message_id
           archived
           group_memberships(limit: 5, order_by: {profile: {display_name: asc}}) {
             user_id
             role
             profile {
               display_name
+            }
+            metadata: metadata {
+              last_seen
             }
           }
           group_events(limit: 3, order_by: {event_date: asc}) {
@@ -124,7 +140,6 @@ class GroupService {
       events: List<Map<String, dynamic>>.from(groupData['group_events'] ?? []),
       announcements: List<Map<String, dynamic>>.from(groupData['group_announcements'] ?? []),
       media: List<Map<String, dynamic>>.from(groupData['group_messages'] ?? []),
-      pinnedMessage: groupData['pinned_message'],
     );
   }
 
@@ -139,7 +154,6 @@ class GroupService {
           visibility
           temporary
           archived
-          pinned_message_id
           created_at
         }
       }
@@ -192,6 +206,7 @@ class GroupService {
   }
 
   Future<List<GroupModel>> getUserGroups(String userId) async {
+    // FIX: Update query to fetch metadata and message timestamps for unread count calculation
     const q = r'''
       query MyGroups($uid: String!) {
         group_memberships(
@@ -201,6 +216,9 @@ class GroupService {
             group: { archived: { _eq: false } }
           }
         ) {
+          metadata: metadata {
+             last_seen
+          }
           group {
             id
             name
@@ -209,8 +227,16 @@ class GroupService {
             visibility
             temporary
             archived
-            pinned_message_id
             created_at
+            
+            # Fetch message timestamps for unread calculation (limited to 50 for performance)
+            messages: group_messages(
+              order_by: { created_at: desc }
+              where: {deleted: {_eq: false}}
+              limit: 50 
+            ) {
+              created_at
+            }
           }
         }
       }
@@ -220,10 +246,45 @@ class GroupService {
     );
     if (res.hasException) throw res.exception!;
     final rows = (res.data?['group_memberships'] as List<dynamic>? ?? []);
+    
+    // FIX: Map the complex response structure and calculate unreadCount in Dart
     return rows
-        .map((e) => e['group']) // Change from 'groups' to 'group'
-        .where((g) => g != null)
-        .map<GroupModel>((g) => GroupModel.fromMap(Map<String, dynamic>.from(g)))
+        .where((e) => e['group'] != null)
+        .map<GroupModel>((e) {
+          final groupMap = Map<String, dynamic>.from(e['group']);
+          
+          // 1. Get the last seen timestamp (safely handling map/list confusion)
+          final rawMetadata = e['metadata'];
+          Map<String, dynamic>? metadata;
+          if (rawMetadata is Map<String, dynamic>) {
+              metadata = rawMetadata;
+          } else if (rawMetadata is List<dynamic> && rawMetadata.isNotEmpty) {
+              // This is the defensive path for Hasura collections that should be objects
+              metadata = rawMetadata[0] as Map<String, dynamic>?;
+          }
+
+          final lastSeenStr = metadata?['last_seen'] as String?;
+              
+          final lastSeen = lastSeenStr != null 
+              ? DateTime.tryParse(lastSeenStr)?.toUtc()
+              : null;
+
+          // 2. Get all message timestamps
+          final messages = (e['group']['messages'] as List<dynamic>? ?? [])
+              .map((m) => DateTime.tryParse(m['created_at'] as String)?.toUtc())
+              .where((dt) => dt != null)
+              .cast<DateTime>()
+              .toList();
+
+          // 3. Calculate unread count
+          final unreadCount = _calculateUnreadCount(lastSeen, messages);
+
+          // 4. Return the GroupModel with the calculated count
+          return GroupModel.fromMap({
+            ...groupMap,
+            'unreadCount': unreadCount,
+          });
+        })
         .toList();
   }
 
@@ -298,46 +359,6 @@ class GroupService {
         .where((g) => g != null)
         .map<GroupModel>((g) => GroupModel.fromMap(Map<String, dynamic>.from(g)))
         .toList();
-  }
-
-  Future<Map<String, dynamic>?> getPinnedMessage(String groupId) async {
-    // Get pinned id
-    const qGroup = r'''
-      query Pinned($id: uuid!) {
-        groups_by_pk(id: $id) { pinned_message_id archived }
-      }
-    ''';
-    final g = await client.query(
-      QueryOptions(document: gql(qGroup), variables: {'id': groupId}),
-    );
-    if (g.hasException) throw g.exception!;
-    final grp = g.data?['groups_by_pk'];
-    if (grp == null) return null;
-    final pinnedId = grp['pinned_message_id'];
-    if (pinnedId == null) return null;
-
-    const qMsg = r'''
-      query PinnedMsg($id: uuid!) {
-        group_messages_by_pk(id: $id) {
-          content
-          sender_id
-          created_at
-          sender: profiles { display_name }
-        }
-      }
-    ''';
-    final m = await client.query(
-      QueryOptions(document: gql(qMsg), variables: {'id': pinnedId}),
-    );
-    if (m.hasException) throw m.exception!;
-    final msg = m.data?['group_messages_by_pk'];
-    if (msg == null) return null;
-
-    return {
-      'content': msg['content'],
-      'sender': (msg['sender']?['display_name'] as String?) ?? 'Someone',
-      'created_at': msg['created_at'],
-    };
   }
 
   Future<List<Map<String, dynamic>>> getGroupEvents(String groupId) async {

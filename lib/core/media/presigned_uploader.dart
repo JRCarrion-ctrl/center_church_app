@@ -1,9 +1,10 @@
 // lib/core/media/presigned_uploader.dart
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io'; // Import dart:io for HttpHeaders
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:mime/mime.dart';
+import 'package:flutter/foundation.dart'; // Needed for debugPrint
 
 class PresignedUploader {
   static const _presignEndpoint = 'https://uploads.ccfapp.com/storage/presign';
@@ -22,7 +23,6 @@ class PresignedUploader {
 
     // 2. Determine MIME type and file name
     final ext = file.path.split('.').last.toLowerCase();
-    // Use the lookupMimeType result, but fallback to a known type if possible
     final contentType = lookupMimeType(file.path) 
         ?? (ext == 'jpg' || ext == 'jpeg' ? 'image/jpeg' : 
            (ext == 'png' ? 'image/png' : 'application/octet-stream'));
@@ -39,7 +39,7 @@ class PresignedUploader {
       },
       body: jsonEncode({
         'filename': filename, 
-        'contentType': contentType // Backend needs this to generate the correct PAR headers
+        'contentType': contentType
       }),
     ).timeout(const Duration(seconds: 15));
     
@@ -50,23 +50,28 @@ class PresignedUploader {
     final body = jsonDecode(presignRes.body) as Map<String, dynamic>;
     final uploadUrl = body['uploadUrl'] as String;
     final finalUrl = body['finalUrl'] as String;
+    debugPrint('🎯 Presigned URL received: $uploadUrl'); // Added debug print
 
-    // 4. PUT the file to the presigned URL with explicit Content-Type header
-    // Use a direct put with the file bytes. This is simpler than the stream send 
-    // and often more reliable for smaller files like images.
-    final bytes = await file.readAsBytes();
-    
-    final response = await http.put(
-        Uri.parse(uploadUrl),
-        // CRITICAL: Ensure Content-Type is set here for the storage system
-        headers: { 'Content-Type': contentType }, 
-        body: bytes,
-    );
+    // 4. PUT the file to the presigned URL using the successful stream method
+    final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
 
-    if (response.statusCode != 200 && response.statusCode != 201) {
-        throw Exception('Direct upload to storage failed: ${response.statusCode} ${response.body}');
+    // Set headers: Content-Type and Content-Length are CRITICAL for S3-compatible storage.
+    request.headers[HttpHeaders.contentTypeHeader] = contentType;
+    request.headers[HttpHeaders.contentLengthHeader] = (await file.length()).toString();
+
+    // Pipe the file stream to the request sink
+    await file.openRead().pipe(request.sink);
+
+    // Send the request and wait for the response.
+    final response = await request.send();
+
+    if (response.statusCode != 200) {
+        final responseBody = await response.stream.bytesToString();
+        debugPrint('❌ Storage upload failed: ${response.statusCode} $responseBody');
+        throw Exception('Storage upload failed (${response.statusCode})');
     }
 
+    debugPrint('✅ Uploaded to $finalUrl'); // Added debug print
     // Return the final URL
     return finalUrl;
   }

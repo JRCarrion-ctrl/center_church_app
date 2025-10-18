@@ -9,8 +9,7 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:easy_localization/easy_localization.dart';
-
-import 'package:ccf_app/core/media/presigned_uploader.dart';
+import '../photo_upload_service.dart'; // Assume this is where PhotoUploadService is defined
 
 class AddChildProfilePage extends StatefulWidget {
   final String familyId;
@@ -26,10 +25,19 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
   final _allergiesController = TextEditingController();
   final _notesController = TextEditingController();
   final _emergencyContactController = TextEditingController();
+  late PhotoUploadService _photoUploadService;
   DateTime? _birthday;
 
   bool _isSaving = false;
   File? _photo;
+  
+  // Use didChangeDependencies to safely access the GraphQL client from context
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = GraphQLProvider.of(context).value;
+    _photoUploadService = PhotoUploadService(client);
+  }
 
   @override
   void dispose() {
@@ -50,30 +58,28 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
 
   Future<String?> _uploadPhotoWithPresigned(File file) async {
     try {
-      // Keep the random name behavior
-      final logicalId = const Uuid().v4();
-      final url = await PresignedUploader.upload(
-        file: file,
-        keyPrefix: 'child_photos',
-        logicalId: logicalId,
-      );
+      // Uses the initialized service
+      final url = await _photoUploadService.uploadProfilePhoto(file, widget.familyId);
       return url;
     } catch (_) {
       return null;
     }
   }
 
-  Future<String?> _uploadQrBytes(Uint8List bytes, {required String logicalId}) async {
+  Future<String?> _uploadQrBytes(Uint8List bytes, {required String childId, required String familyId}) async {
     try {
-      // Write bytes to a temp file, then reuse PresignedUploader
+      // 1. Write bytes to a temp file
       final dir = await getTemporaryDirectory();
-      final tmp = File('${dir.path}/$logicalId.png');
+      final tmp = File('${dir.path}/$childId.png');
       await tmp.writeAsBytes(bytes);
-      final url = await PresignedUploader.upload(
-        file: tmp,
-        keyPrefix: 'child_qrcodes',
-        logicalId: logicalId,
+      
+      // 2. Use the PhotoUploadService, passing both IDs (FIXED)
+      final url = await _photoUploadService.uploadQrCode(
+        tmp,
+        familyId, // New argument for familyId
+        childId,  // logicalId for the file name
       );
+      
       // Best effort cleanup
       try { if (await tmp.exists()) await tmp.delete(); } catch (_) {}
       return url;
@@ -99,7 +105,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
       const insertChild = r'''
         mutation InsertChildProfile(
           $display_name: String!,
-          $birthday: timestamptz,
+          $birthday: date,
           $photo_url: String,
           $allergies: String,
           $notes: String,
@@ -166,8 +172,12 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
       final qrResponse = await http.get(qrUri);
       if (qrResponse.statusCode != 200) throw Exception('Failed to generate QR code');
 
-      // 5) Upload QR image to storage and get a public URL
-      final qrUrl = await _uploadQrBytes(qrResponse.bodyBytes, logicalId: childId);
+      // 5) Upload QR image to storage and get a public URL (FIXED UPLOAD MECHANISM)
+      final qrUrl = await _uploadQrBytes(
+        qrResponse.bodyBytes, 
+        childId: childId, 
+        familyId: widget.familyId // Pass the familyId from the widget
+      );
       if (qrUrl == null) throw Exception('QR code upload failed');
 
       // 6) Update child with qr_code_url

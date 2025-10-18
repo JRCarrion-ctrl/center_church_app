@@ -75,7 +75,6 @@ class _EditGroupInfoPageState extends State<EditGroupInfoPage> {
           visibility
           temporary
           archived
-          pinned_message_id
           created_at
         }
       }

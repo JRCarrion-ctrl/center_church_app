@@ -57,8 +57,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
 
   Future<void> _refreshLivestream() async {
     if (_gql == null) return;
-
-    // TODO: Hasura action for Refresh
     const m = r'''
       mutation RefreshLivestream {
         refresh_livestream_cache {

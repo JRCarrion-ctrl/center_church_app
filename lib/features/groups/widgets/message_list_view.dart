@@ -19,7 +19,6 @@ class MessageListView extends StatefulWidget {
   final Map<String, List<String>> reactionMap;
   final void Function(GroupMessage) onLongPress;
   final String Function(DateTime) formatTimestamp;
-  final String? highlightMessageId;
   final VoidCallback? onMessagesRendered;
   final GroupChatService chatService;
 
@@ -31,7 +30,6 @@ class MessageListView extends StatefulWidget {
     required this.reactionMap,
     required this.onLongPress,
     required this.formatTimestamp,
-    this.highlightMessageId,
     this.onMessagesRendered,
     required this.chatService,
   });
@@ -147,6 +145,15 @@ class _MessageListViewState extends State<MessageListView> {
     if (_isLoading && !isInitial) return;
     setState(() => _isLoading = true);
 
+    double? oldScrollOffset;
+    double? oldMaxScrollExtent;
+    
+    // 1. Store old scroll metrics before loading new data
+    if (!isInitial && widget.scrollController.hasClients) {
+      oldScrollOffset = widget.scrollController.offset;
+      oldMaxScrollExtent = widget.scrollController.position.maxScrollExtent;
+    }
+
     try {
       final offset = isInitial ? 0 : _messages.length;
       final serverMessages = await widget.chatService.getMessagesPaginated(
@@ -158,18 +165,33 @@ class _MessageListViewState extends State<MessageListView> {
 
       if (!mounted) return;
 
+      final bool newMessagesLoaded = serverMessages.isNotEmpty;
+      
       if (isInitial) {
         _messages.clear();
       }
       
       final existingIds = _messages.map((m) => m.id).toSet();
       _messages.addAll(serverMessages.where((m) => !existingIds.contains(m.id)));
-      _hasMore = serverMessages.length == _pageSize;
+      _hasMore = serverMessages.length == _pageSize; 
       _rebuildDisplayList();
 
       if (isInitial && widget.onMessagesRendered != null) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           widget.onMessagesRendered!();
+        });
+      }
+      
+      // 2. Restore scroll position after setState and list rebuild (ONLY if new data loaded)
+      if (!isInitial && newMessagesLoaded) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (widget.scrollController.hasClients && oldMaxScrollExtent != null) {
+            final newMaxScrollExtent = widget.scrollController.position.maxScrollExtent;
+            final extentChange = newMaxScrollExtent - oldMaxScrollExtent;
+            
+            // Adjust the scroll position to keep the current messages in view
+            widget.scrollController.jumpTo(oldScrollOffset! + extentChange);
+          }
         });
       }
       unawaited(_cacheMessages());
@@ -270,10 +292,16 @@ class _MessageListViewState extends State<MessageListView> {
       );
     }
 
+    final scrollPhysics = _hasMore
+        ? const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics())
+        : const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
+        
     return RefreshIndicator(
       onRefresh: _handleRefresh,
       child: ListView.builder(
         controller: widget.scrollController,
+        // ✅ FIX: Apply conditional physics
+        physics: scrollPhysics, 
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         reverse: true,
         itemCount: _displayList.length + (_hasMore ? 1 : 0),

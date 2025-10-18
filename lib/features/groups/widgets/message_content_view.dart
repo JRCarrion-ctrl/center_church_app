@@ -299,9 +299,6 @@ class _MessageContentViewState extends State<MessageContentView> {
           child: Image.file(file, height: 200, fit: BoxFit.cover),
         ),
       );
-    } else if (extension.isVideo) {
-      // TODO: Implement video player preview
-      return Container(height: 200, color: Colors.black, child: const Center(child: Icon(Icons.play_arrow, color: Colors.white, size: 48)));
     }
     return const SizedBox.shrink();
   }

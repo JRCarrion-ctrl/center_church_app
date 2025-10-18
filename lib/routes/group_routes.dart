@@ -1,10 +1,9 @@
 // File: lib/routes/group_routes.dart
 import 'package:go_router/go_router.dart';
-import '../transitions/slide.dart';
+import '../transitions/slide.dart'; 
 import '../features/groups/group_page.dart';
 import '../features/calendar/models/group_event.dart';
-import '../features/groups/models/group.dart';
-import '../features/groups/pages/edit_group_info_page.dart';
+import '../features/groups/pages/group_info_page.dart';
 import '../features/groups/pages/manage_members_page.dart';
 import '../features/groups/pages/manage_events_page.dart';
 import '../features/groups/pages/manage_announcements_page.dart';
@@ -19,22 +18,59 @@ final List<GoRoute> groupRoutes = [
       final groupId = state.pathParameters['id']!;
       return buildSlidePage(
         GroupPage(groupId: groupId),
-        direction: SlideDirection.right, // or left if you're popping from the stack
+        direction: SlideDirection.right, 
       );
     },
   ),
   GoRoute(
-    path: '/groups/:id/edit',
-    builder: (context, state) {
-      final group = state.extra as Group;
-      return EditGroupInfoPage(group: group);
+    path: '/groups/:id/info',
+    pageBuilder: (context, state) {
+      final groupId = state.pathParameters['id']!;
+      final extra = state.extra as Map<String, dynamic>?; 
+      final isAdmin = extra?['isAdmin'] as bool? ?? false;
+      final isOwner = extra?['isOwner'] as bool? ?? false;
+      return buildSlidePage(
+          GroupInfoPage(groupId: groupId, isAdmin: isAdmin, isOwner: isOwner),
+          direction: SlideDirection.right,
+      );
     },
+    // Add the /members route as a sub-route of /info (if you want to ensure
+    // that isAdmin/isOwner is available for the next hop)
+    routes: [
+      GoRoute(
+        // The path should be relative to its parent route: /groups/:id/info/members
+        path: 'members', 
+        pageBuilder: (context, state) {
+          final groupId = state.pathParameters['id']!;
+          // FIX: Extract the isAdmin flag passed from GroupInfoPage via the extra parameter.
+          // NOTE: If GroupInfoPage is navigating here, it must pass the data via 'extra'.
+          final extra = state.extra as Map<String, dynamic>?; 
+          final isAdmin = extra?['isAdmin'] as bool? ?? false;
+          
+          return buildSlidePage(
+            // Pass the isAdmin flag to the ManageMembersPage
+            ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
+            direction: SlideDirection.right,
+          );
+        },
+      ),
+    ]
   ),
+  // The original /groups/:id/members route must be updated or removed
+  // I will update it, assuming the call site remains context.push('/groups/:id/members')
+  // but note that nesting it under /info is a cleaner architectural approach.
   GoRoute(
     path: '/groups/:id/members',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      return ManageMembersPage(groupId: groupId);
+      // FIX: Extract the isAdmin flag passed from GroupInfoPage via the extra parameter.
+      final extra = state.extra as Map<String, dynamic>?; 
+      final isAdmin = extra?['isAdmin'] as bool? ?? false;
+      
+      return buildSlidePage(
+        ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
+        direction: SlideDirection.right,
+      );
     },
   ),
   GoRoute(
@@ -49,9 +85,12 @@ final List<GoRoute> groupRoutes = [
   ),
   GoRoute(
     path: '/groups/:id/announcements',
-    builder: (context, state) {
+    pageBuilder: (context, state) { 
       final groupId = state.pathParameters['id']!;
-      return ManageAnnouncementsPage(groupId: groupId);
+      return buildSlidePage(
+        ManageAnnouncementsPage(groupId: groupId),
+        direction: SlideDirection.right,
+      );
     },
   ),
   GoRoute(
@@ -66,9 +105,12 @@ final List<GoRoute> groupRoutes = [
   ),
   GoRoute(
     path: '/groups/:id/media',
-    builder: (context, state) {
+    pageBuilder: (context, state) { 
       final groupId = state.pathParameters['id']!;
-      return GroupMediaPage(groupId: groupId);
+      return buildSlidePage(
+        GroupMediaPage(groupId: groupId),
+        direction: SlideDirection.right,
+      );
     },
   ),
 ];

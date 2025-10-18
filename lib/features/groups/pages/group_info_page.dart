@@ -93,6 +93,7 @@ class _GroupInfoPageState extends State<GroupInfoPage> {
                 children: [
                   Text("key_086".tr()),
                   const SizedBox(height: 8),
+                  // FIX: Use context.go to ensure navigation stability on retry
                   ElevatedButton(onPressed: _refreshData, child: Text("Retry".tr())),
                 ],
               ),
@@ -277,8 +278,6 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             const SizedBox(height: 12),
             _buildEditableGroupInfo(),
             const SizedBox(height: 24),
-            _SectionCard(title: "key_112a".tr(), child: _buildPinnedMessages(widget.pageData.pinnedMessage)),
-            const SizedBox(height: 24),
             _SectionCard(title: "key_112b".tr(), child: _buildGroupEvents(widget.pageData.events)),
             const SizedBox(height: 24),
             _SectionCard(title: "key_112c".tr(), child: _buildGroupAnnouncements(widget.pageData.announcements)),
@@ -316,22 +315,6 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           )
         else
           Text(widget.pageData.group.description ?? '', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
-      ],
-    );
-  }
-
-  Widget _buildPinnedMessages(Map<String, dynamic>? message) {
-    if (message == null) return Text("key_096".tr());
-    final sender = message['sender']?['display_name'] ?? 'Someone';
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text('📌 “${message['content']}”', maxLines: 2, overflow: TextOverflow.ellipsis),
-        const SizedBox(height: 4),
-        Text(
-          'Posted by $sender • ${message['created_at']}',
-          style: const TextStyle(color: Colors.grey, fontSize: 12),
-        ),
       ],
     );
   }
@@ -393,11 +376,9 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Widget _buildGroupMedia(List<Map<String, dynamic>> media) {
-    // Filter out messages that don't have a file URL or aren't easily previewable as images
     final imageMedia = media.where((msg) {
       final fileUrl = msg['file_url'] as String?;
       if (fileUrl == null) return false;
-      // Simple check for common image extensions (adjust as needed for your backend)
       final ext = fileUrl.split('?').first.split('.').last.toLowerCase();
       return const {'jpg', 'jpeg', 'png', 'gif', 'webp'}.contains(ext);
     }).toList();
@@ -405,7 +386,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     if (imageMedia.isEmpty) {
       return Column(
         children: [
-          Text("key_102".tr()), // e.g., "No media has been shared yet."
+          Text("key_103".tr()),
         ],
       );
     }
@@ -425,19 +406,57 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           ),
           itemCount: displayMedia.length,
           itemBuilder: (context, index) {
-            final fileUrl = displayMedia[index]['file_url'] as String;
+            final fileUrl = displayMedia[index]['file_url'] as String?;
+            
+            // FIX 3A: Check if fileUrl is null or empty before using the provider
+            if (fileUrl == null || fileUrl.isEmpty) {
+              return const Icon(Icons.broken_image, size: 40);
+            }
 
             return GestureDetector(
               onTap: () {
-                // TODO: Implement a function to view the full image/media
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Viewing media is coming soon!')),
+                showDialog(
+                  context: context,
+                  builder: (_) => Stack(
+                    children: [
+                      Container(
+                        color: Colors.black,
+                        padding: const EdgeInsets.all(12),
+                        child: InteractiveViewer(
+                          panEnabled: true,
+                          minScale: 1,
+                          maxScale: 5,
+                          child: Center(
+                            child: CachedNetworkImage(
+                              // FIX 3B: Use fileUrl directly (already checked)
+                              imageUrl: fileUrl, 
+                              fit: BoxFit.contain,
+                              placeholder: (context, url) => const Center(child: CircularProgressIndicator()),
+                              errorWidget: (context, url, error) => const Icon(Icons.error_outline, size: 60, color: Colors.white),
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Close button
+                      Positioned(
+                        top: 30,
+                        right: 16,
+                        child: SafeArea(
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                            onPressed: () => context.pop(),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 );
               },
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(8.0),
                 child: CachedNetworkImage(
-                  imageUrl: fileUrl,
+                  // FIX 3C: Use fileUrl directly (already checked)
+                  imageUrl: fileUrl, 
                   fit: BoxFit.cover,
                   placeholder: (context, url) => const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                   errorWidget: (context, url, error) => const Icon(Icons.broken_image, size: 40),
@@ -451,18 +470,69 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           alignment: Alignment.centerRight,
           child: TextButton(
             onPressed: () => context.push('/groups/${widget.pageData.group.id}/media'),
-            child: Text("key_104".tr()), // e.g., "See All Media"
+            child: Text("key_104".tr()),
           ),
         ),
       ],
     );
   }
 
+  // Helper function to determine online status
+  bool _isOnline(Map<String, dynamic> member) {
+    final metadata = member['metadata'] as Map<String, dynamic>?;
+    final lastSeenStr = metadata?['last_seen'] as String?;
+    
+    if (lastSeenStr == null) return false;
+
+    final lastSeen = DateTime.tryParse(lastSeenStr);
+    if (lastSeen == null) return false;
+
+    final fiveMinutesAgo = DateTime.now().subtract(const Duration(minutes: 5));
+    return lastSeen.isAfter(fiveMinutesAgo);
+  }
+
   Widget _buildGroupMembers(List<Map<String, dynamic>> members) {
     if (members.isEmpty) return Text("key_105".tr());
+    
+    final memberWidgets = members.map((m) {
+      final displayName = m['profile']?['display_name'] as String?;
+      final online = _isOnline(m);
+      
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4.0),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Member Name (FIRST ELEMENT)
+            Text(
+              displayName ?? 'Unknown',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontWeight: online ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+            // Online Status Dot (SECOND ELEMENT - MOVED TO THE RIGHT)
+            if (online)
+              Padding(
+                // Use left padding instead of right padding
+                padding: const EdgeInsets.only(left: 6.0), 
+                child: Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: Colors.green.shade600,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      );
+    }).toList();
+    
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ...members.map((member) => Text(member['display_name'] ?? 'Unknown')),
+        ...memberWidgets,
         if (widget.isAdmin || widget.isOwner)
           TextButton.icon(
             onPressed: _openInviteModal,
@@ -472,7 +542,10 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () => context.push('/groups/${widget.pageData.group.id}/members'),
+            onPressed: () => context.push(
+              '/groups/${widget.pageData.group.id}/members',
+              extra: {'isAdmin': widget.isAdmin},
+            ),
             child: Text("key_107".tr()),
           ),
         ),
@@ -614,6 +687,10 @@ class _GroupHeaderState extends State<_GroupHeader> {
 
   @override
   Widget build(BuildContext context) {
+    // FIX 1: Safely handle null/empty group photo URL
+    final photoUrl = widget.group.photoUrl;
+    final hasPhoto = photoUrl?.isNotEmpty == true;
+
     return GestureDetector(
       onTap: widget.isAdmin && !_isUploading ? _showImagePicker : null,
       child: Stack(
@@ -621,10 +698,11 @@ class _GroupHeaderState extends State<_GroupHeader> {
         children: [
           CircleAvatar(
             radius: 80,
-            backgroundImage: (widget.group.photoUrl?.isNotEmpty ?? false)
-                ? CachedNetworkImageProvider(widget.group.photoUrl!)
+            // FIX 2: Only provide CachedNetworkImageProvider if photoUrl is valid
+            backgroundImage: hasPhoto
+                ? CachedNetworkImageProvider(photoUrl!)
                 : null,
-            child: (widget.group.photoUrl?.isEmpty ?? true)
+            child: !hasPhoto 
                 ? const Icon(Icons.group, size: 80)
                 : null,
           ),

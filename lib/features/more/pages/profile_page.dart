@@ -5,8 +5,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:ccf_app/core/graph_provider.dart';
-import 'package:ccf_app/core/media/presigned_uploader.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -16,6 +14,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/features/auth/oidc_auth.dart';
 
 import '../../../app_state.dart';
+import '../photo_upload_service.dart';
+import '../profile_service.dart';
 
 final _logger = Logger();
 
@@ -31,10 +31,12 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
-  String? _displayName, _bio, _photoUrl, _phone;
+  String? _displayName, _bio, _email, _photoUrl, _phone;
   bool? _visible;
   bool _isLoading = true;
-  GraphQLClient? _client;
+  
+  late ProfileService _profileService;
+  late PhotoUploadService _photoUploadService; // Reference to the dependency
   bool _bootstrapped = false;
 
   List<Map<String, dynamic>> _groups = [];
@@ -53,17 +55,29 @@ class _ProfilePageState extends State<ProfilePage> {
     super.didChangeDependencies();
     if (_bootstrapped) return;
     try {
-      _client = GraphProvider.of(context);
+      final client = GraphQLProvider.of(context).value;
+      
+      // STEP 1: Initialize PhotoUploadService
+      _photoUploadService = PhotoUploadService(client);
+      
+      // STEP 2: Initialize ProfileService with its dependency
+      _profileService = ProfileService(client, _photoUploadService);
+      
       _bootstrapped = true;
       _logger.i('Dependencies are ready. Calling _loadAllData.');
       _loadAllData();
     } catch (e, st) {
       _logger.e('[gp] FAILED in didChangeDependencies', error: e, stackTrace: st);
+      if (mounted) {
+        _isLoading = false; 
+      }
     }
   }
 
+  // --- Data Loading ---
+  
   Future<void> _loadAllData() async {
-    _logger.i('Starting _loadAllData');
+    _logger.i('Starting _loadAllData (Service)');
 
     if (!mounted) {
       _logger.w('Not mounted, exiting _loadAllData');
@@ -71,128 +85,43 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     setState(() => _isLoading = true);
-    _logger.i('after is loading set to true');
 
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) {
-      _logger.w('User ID is null, exiting _loadAllData');
       if (mounted) {
         setState(() => _isLoading = false);
         context.go('/landing');
       }
       return;
     }
-    _logger.i('User is logged in. Loading profile data.');
-    final client = _client!;
-
-    const qProfileBundle = '''
-      query ProfileBundle(\$uid: String!) {
-        profiles_by_pk(id: \$uid) {
-          display_name
-          bio
-          photo_url
-          visible_in_directory
-          phone
-        }
-        group_memberships(where: { user_id: { _eq: \$uid } }) {
-          id
-          role
-          group {
-            id
-            name
-          }
-        }
-        my_family: family_members(
-          where: { user_id: { _eq: \$uid }, status: { _eq: "accepted" } }
-          limit: 1
-        ) {
-          id
-          family_id
-        }
-        prayer_requests(where: { user_id: { _eq: \$uid } }, order_by: { created_at: desc }) {
-          id
-          request
-          created_at
-          expires_at
-          status
-        }
-        event_attendance(where: { user_id: { _eq: \$uid } }, order_by: { created_at: desc }) {
-          id
-          attending_count
-          created_at
-          events {
-            title
-            event_date
-          }
-        }
-        app_event_attendance(where: { user_id: { _eq: \$uid } }, order_by: { created_at: desc }) {
-          id
-          attending_count
-          created_at
-          app_events {
-            title
-            event_date
-          }
-        }
-      }
-    ''';
 
     try {
-      _logger.i('[ProfileBundle] start');
-      final res = await client.query(
-        QueryOptions(
-          document: gql(qProfileBundle),
-          variables: {'uid': userId},
-          fetchPolicy: FetchPolicy.networkOnly,
-        ),
-      );
-      _logger.i('[ProfileBundle] got response');
-
-      if (res.hasException) {
-        _logger.e('[ProfileBundle] exception: ${res.exception}');
-        // Only throw a real exception if it's not a CacheMissException.
-        if (res.exception?.linkException is CacheMissException) {
-          _logger.w('[ProfileBundle] CacheMissException is not a critical error. Continuing.');
-        } else {
-          _logger.e('Error loading profile data', error: res.exception);
-          if (!mounted) return;
-          _showSnackbar(context, "key_294a".tr());
-          return;
-        }
-      }
-
-      final profile = res.data?['profiles_by_pk'] as Map<String, dynamic>?;
-      final groupsRows = (res.data?['group_memberships'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final prayersRows = (res.data?['prayer_requests'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final groupRSVPs = (res.data?['event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-      final myFamilyList = (res.data?['my_family'] as List<dynamic>? ?? []);
-      final fetchedFamilyId = myFamilyList.isNotEmpty ? (myFamilyList.first['family_id'] as String?) : null;
+      final bundle = await _profileService.fetchProfileBundle(userId);
 
       List<Map<String, dynamic>> familyRows = [];
-      if (fetchedFamilyId != null) {
-        familyRows = await _fetchFamilyMembers(client, fetchedFamilyId);
+      if (bundle.familyId != null) {
+        familyRows = await _profileService.fetchFamilyMembers(bundle.familyId!);
       }
 
       setState(() {
-        _displayName = profile?['display_name'] as String?;
-        _bio = profile?['bio'] as String?;
-        _photoUrl = profile?['photo_url'] as String?;
-        _phone = profile?['phone'] as String?;
-        _visible = (profile?['visible_in_directory'] as bool?) ?? true;
-        _groups = groupsRows;
+        _displayName = bundle.profile?['display_name'] as String?;
+        _bio = bundle.profile?['bio'] as String?;
+        _email = bundle.profile?['email'] as String;
+        _photoUrl = bundle.profile?['photo_url'] as String?; 
+        _phone = bundle.profile?['phone'] as String?;
+        _visible = (bundle.profile?['visible_in_directory'] as bool?) ?? true;
+        
+        _groups = bundle.groups;
         _family = familyRows;
-        _prayerRequests = prayersRows;
-        final appRSVPs = (res.data?['app_event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-        _eventRsvps = [
-          ...groupRSVPs.map((r) => {...r, 'source': 'group'}),
-          ...appRSVPs.map((r) => {...r, 'source': 'app'}),
-        ];
+        _prayerRequests = bundle.prayerRequests;
+        _eventRsvps = bundle.eventRsvps;
       });
 
     } catch (e, st) {
-      _logger.e('Error loading profile data', error: e, stackTrace: st);
-      if (!mounted) return;
-      _showSnackbar(context, "key_294a".tr());
+      _logger.e('Error loading profile data via service', error: e, stackTrace: st);
+      if (mounted) {
+        _showSnackbar(context, "key_294a".tr());
+      }
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -201,44 +130,8 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-
-  Future<List<Map<String, dynamic>>> _fetchFamilyMembers(GraphQLClient client, String familyId) async {
-    _logger.d('Starting _fetchFamilyMembers');
-    const qFamily = r'''
-      query Family($fid: uuid!) {
-        family_members(
-          where: { family_id: { _eq: $fid }, status: { _eq: "accepted" } }
-        ) {
-          id
-          relationship
-          status
-          user_id
-          is_child
-          child: child_profile { display_name }
-          user: profile { id display_name photo_url }
-        }
-      }
-    ''';
-    try {
-      final res = await client.query(
-        QueryOptions(
-          document: gql(qFamily),
-          variables: {'fid': familyId},
-          fetchPolicy: FetchPolicy.networkOnly,
-        ),
-      );
-      if (res.hasException) {
-        _logger.e('Family data GraphQL query failed', error: res.exception);
-        throw res.exception!;
-      }
-      _logger.d('Family data query successful.');
-      return (res.data?['family_members'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    } catch (e, st) {
-      _logger.e('Error fetching family members', error: e, stackTrace: st);
-      return [];
-    }
-  }
-
+  // --- Utility Methods ---
+  
   Future<File> _compressImage(File file) async {
     final targetPath = file.path.replaceFirst(RegExp(r'\.(jpg|jpeg|png|heic|webp)$', caseSensitive: false), '_compressed.jpg');
     final compressedBytes = await FlutterImageCompress.compressWithFile(
@@ -252,51 +145,26 @@ class _ProfilePageState extends State<ProfilePage> {
     return File(targetPath)..writeAsBytesSync(compressedBytes);
   }
 
+  // --- Mutations & Actions ---
+
   Future<void> _editPhoto() async {
     _logger.i('Attempting to edit profile photo');
     final picker = ImagePicker();
     final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 75);
-    if (picked == null) {
-      _logger.i('Photo picker cancelled.');
-      return;
-    }
+    if (picked == null) return;
 
-    _logger.d('Image picked, starting compression.');
     File file = File(picked.path);
     file = await _compressImage(file);
     if (!mounted) return;
     
     final userId = context.read<AppState>().profile?.id;
-    if (userId == null) {
-      _logger.e('User ID null during photo edit.');
-      return;
-    }
+    if (userId == null) return;
 
     try {
-      _logger.d('Uploading image to cloud storage.');
-      final uploadedUrl = await PresignedUploader.upload(file: file, keyPrefix: 'profile_photos', logicalId: '$userId.jpg');
-      if (uploadedUrl.isEmpty) {
-        if (!mounted) return;
-        _showSnackbar(context, "key_294d".tr());
-        return;
-      }
-      _logger.d('Image uploaded successfully: $uploadedUrl');
-
-      final cacheBustedUrl = '$uploadedUrl?ts=${DateTime.now().millisecondsSinceEpoch}';
-      if (!mounted) return;
-      final client = GraphProvider.of(context);
+      _logger.d('File compressed. Delegating upload and DB update to service.');
       
-      _logger.d('Updating user profile with new photo URL.');
-      const m = r'''
-        mutation SetPhoto($id: uuid!, $url: String!) {
-          update_profiles_by_pk(pk_columns: { id: $id }, _set: { photo_url: $url }) { id }
-        }
-      ''';
-      final res = await client.mutate(MutationOptions(document: gql(m), variables: {'id': userId, 'url': cacheBustedUrl}));
-      if (res.hasException) {
-        _logger.e('GraphQL mutation for photo URL failed.', error: res.exception);
-        throw res.exception!;
-      }
+      final newUrl = await _profileService.uploadAndSetProfilePhoto(userId, file);
+      
       _logger.d('Photo URL updated in database.');
       
       if (_photoUrl != null && _photoUrl!.isNotEmpty) {
@@ -307,7 +175,7 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       
       if (!mounted) return;
-      setState(() => _photoUrl = cacheBustedUrl);
+      setState(() => _photoUrl = newUrl);
       _showSnackbar(context, "key_294e".tr());
       _logger.i('Profile photo updated successfully.');
 
@@ -317,7 +185,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  Future<void> _editField({required String label, required String initialValue, required ValueChanged<String> onSaved}) async {
+  Future<void> _editField({
+    required String label, 
+    required String initialValue, 
+    required ValueChanged<String> onSaved, 
+    // New optional field for keyboard type (useful for phone number)
+    TextInputType keyboardType = TextInputType.text,
+  }) async {
     final controller = TextEditingController(text: initialValue);
     final newValue = await showDialog<String>(
       context: context,
@@ -327,6 +201,7 @@ class _ProfilePageState extends State<ProfilePage> {
           controller: controller,
           decoration: InputDecoration(hintText: "key_295a".tr(args: [label])),
           maxLines: label.toLowerCase() == 'bio' ? 3 : 1,
+          keyboardType: keyboardType, // Apply keyboard type
         ),
         actions: [
           TextButton(onPressed: () => context.pop(), child: Text("key_296".tr())),
@@ -343,52 +218,19 @@ class _ProfilePageState extends State<ProfilePage> {
     if (userId == null) {
       throw Exception('User not logged in.');
     }
-    final client = GraphProvider.of(context);
-    
-    // 1. Simplified Mutation (as shown above)
-    const m = r'''
-      mutation UpdateField($id: uuid!, $_set: profiles_set_input!) {
-        update_profiles_by_pk(
-          pk_columns: { id: $id },
-          _set: $_set
-        ) { id }
-      }
-    ''';
-
-    // 2. Create the dynamic set object
-    final Map<String, dynamic> setVariables = { key: value };
-
-    // 3. Execute the mutation with the dynamic map
-    await client.mutate(
-      MutationOptions(
-        document: gql(m), 
-        variables: {
-          'id': userId, 
-          '_set': setVariables, // Pass the map containing only the updated field
-        }
-      )
-    );
+    await _profileService.updateProfileField(userId, key, value);
   }
 
   Future<void> _toggleVisibility(bool value) async {
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
-    final client = GraphProvider.of(context);
-    const m = r'''
-      mutation ToggleVisible($id: uuid!, $visible: Boolean!) {
-        update_profiles_by_pk(
-          pk_columns: { id: $id },
-          _set: { visible_in_directory: $visible }
-        ) { id }
-      }
-    ''';
-    await client.mutate(MutationOptions(document: gql(m), variables: {'id': userId, 'visible': value}));
+    await _profileService.toggleVisibility(userId, value);
     setState(() => _visible = value);
   }
 
   Future<void> _changePassword() async {
     if (!mounted) return;
-
+    // (Omitted unchanged _changePassword implementation for brevity)
     final currentPasswordController = TextEditingController();
     final newPasswordController = TextEditingController();
     final confirmNewPasswordController = TextEditingController();
@@ -396,7 +238,6 @@ class _ProfilePageState extends State<ProfilePage> {
     await showDialog<void>(
       context: context,
       builder: (context) {
-        // Use a StatefulBuilder to manage the dialog's own loading state.
         return StatefulBuilder(
           builder: (context, setDialogState) {
             bool isChanging = false;
@@ -425,7 +266,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 await OidcAuth.refreshIfNeeded();
                 await OidcAuth.changePassword(currentPassword, newPassword);
                 if (context.mounted) {
-                  Navigator.of(context).pop(); // Close dialog on success
+                  Navigator.of(context).pop();
                   _showSnackbar(context, "Password changed successfully.");
                 }
               } catch (e) {
@@ -465,13 +306,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _removePrayerRequest(String id) async {
-    final client = GraphProvider.of(context);
-    const m = r'''
-      mutation DeletePrayer($id: uuid!) {
-        delete_prayer_requests_by_pk(id: $id) { id }
-      }
-    ''';
-    await client.mutate(MutationOptions(document: gql(m), variables: {'id': id}));
+    await _profileService.deletePrayerRequest(id);
     setState(() => _prayerRequests.removeWhere((r) => r['id'] == id));
   }
 
@@ -497,14 +332,9 @@ class _ProfilePageState extends State<ProfilePage> {
     if (!mounted) return;
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
+    
     try {
-      final client = GraphProvider.of(context);
-      const m = r'''
-        mutation DeleteAccount($id: uuid!) {
-          delete_user_account(id: $id) { ok }
-        }
-      ''';
-      await client.mutate(MutationOptions(document: gql(m), variables: {'id': userId}));
+      await _profileService.deleteUserAccount(userId);
     } catch (e, st) {
       _logger.e('Delete account failed', error: e, stackTrace: st);
       if (!mounted) return;
@@ -516,6 +346,8 @@ class _ProfilePageState extends State<ProfilePage> {
     if (mounted) context.go('/landing');
   }
 
+  // --- UI Build Methods ---
+
   String _formatUSPhone(String input) {
     final digits = input.replaceAll(RegExp(r'\D'), '');
     if (digits.length != 10) return input;
@@ -523,55 +355,89 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildProfileHeader() {
-    return Center(
-      child: Column(
-        children: [
-          GestureDetector(
-            onTap: _editPhoto,
-            child: CircleAvatar(
-              radius: 48,
-              backgroundImage: (_photoUrl != null && _photoUrl!.isNotEmpty) ? CachedNetworkImageProvider(_photoUrl!) : null,
-              child: (_photoUrl == null || _photoUrl!.isEmpty) ? const Icon(Icons.person, size: 48) : null,
+    final stateRead = context.read<AppState>();
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+      elevation: 2, // Subtle lift
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(20.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            // 1. Photo Section
+            Center(
+              child: GestureDetector(
+                onTap: _editPhoto,
+                child: CircleAvatar(
+                  radius: 48,
+                  backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
+                  backgroundImage: (_photoUrl != null && _photoUrl!.isNotEmpty) 
+                    ? CachedNetworkImageProvider(_photoUrl!) 
+                    : null,
+                  child: (_photoUrl == null || _photoUrl!.isEmpty) 
+                    ? Icon(Icons.person, size: 48, color: Theme.of(context).colorScheme.primary) 
+                    : null,
+                ),
+              ),
             ),
-          ),
-          TextButton(onPressed: _editPhoto, child: Text("key_305".tr())),
-          const SizedBox(height: 8),
-          _buildEditableTextRow(
-            text: _displayName,
-            onEdit: () async {
-              await _editField(
-                label: "key_305a".tr(),
-                initialValue: _displayName ?? '',
-                onSaved: (v) async {
-                  await _updateProfileField('display_name', v);
-                  setState(() => _displayName = v);
-                },
-              );
-            },
-          ),
-          const SizedBox(height: 4),
-          _buildEditableTextRow(
-            text: _bio,
-            isBio: true,
-            onEdit: () async {
-              await _editField(
-                label: "key_305b".tr(),
-                initialValue: _bio ?? '',
-                onSaved: (v) async {
-                  await _updateProfileField('bio', v);
-                  setState(() => _bio = v);
-                },
-              );
-            },
-          ),
-          if (_phone != null && _phone!.isNotEmpty) const SizedBox(height: 4),
-          if (_phone != null)
+            Center(
+              child: TextButton(
+                onPressed: _editPhoto, 
+                child: Text("key_305".tr()),
+              ),
+            ),
+          
+            const SizedBox(height: 16),
+          
+            // 2. Display Name (Emphasized)
             _buildEditableTextRow(
-              text: _formatUSPhone(_phone!),
+              title: "key_305a".tr(), // Display Name
+              text: _displayName,
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
+              icon: Icons.edit_note, // Different icon for name
               onEdit: () async {
                 await _editField(
-                  label: "key_305c".tr(),
+                  label: "key_305a".tr(),
+                  initialValue: _displayName ?? '',
+                  onSaved: (v) async {
+                    await _updateProfileField('display_name', v);
+                    stateRead.loadUserGroups(); // Optional: Refresh groups if name affects user data
+                    setState(() => _displayName = v);
+                  },
+                );
+              },
+            ),
+
+            const SizedBox(height: 16),
+            const Divider(height: 1), 
+            const SizedBox(height: 16),
+
+            // 3. Email (Non-Editable)
+            if (_email != null) 
+              ListTile(
+                leading: Icon(Icons.email, color: Theme.of(context).colorScheme.secondary),
+                title: Text(_email!),
+                subtitle: Text("key_305d".tr()), // E.g., "Email Address"
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+
+            // 4. Phone Number (Editable)
+            _buildEditableListTile(
+              title: (_phone != null && _phone!.isNotEmpty)
+                  ? _formatUSPhone(_phone!)
+                  : "key_305c_add".tr(), // "Add Phone Number"
+              subtitle: "key_305c".tr(), // E.g., "Phone Number"
+              icon: Icons.phone,
+              onTap: () async {
+                await _editField(
+                  label: "key_305c".tr(), // Phone
                   initialValue: _phone ?? '',
+                  keyboardType: TextInputType.phone,
                   onSaved: (v) async {
                     await _updateProfileField('phone', v);
                     setState(() => _phone = v);
@@ -579,24 +445,86 @@ class _ProfilePageState extends State<ProfilePage> {
                 );
               },
             ),
-        ],
+
+            // 5. Bio (Editable)
+            _buildEditableListTile(
+              title: _bio ?? "key_305b_add".tr(), // "Add Bio"
+              subtitle: "key_305b".tr(), // E.g., "Bio"
+              icon: Icons.notes,
+              isBio: true,
+              onTap: () async {
+                await _editField(
+                  label: "key_305b".tr(), // Bio
+                  initialValue: _bio ?? '',
+                  onSaved: (v) async {
+                    await _updateProfileField('bio', v);
+                    setState(() => _bio = v);
+                  },
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildEditableTextRow({String? text, bool isBio = false, required VoidCallback onEdit}) {
+  // New helper for structured list tiles
+  Widget _buildEditableListTile({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+    bool isBio = false,
+  }) {
+    return ListTile(
+      leading: Icon(icon, color: Theme.of(context).colorScheme.secondary),
+      title: Text(
+        title,
+        maxLines: isBio ? 3 : 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(fontStyle: title.contains("key_305e_add_bio") ? FontStyle.italic : null),
+      ),
+      subtitle: Text(subtitle),
+      trailing: const Icon(Icons.edit, size: 20),
+      onTap: onTap,
+      dense: true,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+
+  // Modified helper to handle the Display Name row specifically
+  Widget _buildEditableTextRow({
+    String? text, 
+    String? title,
+    TextStyle? style,
+    IconData icon = Icons.edit,
+    required VoidCallback onEdit
+  }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Flexible(
-          child: Text(
-            text ?? '',
-            maxLines: isBio ? 2 : 1,
-            overflow: TextOverflow.ellipsis,
-            style: isBio ? null : const TextStyle(fontSize: 20),
+          child: Column(
+            children: [
+              if (title != null && text != null)
+                  Text(title, style: Theme.of(context).textTheme.bodySmall),
+              Text(
+                text ?? '',
+                textAlign: TextAlign.center,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: style ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              ),
+            ]
           ),
         ),
-        IconButton(icon: const Icon(Icons.edit), onPressed: onEdit),
+        // Use an IconButton here for a cleaner look next to the text
+        IconButton(
+          icon: Icon(icon, size: 20), 
+          onPressed: onEdit
+        ),
       ],
     );
   }

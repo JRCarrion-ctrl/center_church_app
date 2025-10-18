@@ -6,10 +6,10 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart' as graphql;
 import 'package:easy_localization/easy_localization.dart';
 
-import 'package:ccf_app/core/media/presigned_uploader.dart';
+import 'package:ccf_app/features/more/bible_study_upload_service.dart';
 
 class EditBibleStudyPage extends StatefulWidget {
-  final Map<String, dynamic>? study; // null => new
+  final Map<String, dynamic>? study;
 
   const EditBibleStudyPage({super.key, this.study});
 
@@ -23,6 +23,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
   late final TextEditingController _title;
   late final TextEditingController _youtubeUrl;
   late final TextEditingController _notesUrl;
+  late BibleStudyUploadService _uploadService;
   DateTime _selectedDate = DateTime.now();
   bool isSaving = false;
 
@@ -37,6 +38,13 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       final raw = s!['date'] as String;
       _selectedDate = DateTime.tryParse(raw) ?? DateTime.parse('${raw}T00:00:00Z');
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = graphql.GraphQLProvider.of(context).value;
+    _uploadService = BibleStudyUploadService(client);
   }
 
   @override
@@ -79,12 +87,14 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     }
 
     try {
-      // Reuse your S3/GCS presigned upload helper
+      // The logical ID should use the existing study ID or a slug for new studies.
       final logicalId = widget.study?['id'] as String? ?? _slug(title);
-      final uploadedUrl = await PresignedUploader.upload(
-        file: file,
-        keyPrefix: 'bible_studies', // folder/prefix in your storage
-        logicalId: '$logicalId$ext', // keep filetype in the logical key
+      final logicalIdWithExt = '$logicalId$ext'; // Final key: UUID/slug + .ext
+
+      // FIX: Use the new service for upload
+      final uploadedUrl = await _uploadService.uploadStudyNotes(
+        file,
+        logicalIdWithExt,
       );
 
       if (!mounted) return;
@@ -95,6 +105,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
           SnackBar(content: Text("key_261".tr())), // “Notes uploaded!”
         );
       } else {
+        // This case might be unreachable if the service throws an exception,
+        // but kept for safety.
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Upload failed')),
         );
@@ -111,7 +123,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => isSaving = true);
 
-    final client = graphql.GraphQLProvider.of(context).value; // was: gql
+    final client = graphql.GraphQLProvider.of(context).value;
 
     final dateStr = _selectedDate.toIso8601String().split('T').first;
 
@@ -141,7 +153,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     ''';
 
     final isNew = widget.study == null;
-    final doc = graphql.gql(isNew ? mInsert : mUpdate); // call the real gql()
+    final doc = graphql.gql(isNew ? mInsert : mUpdate);
     final effectiveVars = isNew ? (Map.of(vars)..remove('id')) : vars;
 
     try {

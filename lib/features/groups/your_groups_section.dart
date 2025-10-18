@@ -7,7 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
-import 'package:ccf_app/features/groups/models/group_model.dart';
+import 'package:ccf_app/features/groups/models/group_model.dart'; // Assume unreadCount is here
 
 class YourGroupsSection extends StatefulWidget {
   const YourGroupsSection({super.key, this.excludeArchived = true});
@@ -58,13 +58,17 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     }
 
     final groups = await (await _service()).getUserGroups(userId);
+    
+    // NOTE: GroupModel must be extended in your data layer to include the unread count
+    // The getUserGroups query in GroupService must be updated to fetch:
+    // (count(messages) where message.created_at > membership.last_seen_at)
 
     // Defensive filter: hide archived if requested
     final visible = widget.excludeArchived
         ? groups.where((g) => (g.archived) == false).toList()
         : groups;
 
-    // Stable sort by name
+    // Stable sort by name (consider sorting by unread status first)
     visible.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     _allGroups = visible;
@@ -175,20 +179,57 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
               itemBuilder: (context, index) {
                 final group = _filteredGroups[index];
                 final archived = group.archived;
+                
+                // Assume 'unreadCount' is a field on GroupModel
+                final unreadCount = group.unreadCount; 
+                final hasUnread = unreadCount > 0;
 
                 return InkWell(
                   borderRadius: BorderRadius.circular(12),
                   onTap: () => _openGroup(group),
                   child: Column(
                     children: [
-                      CircleAvatar(
-                        radius: 40,
-                        backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                            ? NetworkImage(group.photoUrl!)
-                            : null,
-                        child: (group.photoUrl?.isEmpty ?? true)
-                            ? const Icon(Icons.group, size: 30)
-                            : null,
+                      Stack(
+                        clipBehavior: Clip.none,
+                        alignment: Alignment.center,
+                        children: [
+                          CircleAvatar(
+                            radius: 40,
+                            backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
+                                ? NetworkImage(group.photoUrl!)
+                                : null,
+                            child: (group.photoUrl?.isEmpty ?? true)
+                                ? const Icon(Icons.group, size: 30)
+                                : null,
+                          ),
+                          // NEW: Unread message badge
+                          if (hasUnread)
+                            Positioned(
+                              right: -4,
+                              top: -4,
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: Theme.of(context).colorScheme.error, // Red badge
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: Theme.of(context).colorScheme.surface,
+                                    width: 2,
+                                  ),
+                                ),
+                                child: Text(
+                                  // Display the count, or "9+" if over 9
+                                  unreadCount > 9 ? '9+' : unreadCount.toString(),
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.onError,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 10,
+                                    height: 1.0, // Tighten vertical space
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
                       ),
                       const SizedBox(height: 6),
                       SizedBox(
@@ -200,7 +241,10 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                               child: Text(
                                 group.name,
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(fontSize: 13),
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                                 maxLines: 2,
                               ),

@@ -1,5 +1,6 @@
 // File: lib/features/prayer/prayer_page.dart
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -126,9 +127,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
 
       if (res.hasException) {
         setState(() => _loading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load prayer requests')),
-        );
         return;
       }
 
@@ -233,7 +231,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
             insert_prayer_requests_one(object: {
               user_id: $user_id,
               request: $request,
-              include_name: $includeName,
+              include_name: $include_name,
               status: "open"
             }) { id }
           }
@@ -269,6 +267,43 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
+    // --- START: Added check for logged out user ---
+    if (currentUserId == null) {
+      return Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_outline, size: 48, color: colorScheme.outline),
+                const SizedBox(height: 16),
+                Text(
+                  "key_338".tr(), // Use a localization key for this message
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "key_338a".tr(), // Hardcoded fallback or another key
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () {
+                    context.push('/auth');
+                  }, 
+                  icon: const Icon(Icons.login), 
+                  label: Text("key_017".tr()),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       body: _loading
           ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
@@ -287,8 +322,8 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                           style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          "No open requests right now. Press the button below to submit one.",
+                        Text(
+                          "key_429".tr(),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey),
                         )
@@ -323,7 +358,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       if (!shouldShowName) {
                         subtitleText = 'Posted on $createdAt'; 
                       } else if (!includeName && canClose) {
-                        subtitleText = 'Posted by $name (Anon) on $createdAt';
+                        subtitleText = 'Posted on $createdAt';
                       } else {
                         subtitleText = 'Posted by $name on $createdAt';
                       }
@@ -375,7 +410,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         onPressed: _showPrayerRequestForm,
         tooltip: "Submit a Prayer Request",
         icon: const Icon(Icons.add_comment_outlined),
-        label: const Text("Add Prayer"),
+        label: Text("key_424".tr()),
       ),
     );
   }
@@ -441,8 +476,8 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                "Submit a Prayer Request",
+              Text(
+                "key_428".tr(),
                 style: TextStyle(
                   fontSize: 20, 
                   fontWeight: FontWeight.bold,
@@ -455,8 +490,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                 maxLines: 5,
                 style: textTheme.bodyLarge,
                 decoration: InputDecoration(
-                    labelText: "Your Prayer Request",
-                    hintText: "Lord, please help me with...",
+                    labelText: "key_427".tr(),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     filled: true,
                     fillColor: colorScheme.surfaceContainerHighest.withAlpha(77),
@@ -467,8 +501,8 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
               ),
               const SizedBox(height: 8),
               SwitchListTile(
-                title: Text("Include my name", style: textTheme.bodyLarge),
-                subtitle: Text("If turned off, your name will not be publicly visible.", style: textTheme.bodySmall),
+                title: Text("key_425".tr(), style: textTheme.bodyLarge),
+                subtitle: Text("key_426".tr(), style: textTheme.bodySmall),
                 value: _includeName,
                 onChanged: (val) => setState(() => _includeName = val),
                 activeThumbColor: Colors.white,
@@ -487,7 +521,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                   shadowColor: primaryColor.withAlpha(200),
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.local_library_outlined),
-                    label: const Text("Submit"), 
+                    label: Text("key_242".tr()), 
                     style: buttonStyle.copyWith(
                       backgroundColor: WidgetStateProperty.all(Colors.transparent),
                       overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withAlpha(30)),
