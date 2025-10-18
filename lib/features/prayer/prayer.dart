@@ -127,7 +127,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       if (res.hasException) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to load prayer requests')),
+          SnackBar(content: Text("key_331a".tr())),
         );
         return;
       }
@@ -144,7 +144,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       if (mounted) {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load prayer requests: $e')),
+          SnackBar(content: Text("key_331".tr(args: [e.toString()]))),
         );
       }
     }
@@ -156,28 +156,24 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        // MODERN DIALOG STYLING
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          // CHANGE: Hardcoded the title text
-          "Delete Prayer Request", 
+          "key_332".tr(), 
           style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
         ),
-        content: Text("key_333".tr()), // Are you sure? (Still uses key for content)
+        content: Text("key_333".tr()),
         actions: [
-          // CANCEL BUTTON
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text("Cancel"), 
+            child: Text("key_334".tr()), 
           ),
-          // DELETE/CLOSE BUTTON
           FilledButton(
             style: FilledButton.styleFrom(
-              backgroundColor: colorScheme.error, // Red color for "Delete" or "Close" action
+              backgroundColor: colorScheme.error,
               foregroundColor: colorScheme.onError,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text("Delete Prayer Request"),
+            child: Text("key_335".tr()),
           ),
         ],
         actionsPadding: const EdgeInsets.all(16),
@@ -201,12 +197,14 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       if (res.hasException) throw res.exception!;
       await _loadPrayerRequests();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_330".tr())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("key_336".tr()))
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error closing request: $e')),
+          SnackBar(content: Text("key_337".tr(args: [e.toString()]))),
         );
       }
     }
@@ -255,7 +253,8 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         } catch (e) {
           if (mounted) {
             navigator.pop();
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("key_340".tr(args: [e.toString()]))));
           }
         }
       }),
@@ -287,8 +286,8 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                           style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
                         ),
                         const SizedBox(height: 8),
-                        const Text(
-                          "No open requests right now. Press the button below to submit one.",
+                        Text(
+                          "key_341a".tr(),
                           textAlign: TextAlign.center,
                           style: TextStyle(color: Colors.grey),
                         )
@@ -309,30 +308,29 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
                       final canClose = isSupervisorOrOwner || isPrayerOwner;
                       final createdAt = item['created_at'] != null 
-                          ? DateFormat('MMM d, h:mm a').format(DateTime.parse(item['created_at'])) 
+                          ? DateFormat('dd/MM/yy h:mm a').format(DateTime.parse(item['created_at'])) 
                           : '';
 
                       final includeName = item['include_name'] == true;
                       
                       final shouldShowName = includeName || canClose;
 
-                      final name = ((item['profiles']?['display_name'] ?? 'Someone') as String);
+                      final name = ((item['profiles']?['display_name'] ?? "key_anonymous".tr()) as String);
 
-                      // Subtitle text construction (Hardcoded English)
                       String subtitleText;
                       if (!shouldShowName) {
-                        subtitleText = 'Posted on $createdAt'; 
+                        subtitleText = "key_posted_on".tr(args: [createdAt]); 
                       } else if (!includeName && canClose) {
-                        subtitleText = 'Posted by $name (Anon) on $createdAt';
+                        subtitleText = "key_posted_by_anon".tr(args: [name, createdAt]);
                       } else {
-                        subtitleText = 'Posted by $name on $createdAt';
+                        // ✨ CHANGED: Using a new key to display only the date/time.
+                        subtitleText = "key_prayer_date_time".tr(args: [createdAt]);
                       }
 
                       return Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         child: Card.filled( 
                           elevation: 0,
-                          // 🎨 MODIFICATION HERE: Changed to use surfaceContainerHigh for better visual separation in light mode
                           color: colorScheme.surfaceContainerHigh,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           child: ListTile(
@@ -358,10 +356,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                             ),
                             trailing: canClose
                                 ? IconButton(
-                                      icon: Icon(Icons.close, color: colorScheme.error),
-                                      tooltip: 'Mark as Closed',
-                                      onPressed: () => _confirmAndClosePrayer(item['id'] as String),
-                                    )
+                                    icon: Icon(Icons.close, color: colorScheme.error),
+                                    tooltip: "key_332".tr(),
+                                    onPressed: () => _confirmAndClosePrayer(item['id'] as String),
+                                  )
                                 : null,
                           ),
                         ),
@@ -373,9 +371,9 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
         onPressed: _showPrayerRequestForm,
-        tooltip: "Submit a Prayer Request",
+        tooltip: "key_342a".tr(),
         icon: const Icon(Icons.add_comment_outlined),
-        label: const Text("Add Prayer"),
+        label: Text("key_135".tr()),
       ),
     );
   }
@@ -441,9 +439,9 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                "Submit a Prayer Request",
-                style: TextStyle(
+              Text(
+                "key_342a".tr(),
+                style: const TextStyle(
                   fontSize: 20, 
                   fontWeight: FontWeight.bold,
                   color: Colors.black, 
@@ -455,20 +453,20 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                 maxLines: 5,
                 style: textTheme.bodyLarge,
                 decoration: InputDecoration(
-                    labelText: "Your Prayer Request",
-                    hintText: "Lord, please help me with...",
+                    labelText: "key_342b".tr(),
+                    hintText: "key_prayer_form_hint".tr(),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     filled: true,
                     fillColor: colorScheme.surfaceContainerHighest.withAlpha(77),
                     alignLabelWithHint: true,
                     floatingLabelBehavior: FloatingLabelBehavior.never,
                 ),
-                validator: (val) => val == null || val.trim().isEmpty ? "Request cannot be empty" : null,
+                validator: (val) => val == null || val.trim().isEmpty ? "key_047d".tr() : null,
               ),
               const SizedBox(height: 8),
               SwitchListTile(
-                title: Text("Include my name", style: textTheme.bodyLarge),
-                subtitle: Text("If turned off, your name will not be publicly visible.", style: textTheme.bodySmall),
+                title: Text("key_343".tr(), style: textTheme.bodyLarge),
+                subtitle: Text("key_prayer_form_subtitle".tr(), style: textTheme.bodySmall),
                 value: _includeName,
                 onChanged: (val) => setState(() => _includeName = val),
                 activeThumbColor: Colors.white,
@@ -487,7 +485,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                   shadowColor: primaryColor.withAlpha(200),
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.local_library_outlined),
-                    label: const Text("Submit"), 
+                    label: Text("key_344".tr()), 
                     style: buttonStyle.copyWith(
                       backgroundColor: WidgetStateProperty.all(Colors.transparent),
                       overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withAlpha(30)),

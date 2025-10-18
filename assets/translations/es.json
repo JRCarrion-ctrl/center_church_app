@@ -199,7 +199,7 @@
   "key_132": "Programado",
   "key_133": "Administrar anuncios",
   "key_134": "No se encontraron anuncios.",
-  "key_135": "Agregar",
+  "key_135": " Agregar oracion",
   "key_136": "RSVP eliminado",
   "key_137": "Error: $e",
   "key_138": "RSVP guardado",
@@ -265,7 +265,7 @@
   "key_184": "Aún no hay anuncios en la app.",
   "key_185": "Editar",
   "key_186": "Eliminar",
-  "key_187": "Agregar",
+  "key_187": "Agregar oracion",
   "key_187a": "Mas Informacion",
   "key_188": "Donar-GivingFire",
   "key_189": "No se pudo abrir {}",
@@ -487,6 +487,7 @@
   "key_421": "este domingo",
   "key_422": "Servicio en inglés",
   "key_423": "Servicio en español",
+  "key_456": "Si apagado, su nombre no aparecera en su peticion de oracion.",
   "set_1": "General",
   "set_1a": "Idioma",
   "set_1b": "Notificaciones",
@@ -583,5 +584,6 @@
   "how_a8": "Ve a la página de Configuración desde la pestaña 'Más' para cambiar tema, preferencias de notificaciones, idioma, opciones de accesibilidad y más.",
   "Yesterday": "Ayer",
   "Today": "Hoy",
+  "key_prayer_form_hint": "Escribe tu peticion de oracion aqui",
   "key_download_file": "Descargar"
 }
