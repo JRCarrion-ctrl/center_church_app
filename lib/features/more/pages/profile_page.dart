@@ -392,7 +392,6 @@ class _ProfilePageState extends State<ProfilePage> {
           
             // 2. Display Name (Emphasized)
             _buildEditableTextRow(
-              title: "key_305a".tr(), // Display Name
               text: _displayName,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
