@@ -69,7 +69,7 @@ Future<void> _signin() async {
             : ElevatedButton(onPressed: _signin, child: const Text('Continue')),
         const SizedBox(height: 8),
         TextButton(
-          onPressed: () => Navigator.of(context).maybePop(),
+          onPressed: () => Navigator.pop(context, false),
           child: const Text('Not now'),
         ),
       ],

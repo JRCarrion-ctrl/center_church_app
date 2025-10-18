@@ -340,7 +340,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       physics: const NeverScrollableScrollPhysics(),
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
       itemCount: announcements.length,
-      separatorBuilder: (_, __) => const Divider(height: 1, thickness: 1), // Thin divider for separation
+      separatorBuilder: (_, _) => const Divider(height: 1, thickness: 1), // Thin divider for separation
       itemBuilder: (context, index) {
         final a = announcements[index];
         return _buildAnnouncementListItem(a, textTheme, colorScheme, context);
@@ -427,7 +427,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: groupAnnouncements.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final a = groupAnnouncements[index];
           

@@ -7,8 +7,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../app_state.dart';
 import 'models/group.dart';
 import 'widgets/group_chat_tab.dart';
-import 'pages/group_info_page.dart';
-import '../../shared/user_roles.dart'; // Ensure UserRole is imported
+import 'package:go_router/go_router.dart';
 
 class GroupPage extends StatefulWidget {
   final String groupId;
@@ -23,20 +22,17 @@ class _GroupPageState extends State<GroupPage> {
   bool _isLoading = true;
   Group? _group;
   
-  // REFACTORED: These are now derived from AppState, not fetched from the server.
-  bool _isAdmin = false;
+  bool _isGroupAdmin = false;
   bool _isOwner = false;
 
   @override
   void initState() {
     super.initState();
-    // Use didChangeDependencies for context-aware initialization.
   }
   
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Ensure this only runs once.
     if (_group == null && _isLoading) {
       _initialize();
     }
@@ -46,31 +42,38 @@ class _GroupPageState extends State<GroupPage> {
     final appState = context.read<AppState>();
     final service = appState.groupService;
 
+    final userId = appState.profile?.id;
+    if (userId == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return;
+    }
+
     try {
       final group = await service.getGroupById(widget.groupId);
+      final userGroupRole = await service.getMyGroupRole(
+        groupId: widget.groupId, 
+        userId: userId,
+      );
 
       if (!mounted) return;
 
-      final userRole = appState.userRole;
-      _isAdmin = (userRole == UserRole.supervisor || userRole == UserRole.owner);
-
-      // Ownership might still need a specific check if it's per-group.
-      // If `group.ownerId` is available, this is the most efficient check.
-      // For now, we'll assume a global owner role.
-      _isOwner = (userRole == UserRole.owner);
-      
-      // If ownership is per-group and stored on the group object:
-      // final userId = appState.profile?.id;
-      // _isOwner = (group != null && group.ownerId == userId);
+      const adminRoles = {'admin', 'leader', 'supervisor', 'owner'};
+      final isGroupAdmin = adminRoles.contains(userGroupRole);
+      final isOwner = userGroupRole == 'owner';
       
       setState(() {
         _group = group;
+        _isGroupAdmin = isGroupAdmin;
+        _isOwner = isOwner;
+        _isLoading = false;
       });
     } catch (e) {
       debugPrint("Failed to initialize GroupPage: $e");
-    } finally {
       if (mounted) {
-        setState(() => _isLoading = false);
+        setState(() {
+          _group = null;
+          _isLoading = false;
+        });
       }
     }
   }
@@ -99,14 +102,12 @@ class _GroupPageState extends State<GroupPage> {
               const BackButton(),
               InkWell(
                 borderRadius: BorderRadius.circular(8),
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => GroupInfoPage(
-                      groupId: widget.groupId,
-                      isAdmin: _isAdmin,
-                      isOwner: _isOwner,
-                    ),
-                  ),
+                onTap: () => context.push(
+                    '/groups/${widget.groupId}/info',
+                    extra: {
+                        'isAdmin': _isGroupAdmin,
+                        'isOwner': _isOwner,
+                    },
                 ),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -164,7 +165,7 @@ class _GroupPageState extends State<GroupPage> {
         children: [
           _buildTopBar(context, group),
           Expanded(
-            child: GroupChatTab(groupId: widget.groupId, isAdmin: _isAdmin),
+            child: GroupChatTab(groupId: widget.groupId, isAdmin: _isGroupAdmin),
           ),
         ],
       ),

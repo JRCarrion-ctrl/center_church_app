@@ -1,6 +1,7 @@
+// File: lib/routes/main_shell_route.dart
+
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-
 import '../features/navigation/main_app.dart';
 import '../features/features.dart';
 import '../features/home/manage_app_announcements_page.dart';
@@ -14,7 +15,7 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/',
       name: 'home',
       pageBuilder: (context, state) {
-        final appState = Provider.of<AppState>(context, listen: false);
+        final appState = context.read<AppState>();
         final direction = appState.currentTabIndex > appState.previousTabIndex
             ? SlideDirection.right
             : SlideDirection.left;
@@ -26,7 +27,7 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/groups',
       name: 'groups',
       pageBuilder: (context, state) {
-        final appState = Provider.of<AppState>(context, listen: false);
+        final appState = context.read<AppState>();
         final direction = appState.currentTabIndex > appState.previousTabIndex
             ? SlideDirection.right
             : SlideDirection.left;
@@ -38,7 +39,7 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/calendar',
       name: 'calendar',
       pageBuilder: (context, state) {
-        final appState = Provider.of<AppState>(context, listen: false);
+        final appState = context.read<AppState>();
         final direction = appState.currentTabIndex > appState.previousTabIndex
             ? SlideDirection.right
             : SlideDirection.left;
@@ -50,7 +51,7 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/prayer',
       name: 'prayer',
       pageBuilder: (context, state) {
-        final appState = Provider.of<AppState>(context, listen: false);
+        final appState = context.read<AppState>();
         final direction = appState.currentTabIndex > appState.previousTabIndex
             ? SlideDirection.right
             : SlideDirection.left;
@@ -62,7 +63,7 @@ final ShellRoute mainShellRoute = ShellRoute(
       path: '/more',
       name: 'more',
       pageBuilder: (context, state) {
-        final appState = Provider.of<AppState>(context, listen: false);
+        final appState = context.read<AppState>();
         final direction = appState.currentTabIndex > appState.previousTabIndex
             ? SlideDirection.right
             : SlideDirection.left;

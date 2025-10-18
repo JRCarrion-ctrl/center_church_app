@@ -4,6 +4,7 @@ import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
+
 import 'package:ccf_app/routes/router_observer.dart';
 import 'package:ccf_app/core/time_service.dart';
 import '../../../core/graph_provider.dart';

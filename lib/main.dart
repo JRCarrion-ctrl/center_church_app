@@ -56,12 +56,10 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   late final ValueNotifier<GraphQLClient> _clientNotifier;
   AppLinks? _appLinks;
   StreamSubscription<Uri?>? _linkSub;
-  // _handledInitialLogin is no longer needed as the conflicting logic is removed.
 
   @override
   void initState() {
     super.initState();
-    // Initialize the ValueNotifier with a public client first.
     _clientNotifier = ValueNotifier<GraphQLClient>(buildPublicHasuraClient());
     _initializeApp();
   }

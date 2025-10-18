@@ -33,6 +33,20 @@ class GroupChatService {
     }
   ''';
 
+  static const _memberMetadataFragment = r'''
+    fragment MemberMetadataFields on group_member_metadata {
+      user_id
+      group_id
+      last_seen
+      last_typed
+      updated_at
+      profile {
+        display_name
+        photo_url
+      }
+    }
+  ''';
+
   // ======= Queries =======
 
   /// ✅ FIX: Added optional `upTo` parameter to prevent race condition.
@@ -157,6 +171,37 @@ class GroupChatService {
     });
   }
 
+  Stream<List<Map<String, dynamic>>> streamMemberMetadata({required String groupId}) {
+    const s = r'''
+      subscription MemberStatuses($gid: uuid!) {
+        group_member_metadata(
+          where: { group_id: { _eq: $gid } }
+          # Order by update time to get the most recent activity first
+          order_by: { updated_at: desc } 
+        ) {
+          ...MemberMetadataFields
+        }
+      }
+    ''' +
+        _memberMetadataFragment;
+
+    final stream = client.subscribe(SubscriptionOptions(
+      document: gql(s),
+      variables: {'gid': groupId},
+    ));
+
+    return stream.map((result) {
+      if (result.hasException) {
+        dev.log('[STREAM] Member metadata subscription error', error: result.exception);
+        return <Map<String, dynamic>>[];
+      }
+      final rows = (result.data?['group_member_metadata'] as List<dynamic>? ?? []);
+      
+      // We return the raw map data here; mapping to a dedicated model is optional
+      return rows.cast<Map<String, dynamic>>();
+    });
+  }
+
   // ======= Mutations =======
 
   /// Sends a message and returns the created message object for optimistic UI updates.
@@ -200,6 +245,78 @@ class GroupChatService {
     if (data == null) return null;
 
     return GroupMessage.fromMap(data as Map<String, dynamic>);
+  }
+
+  Future<void> updateLastSeen(String groupId) async {
+    final sid = getCurrentUserId?.call();
+    if (sid == null || sid.isEmpty) return;
+
+    // Use Hasura's built-in "now()" for the timestamp.
+    const m = r'''
+      mutation UpsertLastSeen($gid: uuid!, $uid: String!) {
+        insert_group_member_metadata_one(
+          object: {
+            group_id: $gid,
+            user_id: $uid,
+            last_seen: "now()"
+          },
+          on_conflict: {
+            constraint: group_member_metadata_pkey,
+            update_columns: [last_seen]
+          }
+        ) { user_id }
+      }
+    ''';
+    
+    // We don't need to refresh OIDC for this frequent, non-critical mutation.
+    final res = await client.mutate(MutationOptions(
+      document: gql(m),
+      variables: {'gid': groupId, 'uid': sid},
+    ));
+    if (res.hasException) {
+      _logger.w('Failed to update last_seen for $sid in $groupId: ${res.exception}');
+      // Do not throw, as this is a background status update.
+    }
+  }
+
+  Future<void> updateLastTyped(String groupId, {required bool isTyping}) async {
+    final sid = getCurrentUserId?.call();
+    if (sid == null || sid.isEmpty) return;
+    
+    // 1. Prepare the value for last_typed (timestamp or null)
+    final String? typedValue = isTyping 
+        ? DateTime.now().toUtc().toIso8601String() 
+        : null;
+    
+    // 2. Use a single upsert mutation. We rely on the JSON variable to handle the null value.
+    const m = r'''
+      mutation UpsertLastTyped($gid: uuid!, $uid: String!, $typed: timestamptz) {
+        insert_group_member_metadata_one(
+          object: {
+            group_id: $gid,
+            user_id: $uid,
+            last_seen: "now()",
+            last_typed: $typed # Use the variable, which handles null
+          },
+          on_conflict: {
+            constraint: group_member_metadata_pkey,
+            update_columns: [last_seen, last_typed] 
+          }
+        ) { user_id }
+      }
+    ''';
+    
+    final res = await client.mutate(MutationOptions(
+      document: gql(m),
+      variables: {
+        'gid': groupId, 
+        'uid': sid,
+        'typed': typedValue, // Passed as String (timestamp) or null
+      },
+    ));
+    if (res.hasException) {
+      _logger.w('Failed to update last_typed for $sid in $groupId: ${res.exception}');
+    }
   }
 
   Future<void> deleteMessage(String messageId) async {

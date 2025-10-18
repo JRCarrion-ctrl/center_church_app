@@ -68,6 +68,7 @@ class AppState extends ChangeNotifier {
   bool get isAuthenticated => _profile != null;
   String? get displayName => _profile?.displayName;
   String? get role => _profile?.role;
+  String? get email => _profile?.email;
   UserRole get userRole => UserRoleExtension.fromString(_profile?.role);
   String? get timezone => _timezone;
   bool get showCountdown => _showCountdown;
@@ -166,6 +167,7 @@ class AppState extends ChangeNotifier {
 
       final userId = (hasuraClaims['x-hasura-user-id'] as String?) ?? (claims['sub'] as String?);
       final defaultRole = (hasuraClaims['x-hasura-default-role'] as String?) ?? 'member';
+      final email = (hasuraClaims['x-hasura-user-email'] as String?);
       if (userId == null || userId.isEmpty) {
         throw Exception('JWT missing x-hasura-user-id / sub');
       }
@@ -183,11 +185,12 @@ class AppState extends ChangeNotifier {
       final tempClient = await makeHasuraClient();
 
       const mUpsert = r'''
-        mutation UpsertProfile($id: String!, $display: String!) {
+        mutation UpsertProfile($id: String!, $display: String!, $email: String!) {
           insert_profiles_one(
             object: { 
             id: $id
             display_name: $display 
+            email: $email
           }
             on_conflict: { constraint: profiles_pkey, update_columns: [display_name] }
           ) { id }
@@ -195,7 +198,7 @@ class AppState extends ChangeNotifier {
       ''';
       await tempClient.mutate(MutationOptions(
         document: gql(mUpsert),
-        variables: {'id': userId, 'display': displayName ?? 'New User'},
+        variables: {'id': userId, 'display': displayName ?? 'New User', 'email': email},
       ));
 
       const qMe = r'''

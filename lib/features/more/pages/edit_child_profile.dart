@@ -6,7 +6,8 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 
-import 'package:ccf_app/core/media/presigned_uploader.dart';
+// Import the service used in add_child_profile.dart
+import '../photo_upload_service.dart';
 
 class EditChildProfilePage extends StatefulWidget {
   final Map<String, dynamic> child;
@@ -21,10 +22,11 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   final _picker = ImagePicker();
 
   late TextEditingController _nameController;
-  late TextEditingController _birthdayController; // YYYY-MM-DD
   late TextEditingController _allergiesController;
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
+  late PhotoUploadService _photoUploadService; // New service
+  DateTime? _birthday; // Stored as DateTime, like in add_child_profile
 
   File? _photoFile;
   String? _initialPhotoUrl;
@@ -34,17 +36,32 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.child['display_name'] ?? '');
-    _birthdayController = TextEditingController(text: widget.child['birthday'] ?? '');
+    // Convert initial birthday string (YYYY-MM-DD) to DateTime
+    final birthdayString = widget.child['birthday'];
+    if (birthdayString != null) {
+      try {
+        _birthday = DateTime.tryParse(birthdayString);
+      } catch (_) {
+        _birthday = null;
+      }
+    }
     _allergiesController = TextEditingController(text: widget.child['allergies'] ?? '');
     _notesController = TextEditingController(text: widget.child['notes'] ?? '');
     _emergencyContactController = TextEditingController(text: widget.child['emergency_contact'] ?? '');
     _initialPhotoUrl = widget.child['photo_url'];
   }
 
+  // Use didChangeDependencies to safely access the GraphQL client from context
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = GraphQLProvider.of(context).value;
+    _photoUploadService = PhotoUploadService(client);
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
-    _birthdayController.dispose();
     _allergiesController.dispose();
     _notesController.dispose();
     _emergencyContactController.dispose();
@@ -56,17 +73,20 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     if (picked != null) setState(() => _photoFile = File(picked.path));
   }
 
+  // REFACTOR: Use PhotoUploadService for consistency
   Future<String?> _uploadPhoto(File file) async {
-    // Use your presigned uploader (S3/GCS/etc.)
-    final logicalId = widget.child['id'] as String; // stable id
-    final url = await PresignedUploader.upload(
-      file: file,
-      keyPrefix: 'child_photos',
-      logicalId: logicalId,
-    );
-    return url.isEmpty
-        ? null
-        : '$url?ts=${DateTime.now().millisecondsSinceEpoch}';
+    try {
+      final familyId = widget.child['family_id'] as String;
+      // Note: Assumes family_id is available in the child object, which is
+      // needed by the service in add_child_profile.dart's implementation.
+      final url = await _photoUploadService.uploadProfilePhoto(file, familyId);
+      // Append timestamp like the original code did to bust cache
+      return url.isEmpty
+          ? null
+          : '$url?ts=${DateTime.now().millisecondsSinceEpoch}';
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _save() async {
@@ -78,9 +98,9 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     // Upload if new photo selected
     final photoUrl = _photoFile != null ? await _uploadPhoto(_photoFile!) : _initialPhotoUrl;
 
-    final birthdayRaw = _birthdayController.text.trim();
-    // If this is a DATE column in Hasura, keep YYYY-MM-DD; if timestamptz, pass ISO8601.
-    final birthday = birthdayRaw.isEmpty ? null : birthdayRaw; // assume DATE
+    // REFACTOR: Use birthday stored as DateTime?
+    // Pass ISO8601 string or null for the 'date' type in Hasura.
+    final birthday = _birthday?.toIso8601String().split('T').first;
 
     const mUpdate = r'''
       mutation UpdateChildProfile(
@@ -110,9 +130,9 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       'id': widget.child['id'],
       'display_name': _nameController.text.trim(),
       'birthday': birthday,
-      'allergies': _allergiesController.text.trim(),
-      'notes': _notesController.text.trim(),
-      'emergency_contact': _emergencyContactController.text.trim(),
+      'allergies': _allergiesController.text.trim().isEmpty ? null : _allergiesController.text.trim(),
+      'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+      'emergency_contact': _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
       'photo_url': photoUrl,
     };
 
@@ -188,9 +208,10 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     }
   }
 
+  // REFACTOR: The date picker now updates the _birthday DateTime field
   Future<void> _selectBirthday() async {
     final today = DateTime.now();
-    final initial = DateTime.tryParse(_birthdayController.text) ?? DateTime(today.year - 9, 1, 1);
+    final initial = _birthday ?? DateTime(today.year - 9, 1, 1);
     final picked = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -198,7 +219,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       lastDate: DateTime.now(),
     );
     if (picked != null) {
-      _birthdayController.text = picked.toIso8601String().split('T').first; // YYYY-MM-DD
+      setState(() => _birthday = picked);
     }
   }
 
@@ -215,6 +236,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
           key: _formKey,
           child: ListView(
             children: [
+              // Photo section is kept for consistency in display
               if (_photoFile != null || (_initialPhotoUrl ?? '').isNotEmpty)
                 CircleAvatar(
                   radius: 40,
@@ -240,11 +262,15 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
                 validator: (v) => v == null || v.isEmpty ? "key_238b".tr() : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
-                controller: _birthdayController,
-                readOnly: true,
+              // REFACTOR: Use ListTile for date selection, similar to add_child_profile.dart
+              ListTile(
+                title: Text(
+                  _birthday != null
+                      ? 'Birthday: ${_birthday!.toLocal().toString().split(' ')[0]}'
+                      : 'key_271a'.tr(), // Use the existing label key if appropriate
+                ),
+                trailing: const Icon(Icons.calendar_today),
                 onTap: _selectBirthday,
-                decoration: InputDecoration(labelText: "key_271a".tr()),
               ),
               const SizedBox(height: 12),
               TextFormField(

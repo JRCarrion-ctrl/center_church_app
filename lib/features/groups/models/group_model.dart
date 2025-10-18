@@ -1,12 +1,12 @@
-// lib/features/groups/models/group_model.dart
 class GroupModel {
   final String id;
   final String name;
   final String? description;
   final String? photoUrl;
-  final String visibility;      // 'public' | 'request' | 'invite_only'
-  final bool archived;          // <- new
-  final bool temporary;         // <- optional but useful for nursery DMs
+  final String visibility;
+  final bool archived;
+  final bool temporary;
+  final int unreadCount; // <-- NEW FIELD
 
   GroupModel({
     required this.id,
@@ -16,6 +16,7 @@ class GroupModel {
     this.visibility = 'public',
     this.archived = false,
     this.temporary = false,
+    this.unreadCount = 0, // <-- Set default
   });
 
   factory GroupModel.fromMap(Map<String, dynamic> m) => GroupModel(
@@ -26,6 +27,7 @@ class GroupModel {
         visibility: (m['visibility'] as String?) ?? 'public',
         archived: (m['archived'] as bool?) ?? false,
         temporary: (m['temporary'] as bool?) ?? false,
+        unreadCount: (m['unreadCount'] as int?) ?? 0,
       );
 
   Map<String, dynamic> toMap() => {
@@ -36,5 +38,6 @@ class GroupModel {
         'visibility': visibility,
         'archived': archived,
         'temporary': temporary,
+        // unreadCount is omitted as it's a runtime/calculated field
       };
 }

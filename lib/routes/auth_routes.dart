@@ -11,9 +11,8 @@ final List<GoRoute> authRoutes = [
     name: 'auth',
     pageBuilder: (context, state) => buildSlidePage(
       const AuthPage(),
-      direction: SlideDirection.left,
+      direction: SlideDirection.right,
     ),
-    // If already authenticated (Zitadel token present → AppState.profile set), keep them off /auth
     redirect: (context, state) {
       final app = context.read<AppState>();
       return app.isAuthenticated ? '/' : null;

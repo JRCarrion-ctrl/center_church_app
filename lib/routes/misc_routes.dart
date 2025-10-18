@@ -1,4 +1,4 @@
-// lib/routes/misc_routes.dart
+// File: lib/routes/misc_routes.dart
 import 'package:ccf_app/features/home/models/group_announcements_page.dart';
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
@@ -84,7 +84,10 @@ final List<GoRoute> miscRoutes = [
   ),
   GoRoute(
     path: '/profile/:id',
-    builder: (context, state) => PublicProfile(userId: state.pathParameters['id']!),
+    pageBuilder: (context, state) => buildSlidePage(
+      PublicProfile(userId: state.pathParameters['id']!),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/more/family',
@@ -163,45 +166,72 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/study/edit',
     name: 'edit_bible_study',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final study = state.extra as Map<String, dynamic>?;
-      return EditBibleStudyPage(study: study);
+      return buildSlidePage(
+        EditBibleStudyPage(study: study),
+        direction: SlideDirection.right,
+      );
     },
   ),
   GoRoute(
     path: '/notes_viewer',
-    builder: (context, state) {
+    pageBuilder: (context, state) {
       final url = state.extra as String;
-      return NotesViewerPage(url: url);
+      return buildSlidePage(
+        NotesViewerPage(url: url),
+        direction: SlideDirection.right,
+      );
     },
   ),
   GoRoute(
     path: '/nursery/child-profile',
-    builder: (context, state) => ChildProfilePage(child: state.extra as Map<String, dynamic>),
+    pageBuilder: (context, state) => buildSlidePage(
+      ChildProfilePage(child: state.extra as Map<String, dynamic>),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/data-and-delete',
-    builder: (context, state) => const DataAndDeleteAccountPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const DataAndDeleteAccountPage(),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/contact-support',
-    builder: (context, state) => const ContactSupportPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const ContactSupportPage(),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/notifications',
     name: 'notifications',
-    builder: (context, state) => const NotificationsPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const NotificationsPage(),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/settings/notifications',
-    builder: (context, state) => const NotificationSettingsPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const NotificationSettingsPage(),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/media-settings',
-    builder: (context, state) => const MediaSettingsPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const MediaSettingsPage(),
+      direction: SlideDirection.right,
+    ),
   ),
   GoRoute(
     path: '/group-announcements',
-    builder: (context, state) => const GroupAnnouncementsPage(),
+    pageBuilder: (context, state) => buildSlidePage(
+      const GroupAnnouncementsPage(),
+      direction: SlideDirection.right,
+    ),
   )
 ];

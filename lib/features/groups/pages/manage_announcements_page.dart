@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
@@ -42,7 +43,7 @@ class PhotoViewPage extends StatelessWidget {
             child: SafeArea(
               child: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => context.pop(),
               ),
             ),
           ),

@@ -1,9 +1,8 @@
-// file: lib/features/groups/groups_page.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:go_router/go_router.dart';
 
 import 'your_groups_section.dart';
 import 'joinable_groups_section.dart';
@@ -76,7 +75,6 @@ class _GroupsPageState extends State<GroupsPage> {
                     items: [
                       DropdownMenuItem(value: 'invite_only', child: Text("key_053".tr())), // Invite only
                       DropdownMenuItem(value: 'public', child: Text("key_054".tr())),      // Public
-                      DropdownMenuItem(value: 'request', child: Text("Request")),           // TODO: i18n
                     ],
                     onChanged: creating
                         ? null
@@ -202,21 +200,48 @@ class _GroupsPageState extends State<GroupsPage> {
     final app = context.watch<AppState>();
     final isAuthed = app.isAuthenticated;
     final isOwner = app.userRole == UserRole.owner;
+    
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
+    // --- START: Updated check for logged out user with better UI ---
     if (!isAuthed) {
       return Scaffold(
         body: Center(
           child: Padding(
             padding: const EdgeInsets.all(24.0),
-            child: Text(
-              "key_058a".tr(), // Please sign in to see and join groups.
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 18),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.lock_outline, size: 48, color: colorScheme.outline),
+                const SizedBox(height: 16),
+                Text(
+                  "key_058a".tr(), // Please sign in to see and join groups.
+                  textAlign: TextAlign.center,
+                  style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  "You must log in to view and manage groups.".tr(),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.grey),
+                ),
+                const SizedBox(height: 24),
+                FilledButton.icon(
+                  onPressed: () {
+                    // Navigate to the authentication route
+                    context.push('/auth');
+                  }, 
+                  icon: const Icon(Icons.login), 
+                  label: Text("key_017".tr()), // Assuming key_017 is "Log In" or similar
+                ),
+              ],
             ),
           ),
         ),
       );
     }
+    // --- END: Updated check for logged out user with better UI ---
 
     return Scaffold(
       floatingActionButton: isOwner
