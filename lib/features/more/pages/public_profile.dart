@@ -225,7 +225,7 @@ class _PublicProfileState extends State<PublicProfile> {
                   Container(
                     padding: const EdgeInsets.only(top: 24, bottom: 16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.05), // Light background for header
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.05), // Light background for header
                       borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
                     ),
                     child: Column(

@@ -102,13 +102,10 @@ class ChildProfilePage extends StatelessWidget {
               child: Chip(
                 avatar: const Icon(Icons.check_circle, color: Colors.green),
                 label: Text("key_256".tr()),
-                backgroundColor: Colors.green.withOpacity(0.1),
+                backgroundColor: Colors.green.withValues(alpha: 0.1),
               ),
             ),
           const SizedBox(height: 20),
-          
-          // You might add a button here to view the QR code
-          // ElevatedButton(onPressed: () {}, child: Text("View QR Code")),
         ],
       ),
     );

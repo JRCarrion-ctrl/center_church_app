@@ -342,22 +342,26 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       final prayerUserId = item['user_id'] as String?;
                       final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
                       final canClose = isSupervisorOrOwner || isPrayerOwner;
-                      final createdAt = item['created_at'] != null 
-                          ? DateFormat('dd/MM/yy h:mm a').format(DateTime.parse(item['created_at'])) 
+                      final createdAtDateTime = item['created_at'] != null 
+                          ? DateTime.parse(item['created_at']).toLocal()
+                          : null;
+                      final createdAt = createdAtDateTime != null 
+                          ? DateFormat('dd/MM/yy h:mm a').format(createdAtDateTime)
                           : '';
 
                       final includeName = item['include_name'] == true;
                       
                       final shouldShowName = includeName || canClose;
 
+                      final displayName = item['profiles']?['display_name'] as String? ?? 'A user';
+
                       String subtitleText;
                       if (!shouldShowName) {
                         subtitleText = "key_posted_on".tr(args: [createdAt]); 
                       } else if (!includeName && canClose) {
-                        subtitleText = 'Posted on $createdAt';
+                        subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
                       } else {
-                        // ✨ CHANGED: Using a new key to display only the date/time.
-                        subtitleText = "key_prayer_date_time".tr(args: [createdAt]);
+                        subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
                       }
 
                       return Padding(
