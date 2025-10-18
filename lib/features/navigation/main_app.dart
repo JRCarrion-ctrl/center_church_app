@@ -10,6 +10,7 @@ class MainApp extends StatelessWidget {
   final Widget child;
 
   // Icons updated to use outlined versions for a cleaner, modern look
+  // NOTE: 'labelKey' is already used instead of hard-coded text.
   static const tabs = [
     _TabItem(path: '/groups', icon: Icons.group_outlined, labelKey: 'main_1'),
     _TabItem(path: '/calendar', icon: Icons.calendar_today_outlined, labelKey: 'main_2'),
@@ -94,11 +95,11 @@ class MainApp extends StatelessWidget {
             // Map _TabItem data to NavigationDestination widgets
             destinations: tabs
                 .map((t) => NavigationDestination(
-                      // NavigationDestination handles M3 styling (rounded indicator)
-                      icon: Icon(t.icon),
-                      selectedIcon: Icon(t.icon), 
-                      label: t.labelKey.tr(), 
-                    ))
+                        // NavigationDestination handles M3 styling (rounded indicator)
+                        icon: Icon(t.icon),
+                        selectedIcon: Icon(t.icon), 
+                        label: t.labelKey.tr(), // Uses localization key for translation
+                      ))
                 .toList(),
           ),
         );

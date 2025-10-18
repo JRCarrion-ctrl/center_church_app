@@ -16,6 +16,7 @@ class AnnouncementsSection extends StatefulWidget {
 }
 
 class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteAware {
+  // ... (State variables remain unchanged)
   GraphQLClient? _gql;
   String? _userId;
 
@@ -23,11 +24,11 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   List<Map<String, dynamic>> groupAnnouncements = [];
   bool loading = true;
   bool isAdmin = false;
+  // ...
 
   @override
   void initState() {
     super.initState();
-    // actual loading is triggered after inherited widgets are available
   }
 
   @override
@@ -38,7 +39,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       routeObserver.subscribe(this, route);
     }
 
-    // init GraphQL + user id once
     _gql ??= GraphQLProvider.of(context).value;
     _userId ??= context.read<AppState>().profile?.id;
 
@@ -56,6 +56,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     _loadData();
   }
 
+  // ... (_loadData method remains unchanged)
   Future<void> _loadData() async {
     final client = _gql;
     if (client == null) return;
@@ -195,73 +196,75 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
-      child: Card(
-        // The main container for the announcements section
-        elevation: 4, // Professional shadow
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        color: colorScheme.surface, // Use surface color for a clean white/light background
-        child: Padding(
-          padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // --- HEADER BLOCK (Announcements Title + Manage Button) ---
-              _buildHeader(context),
-              
-              const SizedBox(height: 8),
-
-              // --- EMPTY STATE ---
-              if (!hasMain && !hasGroup)
-                _buildEmptyState(context),
-
-              // --- GLOBAL ANNOUNCEMENTS LIST ---
-              if (hasMain)
-                _buildAnnouncementList(
-                  context: context,
-                  announcements: mainAnnouncements,
-                  textTheme: textTheme,
-                  colorScheme: colorScheme,
-                ),
-
-              // --- GROUP ANNOUNCEMENTS ---
-              if (showGroupAnnouncements && hasGroup) ...[
-                const SizedBox(height: 24),
+    // === REFACTOR: Use Center and ConstrainedBox to match ChurchInfoCard's max width ===
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 600),
+        child: Container(
+          decoration: BoxDecoration(
+            color: colorScheme.surface, // White background
+            border: Border.all(
+              color: colorScheme.outlineVariant, // Subtle outline color
+              width: 1.0,
+            ),
+            // Apply rounded corners to match the ChurchInfoCard style
+            borderRadius: BorderRadius.circular(16), 
+          ),
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // --- HEADER BLOCK (Announcements Title + Manage Button) ---
+                _buildHeader(context),
                 
-                // Group Section Header
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      // FIX: Wrap the Text widget in Expanded to prevent overflow when the translated title is long.
-                      Expanded(
-                        child: Text(
-                          "key_175b".tr(), // Group Announcements
-                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                          overflow: TextOverflow.ellipsis, // Add overflow handling just in case
-                          maxLines: 1,
-                        ),
-                      ),
-                      TextButton.icon(
-                        onPressed: () => GoRouter.of(context).push('/group-announcements'),
-                        icon: const Icon(Icons.arrow_forward_ios_rounded, size: 16),
-                        label: Text("key_176".tr()), // View All
-                      ),
-                    ],
+                const SizedBox(height: 8),
+
+                // --- EMPTY STATE ---
+                if (!hasMain && !hasGroup)
+                  _buildEmptyState(context),
+
+                // --- GLOBAL ANNOUNCEMENTS LIST ---
+                if (hasMain)
+                  _buildAnnouncementList(
+                    context: context,
+                    announcements: mainAnnouncements,
+                    textTheme: textTheme,
+                    colorScheme: colorScheme,
                   ),
-                ),
-                const SizedBox(height: 12),
-                
-                // Horizontal list
-                Padding(
-                  padding: const EdgeInsets.only(left: 16), // Padding on left for starting item
-                  child: _buildGroupList(textTheme, colorScheme),
-                ),
-                const SizedBox(height: 8), // Extra space at the bottom of the card
+
+                // --- GROUP ANNOUNCEMENTS ---
+                if (showGroupAnnouncements && hasGroup) ...[
+                  const SizedBox(height: 24),
+                    
+                  // Group Section Header
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "key_175b".tr(), // Group Announcements
+                            style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  
+                  // Horizontal list
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16), // Padding on left for starting item
+                    child: _buildGroupList(textTheme, colorScheme),
+                  ),
+                  const SizedBox(height: 8), // Extra space at the bottom of the container
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
@@ -298,20 +301,18 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   Widget _buildHeader(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            // 💡 MODIFICATION: Centering the Row content
             mainAxisAlignment: isAdmin ? MainAxisAlignment.spaceBetween : MainAxisAlignment.center,
             children: [
               Text(
                 "key_112c".tr(), // Announcements
                 style: textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w800, // Very bold
+                  fontWeight: FontWeight.w800,
                   color: colorScheme.primary,
                 ),
               ),
@@ -334,13 +335,13 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     required TextTheme textTheme,
     required ColorScheme colorScheme,
   }) {
-    // A clean, separated vertical list for prominent global announcements
     return ListView.separated(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      // Horizontal padding removed to allow content to stretch up to the 16.0 margin of the list item
+      padding: const EdgeInsets.symmetric(horizontal: 0.0, vertical: 8.0), 
       itemCount: announcements.length,
-      separatorBuilder: (_, _) => const Divider(height: 1, thickness: 1), // Thin divider for separation
+      separatorBuilder: (_, _) => const Divider(height: 1, thickness: 1),
       itemBuilder: (context, index) {
         final a = announcements[index];
         return _buildAnnouncementListItem(a, textTheme, colorScheme, context);
@@ -354,7 +355,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     ColorScheme colorScheme, 
     BuildContext context
   ) {
-    // --- MODERN LIST ITEM DESIGN ---
     final hasBody = (a['body'] ?? '') is String && (a['body'] as String).isNotEmpty;
 
     return InkWell(
@@ -378,7 +378,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
         );
       },
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
+        // Apply the standard horizontal margin here
+        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0), 
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -406,13 +407,27 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
               ),
             const SizedBox(height: 8),
 
-            // PUBLISHED DATE (Subtle label)
-            Text(
-              _formatDate(a['published_at'] as String),
-              style: textTheme.labelSmall?.copyWith(
-                color: colorScheme.outline,
-                fontWeight: FontWeight.w500,
-              ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                // PUBLISHED DATE (Subtle label)
+                Text(
+                  _formatDate(a['published_at'] as String),
+                  style: textTheme.labelSmall?.copyWith(
+                    color: colorScheme.outline,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                
+                // Read More Text Link
+                Text(
+                  "key_read_more".tr(),
+                  style: textTheme.labelLarge?.copyWith(
+                    color: colorScheme.tertiary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -421,7 +436,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   }
 
   Widget _buildGroupList(TextTheme textTheme, ColorScheme colorScheme) {
-    // Horizontal list for less prominent group announcements
     return SizedBox(
       height: 180, 
       child: ListView.separated(
@@ -432,10 +446,11 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
           final a = groupAnnouncements[index];
           
           return SizedBox(
-            width: 200, 
+            // Card width increased for better visibility
+            width: 280, 
             child: Card(
               elevation: 0, 
-              color: colorScheme.surfaceContainerHigh, // Use a distinct color for separation
+              color: colorScheme.surfaceContainerHigh,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
@@ -463,7 +478,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 🎨 Changed icon color to tertiary
                       Icon(Icons.groups_2_outlined, color: colorScheme.tertiary, size: 28),
                       const SizedBox(height: 8),
                       Text(
@@ -482,8 +496,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                       ),
                       const Spacer(),
                       Text(
-                        'Read More', 
-                        // 🎨 Changed "Read More" text color to tertiary
+                        "key_read_more".tr(), 
                         style: textTheme.labelLarge?.copyWith(color: colorScheme.tertiary, fontWeight: FontWeight.bold),
                       )
                     ],
@@ -504,9 +517,9 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       final difference = now.difference(dateTime);
 
       if (difference.inDays == 0) {
-        return 'Today at ${DateFormat.jm().format(dateTime)}';
+        return '${"Today".tr()} ${DateFormat.jm().format(dateTime)}';
       } else if (difference.inDays == 1) {
-        return 'Yesterday at ${DateFormat.jm().format(dateTime)}';
+        return '${"Yesterday".tr()} ${DateFormat.jm().format(dateTime)}';
       }
       return DateFormat('MMM d, yyyy').format(dateTime);
     } catch (_) {

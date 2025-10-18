@@ -5,17 +5,19 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:http/http.dart' as http;
+// import 'package:http/http.dart' as http; // No longer needed
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:graphql_flutter/graphql_flutter.dart';
 
 import '../../../core/graph_provider.dart';
 import '../group_service.dart';
 import '../models/group.dart';
 import '../widgets/invite_user_modal.dart';
+// Import the storage service you provided
+import '../chat_storage_service.dart'; // ASSUMING THIS PATH IS CORRECT
 
+// This helper function remains outside and unchanged
 Future<File> _compressImage(File file) async {
   final targetPath = file.path.replaceFirst(
     RegExp(r'\.(jpg|jpeg|png|heic|webp)$', caseSensitive: false),
@@ -594,60 +596,48 @@ class _GroupHeader extends StatefulWidget {
 
 class _GroupHeaderState extends State<_GroupHeader> {
   bool _isUploading = false;
+  
+  // Instance of the storage service
+  late final ChatStorageService _chatStorageService;
+  late final GroupService _groupService;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = GraphProvider.of(context);
+    _chatStorageService = ChatStorageService(client);
+    _groupService = GroupService(client);
+  }
 
   Future<void> _uploadAndSetPhoto(File file) async {
     final messenger = ScaffoldMessenger.of(context);
-    final groupService = GroupService(GraphProvider.of(context));
-
+    
     setState(() => _isUploading = true);
     try {
-      final ext = file.path.split('.').last.toLowerCase();
-      final contentType = 'image/${(ext == 'jpg') ? 'jpeg' : ext}';
-      final objectKey = 'group_photos/${widget.group.id}_${DateTime.now().millisecondsSinceEpoch}.$ext';
-      
-      final client = GraphProvider.of(context);
-      final presigned = await _presignViaHasura(client, objectKey, contentType);
+      // 1. Upload file using ChatStorageService
+      final finalUrl = await _chatStorageService.uploadFile(file, widget.group.id);
 
-      final uploadRes = await http.put(
-        Uri.parse(presigned.uploadUrl),
-        headers: {'Content-Type': contentType},
-        body: await file.readAsBytes(),
+      // 2. Update the group with the final URL
+      await _groupService.updateGroup(
+        groupId: widget.group.id, 
+        photoUrl: finalUrl
       );
-
-      if (uploadRes.statusCode >= 300) throw Exception('Upload failed with status code ${uploadRes.statusCode}');
-
-      await groupService.updateGroup(groupId: widget.group.id, photoUrl: presigned.finalUrl);
       
+      // 3. Notify parent to refresh and show success
       widget.onPhotoChanged();
       messenger.showSnackBar(SnackBar(content: Text("key_111".tr())));
-    } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('Upload failed: $e')));
+    } catch (e, st) { // Catch exception AND stack trace
+      debugPrint('Error after successful file upload: $e');
+      debugPrint(st.toString()); // Log stack trace for debugging GraphQL/update issue
+      // The application shows the Spanish error here:
+      messenger.showSnackBar(SnackBar(content: Text("key_112".tr(args: [e.toString()])))); 
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }
   }
 
-  Future<({String uploadUrl, String finalUrl})> _presignViaHasura(GraphQLClient client, String objectKey, String contentType) async {
-    const q = r'''
-      query Presign($path: String!, $contentType: String!) {
-        get_presigned_upload(path: $path, contentType: $contentType) {
-          uploadUrl
-          finalUrl
-        }
-      }
-    ''';
-    final res = await client.query(QueryOptions(document: gql(q), variables: {'path': objectKey, 'contentType': contentType}));
-    if (res.hasException) throw res.exception!;
-    
-    final data = res.data?['get_presigned_upload'];
-    if (data == null || data['uploadUrl'] == null || data['finalUrl'] == null) {
-      throw Exception('Invalid presign response from server');
-    }
-    return (
-      uploadUrl: data['uploadUrl'] as String,
-      finalUrl: data['finalUrl'] as String,
-    );
-  }
+  // NOTE: _presignViaHasura is removed as it's logic is now encapsulated in ChatStorageService
+  // Future<({String uploadUrl, String finalUrl})> _presignViaHasura(...) => removed
 
   void _showImagePicker() {
     showModalBottomSheet(
@@ -674,7 +664,7 @@ class _GroupHeaderState extends State<_GroupHeader> {
                 Navigator.pop(context);
                 final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
                 if (picked != null) {
-                   final compressed = await _compressImage(File(picked.path));
+                  final compressed = await _compressImage(File(picked.path));
                   await _uploadAndSetPhoto(compressed);
                 }
               },

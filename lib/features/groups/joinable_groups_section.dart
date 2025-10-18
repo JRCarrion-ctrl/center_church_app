@@ -32,7 +32,8 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
   Future<GroupService> _service() async {
     final appState = context.read<AppState>();
-    return appState.groupService;
+    // Assumes AppState has a readily available GroupService instance
+    return appState.groupService; 
   }
 
   Future<void> _loadFilteredGroups() async {
@@ -76,6 +77,20 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 24),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    
+    // === NEW LOGIC: Hide section if no joinable groups AND no active search query ===
+    if (allGroups.isEmpty && _query.isEmpty) {
+      // If there are no groups to show and the user isn't searching, hide the entire section.
+      return const SizedBox.shrink();
+    }
+    
+    // If loading is complete and either groups exist or the user is searching, display the section.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -93,12 +108,8 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
           },
         ),
         const SizedBox(height: 16),
-        if (_loading)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
-            child: Center(child: CircularProgressIndicator()),
-          )
-        else if (filteredGroups.isEmpty)
+        // If groups exist, render the content (either filtered list or "no results" message)
+        if (filteredGroups.isEmpty)
           Text("key_064".tr())
         else
           GridView.builder(

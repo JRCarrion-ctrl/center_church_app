@@ -87,8 +87,8 @@ class QuickLinksFooter extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          // Use tertiary/secondary color for link visual appeal
-                          foregroundColor: colorScheme.secondary,
+                          // 🎨 MODIFIED: Set foregroundColor to white
+                          foregroundColor: Colors.white,
                           side: BorderSide(color: colorScheme.outlineVariant),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),

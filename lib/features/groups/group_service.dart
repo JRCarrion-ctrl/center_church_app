@@ -10,6 +10,7 @@ import 'models/group_model.dart';
 final log = Logger();
 
 class GroupArchivedException implements Exception {
+// ... (GroupArchivedException and GroupInfoData remain unchanged)
   final String groupId;
   const GroupArchivedException(this.groupId);
   @override
@@ -98,6 +99,7 @@ class GroupService {
           group_events(limit: 3, order_by: {event_date: asc}) {
             title
             event_date
+            location
           }
           group_announcements(limit: 2, order_by: {published_at: desc}) {
             title
@@ -217,7 +219,7 @@ class GroupService {
           }
         ) {
           metadata: metadata {
-             last_seen
+              last_seen
           }
           group {
             id
@@ -487,24 +489,43 @@ class GroupService {
     String? photoUrl,
   }) async {
     await _assertGroupActive(groupId);
+    
+    // Dynamically build the _set object based on non-null arguments
+    final Map<String, dynamic> setFields = {};
+    if (name != null) setFields['name'] = name;
+    if (description != null) setFields['description'] = description;
+    if (photoUrl != null) setFields['photo_url'] = photoUrl;
+
+    if (setFields.isEmpty) {
+        log.w('Attempted to update group $groupId with no fields set.');
+        return;
+    }
+
     const m = r'''
-      mutation UpdateGroup($id: uuid!, $name: String, $desc: String, $photo: String) {
+      mutation UpdateGroup($id: uuid!, $_set: groups_set_input!) {
         update_groups_by_pk(
           pk_columns: { id: $id },
-          _set: { name: $name, description: $desc, photo_url: $photo }
+          _set: $_set
         ) { id }
       }
     ''';
+    
+    // Pass the dynamically built map as a single variable
     final res = await client.mutate(
       MutationOptions(
         document: gql(m),
-        variables: {'id': groupId, 'name': name, 'desc': description, 'photo': photoUrl},
+        variables: {
+          'id': groupId, 
+          '_set': setFields, // Pass only the non-null fields
+        },
       ),
     );
+    
     if (res.hasException) throw res.exception!;
   }
 
   Future<void> joinGroup({required String groupId, required String userId}) async {
+// ... (joinGroup implementation remains unchanged)
     await _assertGroupActive(groupId);
 
     // Fetch group visibility
@@ -724,7 +745,9 @@ class GroupService {
     if (updated == 0) {
       // …otherwise insert new approved membership.
       const mInsert = r'''
-        mutation ApproveInsert($gid: uuid!, $uid: String!) {
+        mutation ApproveInsert(
+          $gid: uuid!, $uid: String!
+        ) {
           insert_group_memberships_one(object: {
             group_id: $gid, user_id: $uid, role: "member", status: "approved"
           }) { group_id }
