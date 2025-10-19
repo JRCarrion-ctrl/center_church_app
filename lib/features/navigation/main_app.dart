@@ -63,10 +63,6 @@ class MainApp extends StatelessWidget {
             ),
             
             actions: [
-              IconButton(
-                icon: Icon(Icons.notifications_outlined, color: colorScheme.onSurface),
-                onPressed: () => context.push('/notifications'),
-              ),
               // Added profile icon for better user navigation structure
               IconButton(
                 icon: Icon(Icons.account_circle_outlined, color: colorScheme.onSurface),
