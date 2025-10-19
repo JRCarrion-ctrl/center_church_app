@@ -24,6 +24,12 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
   @override
   void initState() {
     super.initState();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // This is the correct place to access InheritedWidgets for initialization
     _loadSettings();
   }
 
@@ -38,15 +44,17 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     const q = r'''
       query LoadNotificationSettings($uid: String!) {
         profiles_by_pk(id: $uid) { global_mute }
-        group_memberships(
+        
+        approved_memberships: group_memberships( 
           where: { user_id: { _eq: $uid }, status: { _eq: "approved" } }
         ) {
           group { id name }
         }
-        notification_settings(
-          where: { user_id: { _eq: $uid }, muted: { _eq: true } }
+
+        muted_settings: group_memberships(
+          where: { user_id: { _eq: $uid }, is_muted: { _eq: true } }
         ) {
-          group_id
+          group { id }
         }
       }
     ''';
@@ -56,7 +64,7 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         QueryOptions(
           document: gql(q),
           variables: {'uid': userId},
-          fetchPolicy: FetchPolicy.networkOnly,
+          fetchPolicy: FetchPolicy.noCache,
         ),
       );
 
@@ -68,15 +76,16 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
 
       final gm = (res.data?['profiles_by_pk']?['global_mute'] as bool?) ?? false;
 
-      final memberships = (res.data?['group_memberships'] as List<dynamic>? ?? []);
+      final memberships = (res.data?['approved_memberships'] as List<dynamic>? ?? []);
       final grp = memberships
-          .map((m) => (m as Map<String, dynamic>)['groups'] as Map<String, dynamic>?)
+          .map((m) => (m as Map<String, dynamic>)['group'] as Map<String, dynamic>?)
           .whereType<Map<String, dynamic>>()
           .toList();
 
-      final mutedRows = (res.data?['notification_settings'] as List<dynamic>? ?? []);
+      final mutedRows = (res.data?['muted_settings'] as List<dynamic>? ?? []);
       final muted = mutedRows
-          .map((m) => (m as Map<String, dynamic>)['group_id'] as String)
+          .map((m) => (m as Map<String, dynamic>)['group']?['id'] as String?)
+          .whereType<String>()
           .toSet();
 
       if (!mounted) return;
@@ -138,16 +147,21 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
 
+    await OneSignal.User.addTags({
+        groupId: muted ? 'muted' : 'active',
+    });
+
     // Upsert the (user_id, group_id) row and set muted
     const m = r'''
-      mutation UpsertNotificationSetting($user_id: uuid!, $group_id: uuid!, $muted: Boolean!) {
-        insert_notification_settings_one(
-          object: { user_id: $user_id, group_id: $group_id, muted: $muted }
-          on_conflict: {
-            constraint: notification_settings_user_id_group_id_key
-            update_columns: [muted]
+      mutation UpsertNotificationSetting($user_id: String!, $group_id: uuid!, $muted: Boolean!) {
+        update_group_memberships(where: {group_id: {_eq: $group_id}, user_id: {_eq: $user_id}}, _set: {is_muted: $muted}) {
+          affected_rows
+          returning {
+            group_id
+            user_id
+            is_muted
           }
-        ) { user_id group_id muted }
+        }
       }
     ''';
 
@@ -162,11 +176,10 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
         debugPrint('Upsert setting error: ${res.exception}');
       }
 
-      // Update OneSignal tag
       if (muted) {
-        await OneSignal.User.addTags({'group_$groupId': 'muted'});
+        await OneSignal.User.addTags({groupId: 'muted'});
       } else {
-        await OneSignal.User.addTags({'group_$groupId': 'member'});
+        await OneSignal.User.addTags({groupId: 'active'});
       }
 
       if (!mounted) return;

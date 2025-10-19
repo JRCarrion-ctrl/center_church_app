@@ -208,7 +208,6 @@ class GroupService {
   }
 
   Future<List<GroupModel>> getUserGroups(String userId) async {
-    // FIX: Update query to fetch metadata and message timestamps for unread count calculation
     const q = r'''
       query MyGroups($uid: String!) {
         group_memberships(
@@ -221,6 +220,7 @@ class GroupService {
           metadata: metadata {
               last_seen
           }
+          is_muted # <-- NEW FIELD ADDED HERE
           group {
             id
             name
@@ -248,20 +248,17 @@ class GroupService {
     );
     if (res.hasException) throw res.exception!;
     final rows = (res.data?['group_memberships'] as List<dynamic>? ?? []);
-    
-    // FIX: Map the complex response structure and calculate unreadCount in Dart
+
     return rows
         .where((e) => e['group'] != null)
         .map<GroupModel>((e) {
           final groupMap = Map<String, dynamic>.from(e['group']);
-          
-          // 1. Get the last seen timestamp (safely handling map/list confusion)
+
           final rawMetadata = e['metadata'];
           Map<String, dynamic>? metadata;
           if (rawMetadata is Map<String, dynamic>) {
               metadata = rawMetadata;
           } else if (rawMetadata is List<dynamic> && rawMetadata.isNotEmpty) {
-              // This is the defensive path for Hasura collections that should be objects
               metadata = rawMetadata[0] as Map<String, dynamic>?;
           }
 
@@ -271,20 +268,20 @@ class GroupService {
               ? DateTime.tryParse(lastSeenStr)?.toUtc()
               : null;
 
-          // 2. Get all message timestamps
           final messages = (e['group']['messages'] as List<dynamic>? ?? [])
               .map((m) => DateTime.tryParse(m['created_at'] as String)?.toUtc())
               .where((dt) => dt != null)
               .cast<DateTime>()
               .toList();
 
-          // 3. Calculate unread count
           final unreadCount = _calculateUnreadCount(lastSeen, messages);
 
-          // 4. Return the GroupModel with the calculated count
+          final isMuted = (e['is_muted'] as bool?) ?? false;
+
           return GroupModel.fromMap({
             ...groupMap,
             'unreadCount': unreadCount,
+            'is_muted': isMuted,
           });
         })
         .toList();

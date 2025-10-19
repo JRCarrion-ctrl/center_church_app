@@ -11,4 +11,3 @@ export 'more/pages/profile_page.dart';
 export 'more/pages/settings_page.dart';
 export 'more/pages/directory_page.dart';
 export 'splash/splash_screen.dart';
-export 'notifications/notifications_page.dart';

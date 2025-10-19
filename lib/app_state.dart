@@ -253,8 +253,6 @@ class AppState extends ChangeNotifier {
     _setLoading(true);
 
     try {
-      // 🛑 REFINEMENT: Explicitly handle the PlatformException to provide a clearer error,
-      // and keep the timeout as a safety net against non-throwing hangs.
       await OidcAuth.signIn().timeout(
         const Duration(seconds: 45),
         onTimeout: () {
@@ -347,6 +345,7 @@ class AppState extends ChangeNotifier {
     try {
       final loginId = _profile?.id;
       if (loginId == null || loginId.isEmpty) {
+        // If logged out, clear OneSignal user identity
         await OneSignal.logout();
         _logger.i('OneSignal logged out');
         return;
@@ -355,13 +354,14 @@ class AppState extends ChangeNotifier {
       await OneSignal.login(loginId);
       final String? pushToken = OneSignal.User.pushSubscription.id;
       
-      final m = r'''
-        mutation UpsertEndpoint($userId: String!, $externalId: String!, $token: String, $seen: timestamptz!) {
+      // 1. Hasura Upsert: Always sync the device token
+      const mUpsertEndpoint = r'''
+        mutation UpsertEndpoint($userId: String!, $token: String, $seen: timestamptz!) {
           insert_notification_endpoints_one(
             object: {
               user_id: $userId,
               provider: "onesignal",
-              external_id: $externalId,
+              external_id: $userId,
               push_token: $token,
               last_seen: $seen
             },
@@ -374,10 +374,9 @@ class AppState extends ChangeNotifier {
       ''';
 
       await client.mutate(MutationOptions(
-        document: gql(m),
+        document: gql(mUpsertEndpoint),
         variables: {
           'userId': loginId,
-          'externalId': loginId,
           'token': pushToken,
           'seen': DateTime.now().toUtc().toIso8601String(),
         },
@@ -388,12 +387,13 @@ class AppState extends ChangeNotifier {
       if (role != null && role.isNotEmpty) {
         await OneSignal.User.addTags({'role': role});
       }
+
       if (_userGroups.isNotEmpty) {
         await OneSignal.User.addTags({
-          for (final g in _userGroups) 'group_${g.id}': 'member',
+          for (final g in _userGroups) g.id: g.isMuted ? 'muted' : 'active',
         });
       }
-      _logger.i('OneSignal tags updated');
+      _logger.i('OneSignal tags updated for user groups');
     } catch (e, st) {
       _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);
     }

@@ -206,14 +206,6 @@ final List<GoRoute> miscRoutes = [
     ),
   ),
   GoRoute(
-    path: '/notifications',
-    name: 'notifications',
-    pageBuilder: (context, state) => buildSlidePage(
-      const NotificationsPage(),
-      direction: SlideDirection.right,
-    ),
-  ),
-  GoRoute(
     path: '/settings/notifications',
     pageBuilder: (context, state) => buildSlidePage(
       const NotificationSettingsPage(),

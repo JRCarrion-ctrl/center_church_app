@@ -7,6 +7,7 @@ class GroupModel {
   final bool archived;
   final bool temporary;
   final int unreadCount; // <-- NEW FIELD
+  final bool isMuted;
 
   GroupModel({
     required this.id,
@@ -17,9 +18,13 @@ class GroupModel {
     this.archived = false,
     this.temporary = false,
     this.unreadCount = 0, // <-- Set default
+    this.isMuted = false,
   });
 
-  factory GroupModel.fromMap(Map<String, dynamic> m) => GroupModel(
+  factory GroupModel.fromMap(Map<String, dynamic> m) {
+    final bool muted = (m['is_muted'] as bool?) ?? false;
+
+     return GroupModel(
         id: m['id'] as String,
         name: m['name'] as String,
         description: m['description'] as String?,
@@ -28,7 +33,9 @@ class GroupModel {
         archived: (m['archived'] as bool?) ?? false,
         temporary: (m['temporary'] as bool?) ?? false,
         unreadCount: (m['unreadCount'] as int?) ?? 0,
+        isMuted: muted,
       );
+  }
 
   Map<String, dynamic> toMap() => {
         'id': id,
@@ -38,6 +45,6 @@ class GroupModel {
         'visibility': visibility,
         'archived': archived,
         'temporary': temporary,
-        // unreadCount is omitted as it's a runtime/calculated field
+        'is_muted': isMuted,
       };
 }
