@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 class QuickLinksFooter extends StatelessWidget {
   const QuickLinksFooter({super.key});
@@ -11,10 +12,10 @@ class QuickLinksFooter extends StatelessWidget {
   static const String _donateUrl = 'https://tccf.givingfire.com';
   // URL for the quick links
   final List<LinkData> links = const [
-    LinkData('Facebook', 'https://www.facebook.com/profile.php?id=100089863186477'),
-    LinkData('Instagram', 'https://www.instagram.com/centrocristiano_frederick/'),
-    LinkData('YouTube', 'https://www.youtube.com/@centerchurch8898/streams'),
-    LinkData('Cafe', 'https://center-cafe.square.site'),
+    LinkData('Facebook', 'https://www.facebook.com/profile.php?id=100089863186477', FaIcon(FontAwesomeIcons.facebook, size: 20),),
+    LinkData('Instagram', 'https://www.instagram.com/centrocristiano_frederick/', FaIcon(FontAwesomeIcons.instagram, size: 20),),
+    LinkData('YouTube', 'https://www.youtube.com/@centerchurch8898/streams', FaIcon(FontAwesomeIcons.youtube, size: 20),),
+    LinkData('Cafe', 'https://center-cafe.square.site', FaIcon(FontAwesomeIcons.mugHot, size: 20),),
   ];
 
   @override
@@ -43,7 +44,7 @@ class QuickLinksFooter extends StatelessWidget {
                 width: double.infinity,
                 child: FilledButton.icon(
                   onPressed: () => _launchUrl(context, _donateUrl),
-                  icon: const Icon(Icons.volunteer_activism_outlined),
+                  icon: FaIcon(FontAwesomeIcons.fireFlameCurved),
                   label: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8.0),
                     child: Text(
@@ -79,7 +80,7 @@ class QuickLinksFooter extends StatelessWidget {
                 children: links
                     .map(
                       (link) => OutlinedButton.icon(
-                        icon: const Icon(Icons.link),
+                        icon: link.icon,
                         label: Text(link.label),
                         onPressed: () => _launchUrl(context, link.url),
                         style: OutlinedButton.styleFrom(
@@ -87,8 +88,6 @@ class QuickLinksFooter extends StatelessWidget {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          // 🎨 MODIFIED: Set foregroundColor to white
-                          foregroundColor: Colors.white,
                           side: BorderSide(color: colorScheme.outlineVariant),
                           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
@@ -119,6 +118,7 @@ class QuickLinksFooter extends StatelessWidget {
 class LinkData {
   final String label;
   final String url;
+  final Widget icon;
 
-  const LinkData(this.label, this.url);
+  const LinkData(this.label, this.url, this.icon);
 }

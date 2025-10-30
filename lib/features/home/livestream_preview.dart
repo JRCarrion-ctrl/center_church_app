@@ -109,13 +109,10 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
     }
 
     return FutureBuilder<String?>(
-      future: _videoIdFuture, // Guaranteed to be initialized by didChangeDependencies
+      future: _videoIdFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const SizedBox(
-            height: 200,
-            child: Center(child: CircularProgressIndicator()),
-          );
+          return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
         }
 
         final videoId = snapshot.data;
@@ -123,58 +120,67 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
           return Center(child: Text("key_179".tr()));
         }
 
-        // Initialize controller only once after videoId is available
-        _ytController ??= YoutubePlayerController(
-          initialVideoId: videoId,
-          flags: const YoutubePlayerFlags(autoPlay: false),
-        );
-
         final canRefresh = _userRole == 'supervisor' || _userRole == 'owner';
 
-        return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+        // --- START: CRITICAL CHANGE ---
+        // Use YoutubePlayerBuilder to safely manage the controller's lifecycle
+        return YoutubePlayerBuilder(
+          // Factory to create the controller based on the resolved videoId
+          player: YoutubePlayer(
+            controller: YoutubePlayerController(
+              initialVideoId: videoId,
+              flags: const YoutubePlayerFlags(autoPlay: false),
+            ),
+            showVideoProgressIndicator: true,
+            width: double.infinity,
+          ),
+          builder: (context, player) {
+            // The rest of your layout goes here, using the 'player' widget
+            return Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      "key_179a".tr(),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    // Your Row with Title and Refresh Button
+                    Row(
+                      children: [
+                        Text(
+                          "key_179a".tr(),
+                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        const SizedBox(width: 8),
+                        if (canRefresh)
+                          IconButton(
+                            icon: const Icon(Icons.refresh),
+                            tooltip: 'Refresh Livestream',
+                            onPressed: _refreshLivestream,
+                          ),
+                      ],
                     ),
-                    const SizedBox(width: 8),
-                    if (canRefresh)
-                      IconButton(
-                        icon: const Icon(Icons.refresh),
-                        tooltip: 'Refresh Livestream',
-                        onPressed: _refreshLivestream,
+                    const SizedBox(height: 12),
+                    // --- Embed the player widget created above ---
+                    player, 
+                    const SizedBox(height: 8),
+                    // Your "Watch on Youtube" TextButton
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton.icon(
+                        onPressed: () async {
+                          final url = Uri.parse('https://www.youtube.com/@centerchurch8898/streams');
+                          if (await canLaunchUrl(url)) {
+                            await launchUrl(url, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                        icon: const Icon(Icons.open_in_new),
+                        label: Text("key_180".tr()),
                       ),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 12),
-                YoutubePlayer(
-                  controller: _ytController!,
-                  showVideoProgressIndicator: true,
-                  width: double.infinity,
-                ),
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final url = Uri.parse('https://www.youtube.com/@centerchurch8898/streams');
-                      if (await canLaunchUrl(url)) {
-                        await launchUrl(url, mode: LaunchMode.externalApplication);
-                      }
-                    },
-                    icon: const Icon(Icons.open_in_new),
-                    label: Text("key_180".tr()),
-                  ),
-                ),
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );

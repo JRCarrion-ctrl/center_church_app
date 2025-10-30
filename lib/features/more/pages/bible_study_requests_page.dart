@@ -17,11 +17,22 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
   List<Map<String, dynamic>> requests = [];
   bool isLoading = true;
   String? error;
+  bool _didInitialLoad = false;
 
   @override
   void initState() {
     super.initState();
-    _loadRequests();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Call _loadRequests() only on the very first time
+    if (!_didInitialLoad) {
+      _loadRequests();
+      _didInitialLoad = true;
+    }
   }
 
   Future<void> _loadRequests() async {
@@ -87,7 +98,7 @@ class _BibleStudyRequestsPageState extends State<BibleStudyRequestsPage> {
     if (reviewerId == null) return;
 
     const m = r'''
-      mutation RespondToRequest($id: uuid!, $status: String!, $reviewedBy: uuid!) {
+      mutation RespondToRequest($id: uuid!, $status: String!, $reviewedBy: String!) {
         update_bible_study_access_requests_by_pk(
           pk_columns: {id: $id},
           _set: { status: $status, reviewed_by: $reviewedBy }

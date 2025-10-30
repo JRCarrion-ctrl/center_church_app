@@ -318,7 +318,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                         Text(
                           "key_341".tr(),
                           textAlign: TextAlign.center,
-                          style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                          style: textTheme.titleMedium?.copyWith(color: Colors.black),
                         ),
                         const SizedBox(height: 8),
                         Text(

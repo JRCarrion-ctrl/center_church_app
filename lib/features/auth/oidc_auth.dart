@@ -84,6 +84,89 @@ class OidcAuth {
     }
   }
 
+  static Future<String?> readUserLoginId() async {
+    final idToken = await _storage.read(key: _kIdToken);
+    if (idToken == null) return null;
+    
+    // The ID Token contains the sub (subject/user ID) and email/username.
+    final payload = JwtDecoder.decode(idToken);
+    
+    // Depending on your Zitadel setup, the login ID might be the 'email' 
+    // or a 'preferred_username'. Use 'email' as the standard fallback.
+    return payload['email'] as String? ?? payload['preferred_username'] as String?;
+  }
+
+  static Future<void> login(String username, String password) async {
+    final url = Uri.parse('$issuer/oauth/v2/token');
+    
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: {
+        'grant_type': 'password',
+        'client_id': clientId,
+        'scope': scopes.join(' '),
+        'username': username,
+        'password': password,
+      },
+    );
+
+    if (response.statusCode != 200) {
+      final responseBody = jsonDecode(response.body);
+      final errorDescription = responseBody['error_description'] ?? 'Authentication failed.';
+      throw Exception(errorDescription);
+    }
+    
+    final result = jsonDecode(response.body);
+    
+    // Store the new tokens
+    await _storage.write(key: _kAccess,  value: result['access_token']);
+    await _storage.write(key: _kIdToken, value: result['id_token']);
+
+    if (result['refresh_token'] != null) {
+      await _storage.write(key: _kRefresh, value: result['refresh_token']);
+    }
+    
+    // Calculate and store the new expiry time
+    final expiresIn = result['expires_in'] as int; // typically in seconds
+    final expiryTime = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + expiresIn;
+    await _storage.write(key: _kExpiry, value: expiryTime.toString());
+  }
+
+  static Future<void> reauthenticate() async {
+    final result = await _auth.authorizeAndExchangeCode(
+      AuthorizationTokenRequest(
+        clientId,
+        redirectUri,
+        serviceConfiguration: const AuthorizationServiceConfiguration(
+          authorizationEndpoint: '$issuer/oauth/v2/authorize',
+          tokenEndpoint:        '$issuer/oauth/v2/token',
+        ),
+        scopes: scopes,
+        // CRITICAL: The 'login' prompt forces the user to enter their credentials.
+        // This updates the 'auth_time' claim on the token, satisfying Zitadel's security requirements.
+        additionalParameters: {'prompt': 'login'},
+      ),
+    );
+    
+    if (result.accessToken == null) throw Exception('Re-authentication failed');
+
+    // Overwrite the existing tokens with the new, fresh ones
+    await _storage.write(key: _kAccess,  value: result.accessToken);
+    await _storage.write(key: _kIdToken, value: result.idToken);
+    if (result.refreshToken != null) {
+      await _storage.write(key: _kRefresh, value: result.refreshToken);
+    }
+    if (result.accessTokenExpirationDateTime != null) {
+      await _storage.write(
+        key: _kExpiry,
+        value: (result.accessTokenExpirationDateTime!.millisecondsSinceEpoch ~/ 1000).toString(),
+      );
+    }
+  }
+
   static Future<void> signOut() async {
     await _storage.delete(key: _kAccess);
     await _storage.delete(key: _kRefresh);

@@ -102,11 +102,6 @@ class _MorePageState extends State<MorePage> {
         'title': "key_196i".tr(),
         'onTap': () => context.push('/more/faq'),
       },
-      if (isAdmin)
-        {
-          'title': "key_196j".tr(),
-          'onTap': null,
-        },
     ];
 
     return Scaffold(

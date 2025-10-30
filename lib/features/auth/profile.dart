@@ -2,13 +2,13 @@
 class Profile {
   final String id;
   final String displayName;
-  final String email;
+  final String? email;
   final String role;
 
   Profile({
     required this.id,
     this.displayName = '',
-    this.email = '',
+    this.email,
     this.role = '',
   });
 
@@ -16,7 +16,7 @@ class Profile {
     return Profile(
       id: map['id'] as String,
       displayName: map['display_name'] ?? '',
-      email: map['email'] ?? '',
+      email: map['email'],
       role: map['role'] ?? '',
     );
   }

@@ -203,7 +203,7 @@ class AppState extends ChangeNotifier {
 
       const qMe = r'''
         query Me($id: String!) {
-          profiles_by_pk(id: $id) { id display_name role }
+          profiles_by_pk(id: $id) { id display_name role email }
         }
       ''';
       final me = await tempClient.query(QueryOptions(
@@ -223,6 +223,7 @@ class AppState extends ChangeNotifier {
         id: m['id'] as String,
         displayName: (m['display_name'] as String?) ?? (displayName ?? 'User'),
         role: (m['role'] as String?) ?? defaultRole,
+        email: m['email'] as String?,
       );
 
       _setProfile(prof);

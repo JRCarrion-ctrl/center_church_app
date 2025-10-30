@@ -19,7 +19,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
   final _messageController = TextEditingController();
   bool _isSubmitting = false;
 
-  Future<void> _submitSupportRequest() async {
+  Future<void> _submitSupportRequest(String? currentEmail) async {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isSubmitting = true);
 
@@ -27,15 +27,15 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     final message = _messageController.text.trim();
 
     final client = GraphQLProvider.of(context).value;
-    final appState = context.read<AppState>();
-    final userId = appState.profile?.id;
-    final email = appState.profile?.email;
+    final appState = context.read<AppState>(); // Still needed for userId
 
-    // If you don't yet have this table, create it (id uuid pk default gen_random_uuid(),
-    // user_id uuid, email text, subject text, message text, status text default 'open', created_at timestamptz default now()).
+    final userId = appState.profile?.id; 
+    
+    final email = currentEmail;
+
     const m = r'''
       mutation SubmitSupport(
-        $user_id: uuid,
+        $user_id: String,
         $email: String,
         $subject: String!,
         $message: String!
@@ -90,7 +90,8 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
 
   @override
   Widget build(BuildContext context) {
-    final email = context.watch<AppState>().profile?.email ?? 'your email';
+    final email = context.watch<AppState>().email;
+    final displayEmail = email ?? 'your email';
 
     return Scaffold(
       appBar: AppBar(title: Text("key_201".tr())),
@@ -101,7 +102,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("key_202".tr(args: [email])),
+              Text("key_202".tr(args: [displayEmail])),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _subjectController,
@@ -119,7 +120,7 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitSupportRequest,
+                  onPressed: _isSubmitting ? null : () => _submitSupportRequest(email),
                   child: _isSubmitting
                       ? const CircularProgressIndicator()
                       : Text("key_203".tr()),
@@ -132,4 +133,3 @@ class _ContactSupportPageState extends State<ContactSupportPage> {
     );
   }
 }
-//TODO: This creates a table insert, further action is needed to actually send the message

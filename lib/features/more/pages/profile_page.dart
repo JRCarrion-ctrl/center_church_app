@@ -10,6 +10,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/features/auth/oidc_auth.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app_state.dart';
 import '../photo_upload_service.dart';
@@ -226,81 +227,28 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() => _visible = value);
     }
 
-    Future<void> _changePassword() async {
-        if (!mounted) return;
-        // (Omitted unchanged _changePassword implementation for brevity)
-        final currentPasswordController = TextEditingController();
-        final newPasswordController = TextEditingController();
-        final confirmNewPasswordController = TextEditingController();
+    Future<void> _openZitadelPasswordChange() async {
+      // 💡 NOTE: OidcAuth.issuer must be accessible (it is in your imports)
+      const String issuer = OidcAuth.issuer; 
+    
+      // The standard path for the Zitadel user portal/console password management
+      // NOTE: This path is based on standard Zitadel UIs. Verify the exact path for your instance.
+      final Uri uri = Uri.parse('$issuer/ui/console/users/me/password');
 
-        await showDialog<void>(
-            context: context,
-            builder: (context) {
-                return StatefulBuilder(
-                    builder: (context, setDialogState) {
-                        bool isChanging = false;
-                        String? errorText;
-
-                        Future<void> performChange() async {
-                            final currentPassword = currentPasswordController.text;
-                            final newPassword = newPasswordController.text;
-                            final confirmNewPassword = confirmNewPasswordController.text;
-
-                            if (newPassword != confirmNewPassword) {
-                                setDialogState(() => errorText = "Passwords do not match.");
-                                return;
-                            }
-                            if (currentPassword.isEmpty || newPassword.isEmpty) {
-                                setDialogState(() => errorText = "Password fields cannot be empty.");
-                                return;
-                            }
-                            
-                            setDialogState(() {
-                                isChanging = true;
-                                errorText = null;
-                            });
-
-                            try {
-                                await OidcAuth.refreshIfNeeded();
-                                await OidcAuth.changePassword(currentPassword, newPassword);
-                                if (context.mounted) {
-                                    Navigator.of(context).pop();
-                                    _showSnackbar(context, "Password changed successfully.");
-                                }
-                            } catch (e) {
-                                _logger.e('Failed to change password', error: e);
-                                setDialogState(() {
-                                    isChanging = false;
-                                    errorText = "Failed to change password. Please check your current password.";
-                                });
-                            }
-                        }
-
-                        return AlertDialog(
-                            title: const Text("Change Password"),
-                            content: SingleChildScrollView(
-                                child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                        TextField(controller: currentPasswordController, decoration: const InputDecoration(labelText: "Current Password"), obscureText: true),
-                                        TextField(controller: newPasswordController, decoration: const InputDecoration(labelText: "New Password"), obscureText: true),
-                                        TextField(controller: confirmNewPasswordController, decoration: const InputDecoration(labelText: "Confirm New Password"), obscureText: true),
-                                        if (errorText != null) Padding(padding: const EdgeInsets.only(top: 8.0), child: Text(errorText!, style: TextStyle(color: Theme.of(context).colorScheme.error))),
-                                    ],
-                                ),
-                            ),
-                            actions: [
-                                TextButton(onPressed: isChanging ? null : () => Navigator.of(context).pop(), child: const Text("Cancel")),
-                                TextButton(
-                                    onPressed: isChanging ? null : performChange,
-                                    child: isChanging ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text("Change"),
-                                ),
-                            ],
-                        );
-                    },
-                );
-            },
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(
+          uri,
+          mode: LaunchMode.externalApplication, // Opens in default mobile browser
         );
+      } else {
+        if (mounted) {
+          _showSnackbar(context, "Could not open the external browser. Please check the URL.");
+        }
+      }
+    }
+
+    Future<void> _changePassword() async {
+      await _openZitadelPasswordChange();
     }
 
     Future<void> _removePrayerRequest(String id) async {
@@ -369,7 +317,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                 onTap: _editPhoto,
                                 child: CircleAvatar(
                                     radius: 48,
-                                    backgroundColor: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                                    backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
                                     backgroundImage: (_photoUrl != null && _photoUrl!.isNotEmpty) 
                                         ? CachedNetworkImageProvider(_photoUrl!) 
                                         : null,

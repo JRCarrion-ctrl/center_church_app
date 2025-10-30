@@ -322,7 +322,34 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   }
 
   Widget _buildGroupEvents(List<Map<String, dynamic>> events) {
-    if (events.isEmpty) {
+    // 1. FILTER THE EVENTS using 'event_date'
+    final now = DateTime.now();
+    final upcomingEvents = events.where((event) {
+      // Use the 'event_date' key
+      final eventDateString = event['event_date'];
+    
+      if (eventDateString == null) {
+        // Exclude if the date is missing
+        return false; 
+      }
+    
+      // Parse the string into a DateTime object.
+      try {
+        final eventTime = DateTime.parse(eventDateString);
+        // Only keep the event if its time is after the current time
+        // Using .isAfter(now) means an event that started in the past 
+        // but hasn't ended might still be excluded if 'event_date' is the START time.
+        // If 'event_date' is the start time, this strictly shows future events.
+        return eventTime.isAfter(now);
+      } catch (e) {
+        // Handle parsing errors
+        debugPrint('Error parsing event date: $e for event: ${event['title']}');
+        return false;
+      }
+    }).toList(); // Convert the iterable back to a list
+
+    // 2. USE THE FILTERED LIST
+    if (upcomingEvents.isEmpty) {
       return Column(
         children: [
           Text("key_097".tr()),
@@ -335,9 +362,11 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         ],
       );
     }
+  
     return Column(
       children: [
-        ...events.map((event) => Text(event['title'] ?? '')),
+        // Iterate over the filtered list
+        ...upcomingEvents.map((event) => Text(event['title'] ?? '')),
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
