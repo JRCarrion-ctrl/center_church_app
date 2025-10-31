@@ -5,7 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
-// import 'package:http/http.dart' as http; // No longer needed
+
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -14,8 +14,8 @@ import '../../../core/graph_provider.dart';
 import '../group_service.dart';
 import '../models/group.dart';
 import '../widgets/invite_user_modal.dart';
-// Import the storage service you provided
-import '../chat_storage_service.dart'; // ASSUMING THIS PATH IS CORRECT
+
+import '../chat_storage_service.dart';
 
 // This helper function remains outside and unchanged
 Future<File> _compressImage(File file) async {
