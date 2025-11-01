@@ -6,9 +6,10 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 
 import '../../../core/graph_provider.dart';
 import '../../../core/time_service.dart';
-import '../../../core/media/presigned_uploader.dart'; // Import the new service
+// REMOVED: import '../../../core/media/presigned_uploader.dart'; // Old upload logic
 import '../../../core/media/image_picker_field.dart'; // Import the new widget
 import '../models/group_announcement.dart';
+import '../../calendar/event_photo_storage_service.dart'; // <-- NEW/SHARED SERVICE IMPORT (Assume location)
 
 class AnnouncementFormModal extends StatefulWidget {
   final String groupId;
@@ -33,6 +34,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   bool _removedImage = false;
 
   late GraphQLClient _client;
+  late EventPhotoStorageService _mediaService; // <-- INITIALIZE NEW SERVICE
   bool _clientReady = false;
   bool saving = false;
 
@@ -43,7 +45,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     if (ex != null) {
       _title.text = ex.title;
       _body.text = ex.body ?? '';
-      _scheduledUtc = ex.publishedAt;
+      _scheduledUtc = ex.publishedAt; 
     }
   }
 
@@ -52,6 +54,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     super.didChangeDependencies();
     if (_clientReady) return;
     _client = GraphProvider.of(context);
+    _mediaService = EventPhotoStorageService(_client);
     _clientReady = true;
   }
 
@@ -67,14 +70,16 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     setState(() => saving = true);
 
     String? imageUrl = widget.existing?.imageUrl;
+    final logicalId = widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+
     if (_removedImage) {
       imageUrl = null;
     } else if (_selectedImage != null) {
       try {
-        imageUrl = await PresignedUploader.upload(
+        imageUrl = await _mediaService.uploadEventPhoto(
           file: _selectedImage!,
-          keyPrefix: 'announcements/${widget.groupId}',
-          logicalId: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+          keyPrefix: 'group_announcements', 
+          logicalId: '${widget.groupId}/$logicalId', 
         );
       } catch (e) {
         if (!mounted) return;

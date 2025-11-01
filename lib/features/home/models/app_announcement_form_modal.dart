@@ -1,11 +1,13 @@
 // File: lib/features/home/app_announcement_form_modal.dart
+import 'package:ccf_app/features/calendar/event_photo_storage_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'dart:io';
 
 import '../../../app_state.dart';
-
+import '../../../core/media/image_picker_field.dart';
 class AppAnnouncementFormModal extends StatefulWidget {
   final Map<String, dynamic>? existing;
 
@@ -20,6 +22,12 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
   final _title = TextEditingController();
   final _body = TextEditingController();
   DateTime? _scheduled;
+
+  File? _localImageFile; // <-- NEW STATE
+  bool _imageRemoved = false; // <-- NEW STATE
+  String? _imageUrl; // Existing image URL
+
+  late EventPhotoStorageService _mediaService; // <-- NEW SERVICE
   bool saving = false;
 
   GraphQLClient? _gql;
@@ -32,6 +40,7 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
     if (a != null) {
       _title.text = (a['title'] ?? '') as String;
       _body.text = (a['body'] ?? '') as String;
+      _imageUrl = a['image_url'] as String?; // Capture existing image URL
       final published = a['published_at'];
       if (published is String && published.isNotEmpty) {
         _scheduled = DateTime.tryParse(published)?.toLocal();
@@ -44,6 +53,10 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
     super.didChangeDependencies();
     _gql ??= GraphQLProvider.of(context).value;
     _userId ??= context.read<AppState>().profile?.id;
+    
+    if (_gql != null) {
+      _mediaService = EventPhotoStorageService(_gql!);
+    }
   }
 
   @override
@@ -84,29 +97,58 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
 
     setState(() => saving = true);
 
+    String? finalImageUrl = _imageUrl;
+    final logicalId = widget.existing?['id'] as String? ?? 'new'; // Unique ID for S3 path
+
+    // --- NEW IMAGE UPLOAD LOGIC ---
+    if (_imageRemoved && _localImageFile == null) {
+      finalImageUrl = null;
+    } else if (_localImageFile != null) {
+      try {
+        finalImageUrl = await _mediaService.uploadEventPhoto(
+          file: _localImageFile!,
+          keyPrefix: 'app_announcements',
+          logicalId: logicalId,
+        );
+      } catch (e) {
+        debugPrint('Error uploading image: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Failed to upload image")),
+          );
+          setState(() => saving = false);
+          return;
+        }
+      }
+    }
+    // --- END NEW IMAGE UPLOAD LOGIC ---
+
     final payload = {
       'title': _title.text.trim(),
       'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
       'published_at': (_scheduled ?? DateTime.now()).toUtc().toIso8601String(),
+      'image_url': finalImageUrl,
     };
 
     const insertMutation = r'''
-      mutation InsertAppAnnouncement($title: String!, $body: String, $published_at: timestamptz!, $created_by: String!) {
+      mutation InsertAppAnnouncement($title: String!, $body: String, $published_at: timestamptz!, $created_by: String!, $image_url: String) {
         insert_app_announcements_one(object: {
           title: $title,
           body: $body,
           published_at: $published_at,
-          created_by: $created_by
+          created_by: $created_by,
+          image_url: $image_url
         }) { id }
       }
     ''';
 
     const updateMutation = r'''
-      mutation UpdateAppAnnouncement($id: uuid!, $title: String!, $body: String, $published_at: timestamptz!) {
+      mutation UpdateAppAnnouncement($id: uuid!, $title: String!, $body: String, $published_at: timestamptz!, $image_url: String) {
         update_app_announcements_by_pk(pk_columns: {id: $id}, _set: {
           title: $title,
           body: $body,
-          published_at: $published_at
+          published_at: $published_at,
+          image_url: $image_url
         }) { id }
       }
     ''';
@@ -118,6 +160,7 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
           'title': payload['title'],
           'body': payload['body'],
           'published_at': payload['published_at'],
+          'image_url': payload['image_url'],
         };
         final res = await _gql!.mutate(MutationOptions(document: gql(updateMutation), variables: vars));
         if (res.hasException) throw res.exception!;
@@ -127,6 +170,7 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
           'body': payload['body'],
           'published_at': payload['published_at'],
           'created_by': _userId,
+          'image_url': payload['image_url'], // <-- ADDED
         };
         final res = await _gql!.mutate(MutationOptions(document: gql(insertMutation), variables: vars));
         if (res.hasException) throw res.exception!;
@@ -179,6 +223,20 @@ class _AppAnnouncementFormModalState extends State<AppAnnouncementFormModal> {
                 maxLines: 3,
               ),
               const SizedBox(height: 12),
+
+              // --- ADDED IMAGE PICKER FIELD ---
+              ImagePickerField(
+                label: 'Announcement Image (Optional)',
+                initialUrl: _imageUrl,
+                onChanged: (localFile, removed) {
+                  setState(() {
+                    _localImageFile = localFile;
+                    _imageRemoved = removed;
+                  });
+                },
+              ),
+              const SizedBox(height: 12),
+              // --- END ADDED IMAGE PICKER FIELD ---
 
               ListTile(
                 contentPadding: EdgeInsets.zero,

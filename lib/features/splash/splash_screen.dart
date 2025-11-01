@@ -5,14 +5,14 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FlutterLogo(size: 100), // Replace with your church logo
-            SizedBox(height: 16),
+            Image.asset('assets/logo_light.png',width: 150,height: 150),
+            SizedBox(height: 8),
             CircularProgressIndicator(),
           ],
         ),

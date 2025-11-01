@@ -1,8 +1,6 @@
 // File: lib/features/home/livestream_preview.dart
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:ccf_app/app_state.dart';
 
 import 'package:ccf_app/features/media/media_service.dart';
 import 'package:youtube_player_flutter/youtube_player_flutter.dart';
@@ -22,7 +20,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
   YoutubePlayerController? _ytController;
 
   GraphQLClient? _gql;
-  String? _userRole;
 
   @override
   void initState() {
@@ -34,8 +31,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
     super.didChangeDependencies();
     
     _gql ??= GraphQLProvider.of(context).value;
-
-    _userRole = context.read<AppState>().role;
 
     _videoIdFuture ??= _loadVideoId();
   }
@@ -53,43 +48,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
       debugPrint('Error loading livestream: $e');
       return null;
     }
-  }
-
-  Future<void> _refreshLivestream() async {
-    if (_gql == null) return;
-    const m = r'''
-      mutation RefreshLivestream {
-        refresh_livestream_cache {
-          ok
-          message
-        }
-      }
-    ''';
-
-    try {
-      final res = await _gql!.mutate(MutationOptions(document: gql(m)));
-      if (res.hasException) {
-        _showSnackbar('Refresh failed');
-        return;
-      }
-
-      // Reset the player and re-fetch the video id
-      setState(() {
-        _ytController?.dispose();
-        _ytController = null;
-        // The old _videoIdFuture is replaced with a new one
-        _videoIdFuture = _loadVideoId(); 
-      });
-      _showSnackbar('Livestream refresh initiated');
-    } catch (e) {
-      debugPrint('Error refreshing livestream: $e');
-      _showSnackbar('Error refreshing livestream');
-    }
-  }
-
-  void _showSnackbar(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -120,12 +78,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
           return Center(child: Text("key_179".tr()));
         }
 
-        final canRefresh = _userRole == 'supervisor' || _userRole == 'owner';
-
-        // --- START: CRITICAL CHANGE ---
-        // Use YoutubePlayerBuilder to safely manage the controller's lifecycle
         return YoutubePlayerBuilder(
-          // Factory to create the controller based on the resolved videoId
           player: YoutubePlayer(
             controller: YoutubePlayerController(
               initialVideoId: videoId,
@@ -150,12 +103,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
                           style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(width: 8),
-                        if (canRefresh)
-                          IconButton(
-                            icon: const Icon(Icons.refresh),
-                            tooltip: 'Refresh Livestream',
-                            onPressed: _refreshLivestream,
-                          ),
                       ],
                     ),
                     const SizedBox(height: 12),

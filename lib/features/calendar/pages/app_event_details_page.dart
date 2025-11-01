@@ -7,7 +7,7 @@ import 'package:provider/provider.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/app_state.dart';
-import 'package:ccf_app/shared/user_roles.dart'; // <--- Ensure this import is available
+import 'package:ccf_app/shared/user_roles.dart';
 import '../event_service.dart';
 import '../models/app_event.dart';
 
@@ -24,15 +24,13 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
   late EventService _eventService;
   bool _svcReady = false;
 
-  int _attendingCount = 1; // Corrected by _loadRSVPs if an existing RSVP is found
+  int _attendingCount = 1;
   bool _saving = false;
-  // REMOVED: bool _isSupervisor = false; // Now calculated in the build method
   List<Map<String, dynamic>> _rsvps = [];
 
   @override
   void initState() {
     super.initState();
-    // Services are now initialized in didChangeDependencies
   }
 
   @override
@@ -44,12 +42,9 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       _eventService = EventService(client, currentUserId: userId);
       _svcReady = true;
 
-      // REMOVED: _checkRole(); // No longer needed, as role is read from AppState
       _loadRSVPs();
     }
   }
-
-  // DELETED: Future<void> _checkRole() async { ... }
 
   Future<void> _loadRSVPs() async {
     if (!_svcReady) return;
@@ -134,8 +129,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     final e = widget.event;
     final currentUserId = context.select<AppState, String?>((s) => s.profile?.id);
     final hasRSVP = currentUserId != null && _rsvps.any((r) => r['user_id'] == currentUserId);
-    
-    // Synchronous Role Check (Replaces _isSupervisor state)
+
     final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final bool isSupervisor = userRole == UserRole.supervisor || userRole == UserRole.owner || userRole == UserRole.leader;
 
@@ -193,7 +187,6 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
               ),
               const Spacer(),
               ElevatedButton(
-                // The label for the button should indicate if it's a new RSVP or an update
                 onPressed: _saving ? null : _submitRSVP,
                 child: _saving ? const SizedBox(
                   width: 20, 
@@ -209,7 +202,6 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             ],
           ),
           const Divider(height: 32),
-          // Use the local 'isSupervisor' bool
           if (isSupervisor && _rsvps.isNotEmpty) ...[
             Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),

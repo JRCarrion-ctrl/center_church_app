@@ -24,6 +24,7 @@ import '../features/calendar/models/app_event.dart';
 import '../features/more/pages/family_page.dart';
 import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
+import '../features/more/pages/child_staff_profile.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -190,6 +191,17 @@ final List<GoRoute> miscRoutes = [
       ChildProfilePage(child: state.extra as Map<String, dynamic>),
       direction: SlideDirection.right,
     ),
+  ),
+  GoRoute(
+    path: '/child-staff/:childId',
+    name: 'child-staff',
+    pageBuilder: (context, state) {
+      final childId = state.pathParameters['childId']!;
+      return buildSlidePage(
+        ChildStaffProfilePage(childId: childId),
+        direction: SlideDirection.right,
+      );
+    },
   ),
   GoRoute(
     path: '/data-and-delete',

@@ -1,5 +1,4 @@
 // File: lib/features/calendar/widgets/app_event_form_modal.dart
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -9,10 +8,9 @@ import 'dart:io';
 import '../models/app_event.dart';
 import '../event_service.dart';
 import 'package:ccf_app/app_state.dart';
-import 'package:ccf_app/core/media/presigned_uploader.dart';
 import 'package:ccf_app/core/media/image_picker_field.dart';
+import '../event_photo_storage_service.dart';
 
-/// Modal bottom sheet for creating or editing an AppEvent
 class AppEventFormModal extends StatefulWidget {
   final AppEvent? existing;
 
@@ -24,12 +22,13 @@ class AppEventFormModal extends StatefulWidget {
 
 class _AppEventFormModalState extends State<AppEventFormModal> {
   final _formKey = GlobalKey<FormState>();
-  late EventService _service;           // <-- Hasura-backed service
+  late EventService _service;
+  late EventPhotoStorageService _photoService;
   bool _svcReady = false;
 
   File? _localImageFile;
   bool _imageRemoved = false;
-  String? _imageUrl; // existing when editing
+  String? _imageUrl;
 
   late TextEditingController _titleController;
   late TextEditingController _descController;
@@ -60,6 +59,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
       _service = EventService(client, currentUserId: userId);
+      _photoService = EventPhotoStorageService(client);
       _svcReady = true;
     }
   }
@@ -104,12 +104,13 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       return;
     }
 
-    // Handle image upload/delete
+
     if (_imageRemoved && _localImageFile == null) {
       finalImageUrl = null;
     } else if (_localImageFile != null) {
       final logicalId = widget.existing?.id ?? 'new';
-      finalImageUrl = await PresignedUploader.upload(
+
+      finalImageUrl = await _photoService.uploadEventPhoto(
         file: _localImageFile!,
         keyPrefix: 'app_events',
         logicalId: logicalId,

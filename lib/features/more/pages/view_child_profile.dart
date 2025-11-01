@@ -5,9 +5,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
-// No need for ccf_app/core/graph_provider.dart if using GraphQLProvider.of(context)
-// or the Query widget itself, which finds the client implicitly.
-
 class ViewChildProfilePage extends StatelessWidget {
   final String childId;
   const ViewChildProfilePage({super.key, required this.childId});

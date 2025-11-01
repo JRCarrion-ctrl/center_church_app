@@ -8,11 +8,10 @@ import 'package:logger/logger.dart';
 
 import '../../../app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
-// import '../../../core/app_keys.dart'; // <--- Import your AppKeys file
 
-final logger = Logger(); // <--- Initialize your logger
+final logger = Logger();
 
-typedef CheckinHandler = void Function(String checkinId);
+// REMOVED: typedef CheckinHandler = void Function(String checkinId);
 
 class NurseryStaffPage extends StatefulWidget {
   const NurseryStaffPage({super.key});
@@ -24,7 +23,7 @@ class NurseryStaffPage extends StatefulWidget {
 class _NurseryStaffPageState extends State<NurseryStaffPage> {
   bool _checkingRole = true;
   bool _authorized = false;
-  String? _userId;
+  // REMOVED: String? _userId; - Relying on context.read<AppState>().profile?.id directly
 
   @override
   void initState() {
@@ -33,7 +32,6 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
   }
 
   Future<void> _checkRole() async {
-    // Synchronous context access is fine, but check 'mounted' before 'setState'
     final appState = context.read<AppState>();
     String? uid;
     
@@ -50,13 +48,10 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
         setState(() {
           _authorized = false;
           _checkingRole = false;
-          _userId = null;
         });
         logger.i('User not logged in. Access denied.');
         return;
       }
-      
-      _userId = uid;
       
       // 2. Use the AppState's role check
       final role = appState.userRole;
@@ -71,9 +66,9 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       });
       
       if (!isAuthorized) {
-        logger.w('User $_userId access denied. Role: $role');
+        logger.w('User $uid access denied. Role: $role');
       } else {
-        logger.i('User $_userId authorized as $role.');
+        logger.i('User $uid authorized as $role.');
       }
 
     } catch (e, stack) {
@@ -84,7 +79,6 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
           _checkingRole = false;
         });
       }
-      // You could show a generic error SnackBar here if needed
     }
   }
 
@@ -101,9 +95,21 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
     try {
       final client = GraphQLProvider.of(context).value;
       
+      // Get userId from context since it's no longer state
+      final userId = context.read<AppState>().profile?.id; 
+      if (userId == null) {
+         logger.e('Cannot checkout: User ID is null.');
+         if(mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(tr('key_012'))), // "Error"
+            );
+         }
+         return;
+      }
+
       final variables = {
         'id': checkinId,
-        'uid': _userId,
+        'uid': userId, 
         'now': DateTime.now().toUtc().toIso8601String(), 
       };
 
@@ -117,106 +123,48 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       if (!mounted) return;
 
       if (res.hasException) {
-        // Log the full exception for debugging
         logger.e('GraphQL Exception during checkout for $checkinId:', error: res.exception);
         
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('key_293a'))), // “Could not check out”
+          SnackBar(content: Text(tr('key_293a'))),
         );
         return;
       } 
       
       if (res.data?['update_child_checkins_by_pk'] == null) {
-        // Handle successful GraphQL query but no rows affected
         logger.w('Checkout failed for $checkinId: Checkin not found or not updated.');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('key_293a'))), // “Could not check out”
+          SnackBar(content: Text(tr('key_293a'))),
         );
       } else {
         logger.i('Successfully checked out child for checkin $checkinId.');
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('key_293b'))), // “Checked out”
+          SnackBar(content: Text(tr('key_293b'))),
         );
       }
     } catch (e, stack) {
-      // Log generic network or parsing error
       logger.e('Fatal error during checkout for $checkinId:', error: e, stackTrace: stack);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('key_293c'))), // “Something went wrong”
+        SnackBar(content: Text(tr('key_293c'))),
       );
     }
   }
 
-  Future<void> _openOrCreateChat(String checkinId) async {
-    const tempGroupQuery = r'''
-      query TempGroup($cid: uuid!) {
-        nursery_temp_groups(where: { checkin_id: { _eq: $cid } }, limit: 1) {
-          group_id
-        }
-      }
-    ''';
-
-    const createGroupMutation = r'''
-      mutation CreateNurseryTempGroup($cid: uuid!) {
-        create_nursery_temp_group(args: {checkin_id: $cid}) {
-          group_id
-        }
-      }
-    ''';
-
-    try {
-      final client = GraphQLProvider.of(context).value;
-      String? groupId;
-
-      // 1) Look for existing temp group
-      final resQ = await client.query(
-        QueryOptions(document: gql(tempGroupQuery), variables: {'cid': checkinId}),
-      );
-
-      if (resQ.hasException) {
-        logger.e('GraphQL Exception on TempGroup query:', error: resQ.exception);
-      } else {
-        final rows = (resQ.data?['nursery_temp_groups'] as List<dynamic>? ?? []);
-        if (rows.isNotEmpty) {
-          groupId = rows.first['group_id'] as String?;
-          logger.d('Existing group found for $checkinId: $groupId');
-        }
-      }
-
-      // 2) If none, create it
-      if (groupId == null) {
-        logger.i('No existing group found. Creating new group for $checkinId.');
-        final resM = await client.mutate(
-          MutationOptions(document: gql(createGroupMutation), variables: {'cid': checkinId}),
-        );
-        
-        if (resM.hasException) {
-          logger.e('GraphQL Exception on CreateNurseryTempGroup mutation:', error: resM.exception);
-        } else {
-          groupId = resM.data?['create_nursery_temp_group']?['group_id'] as String?;
-        }
-      }
-
-      if (!mounted) return;
-
-      if (groupId == null) {
-        logger.w('Failed to get or create group ID for $checkinId.');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(tr('key_293f'))), // “Unable to open chat”
-        );
-        return;
-      }
-
-      logger.i('Opening chat group $groupId for checkin $checkinId.');
-      context.push('/groups/$groupId');
-    } catch (e, stack) {
-      logger.e('Fatal error in _openOrCreateChat for $checkinId:', error: e, stackTrace: stack);
+  // REFACTORED: The function now takes the childId (which is the groupId) directly
+  Future<void> _openChat(String groupId) async {
+    if (groupId.isEmpty) {
+      logger.w('Cannot open chat: Group ID (Child ID) is empty.');
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('key_293e'))), // generic error
+        SnackBar(content: Text(tr('key_293f'))), // “Unable to open chat”
       );
+      return;
     }
+    
+    logger.i('Opening chat group $groupId.');
+    if (!mounted) return;
+    context.push('/groups/$groupId');
   }
 
   @override
@@ -227,8 +175,8 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
 
     if (!_authorized) {
       return Scaffold(
-        appBar: AppBar(title: Text(tr('key_294'))), // "Check-Ins"
-        body: Center(child: Text(tr('key_012'))),   // "Error" (no access)
+        appBar: AppBar(title: Text(tr('key_294'))),
+        body: Center(child: Text(tr('key_012'))),
       );
     }
 
@@ -237,12 +185,11 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final res = await context.push('/nursery/qr_checkin');
-          if (!mounted) return;
-          
-          // Removed redundant context.mounted check
+          if (!context.mounted) return;
+
           if (res != null) { 
             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text(tr('key_313'))), // “Check-In Successful”
+              SnackBar(content: Text(tr('key_313'))),
             );
           }
         },
@@ -251,21 +198,21 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       ),
       body: _ActiveCheckinsList(
         onCheckout: _checkout,
-        onOpenChat: _openOrCreateChat,
+        onOpenChat: _openChat,
       ),
     );
   }
 }
 
 class _ActiveCheckinsList extends StatelessWidget {
-  // ... constructor and types ...
   const _ActiveCheckinsList({
     required this.onCheckout,
     required this.onOpenChat,
   });
 
   final void Function(String checkinId) onCheckout;
-  final void Function(String checkinId) onOpenChat;
+  // REFACTORED: Changed signature to accept the groupId (which is the childId)
+  final void Function(String groupId) onOpenChat;
 
   static const _activeCheckinsSubscription = r'''
     subscription ActiveCheckins {
@@ -274,7 +221,7 @@ class _ActiveCheckinsList extends StatelessWidget {
         order_by: { check_in_time: desc }
       ) {
         id
-        child_id
+        child_id  
         check_in_time
         child: child_profile {
           id
@@ -295,8 +242,8 @@ class _ActiveCheckinsList extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (result.hasException) {
-          logger.e('GraphQL Subscription Exception:', error: result.exception); // Added logging
-          return Center(child: Text(tr('key_012'))); // “Error”
+          logger.e('GraphQL Subscription Exception:', error: result.exception);
+          return Center(child: Text(tr('key_012')));
         }
 
         final rows = (result.data?['child_checkins'] as List<dynamic>? ?? [])
@@ -309,10 +256,8 @@ class _ActiveCheckinsList extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
           );
-        } //No Check-Ins
+        }
         
-        // ... ListView.separated implementation remains the same ...
-
         return ListView.separated(
           padding: const EdgeInsets.symmetric(vertical: 8),
           itemCount: rows.length,
@@ -320,6 +265,7 @@ class _ActiveCheckinsList extends StatelessWidget {
           itemBuilder: (context, i) {
             final row = rows[i];
             final checkinId = (row['id'] ?? '').toString();
+            final groupId = (row['child_id'] ?? '').toString(); 
             final child = row['child'] as Map<String, dynamic>?;
             final name = (child?['display_name'] ?? '—').toString();
             final photoUrl = child?['photo_url'] as String?;
@@ -338,14 +284,25 @@ class _ActiveCheckinsList extends StatelessWidget {
               subtitle: allergies.isEmpty
                   ? null
                   : Text(tr('key_253', args: [allergies])), 
-              // onTap handles chat
-              onTap: () => onOpenChat(checkinId),
+              
+              // NEW BEHAVIOR: Navigate to child-staff route on card tap
+              onTap: () {
+                final childProfileId = (child?['id'] ?? '').toString();
+                if (childProfileId.isNotEmpty) {
+                  // Correctly call the route using the path parameter map
+                  context.pushNamed(
+                    'child-staff', 
+                    pathParameters: {'childId': childProfileId}
+                  );
+                }
+              },
+
               trailing: Wrap(
                 spacing: 4,
                 children: [
                   IconButton(
                     icon: const Icon(Icons.chat_bubble_outline),
-                    onPressed: () => onOpenChat(checkinId),
+                    onPressed: () => onOpenChat(groupId),
                   ),
                   IconButton(
                     icon: const Icon(Icons.logout),

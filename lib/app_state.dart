@@ -24,6 +24,9 @@ class AppState extends ChangeNotifier {
   final _logger = Logger();
   final _authChangeNotifier = ValueNotifier<int>(0);
   final _authStreamController = StreamController<void>.broadcast();
+  static const _termsAcceptedKey = 'terms_accepted';
+  bool _termsAccepted = false;
+  bool get termsAccepted => _termsAccepted;
   
   // Use a single GraphQLClient and update it.
   GraphQLClient? _client;
@@ -147,6 +150,8 @@ class AppState extends ChangeNotifier {
   }
 
   Future<void> restoreSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    _termsAccepted = prefs.getBool(_termsAcceptedKey) ?? false;
     _logger.i('Starting restoreSession');
     try {
       await OidcAuth.refreshIfNeeded();
@@ -239,6 +244,14 @@ class AppState extends ChangeNotifier {
     } finally {
       _notifyAuthChanged();
     }
+    notifyListeners();
+  }
+
+  Future<void> acceptTerms() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_termsAcceptedKey, true);
+    _termsAccepted = true;
+    notifyListeners();
   }
 
   Future<void> _clearSessionData() async {

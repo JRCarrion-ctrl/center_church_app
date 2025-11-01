@@ -101,9 +101,6 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
 
   void _openGroup(GroupModel group) {
     if ((group.archived) == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('key_group_archived'.tr())),
-      );
       return;
     }
     context.push('/groups/${group.id}');

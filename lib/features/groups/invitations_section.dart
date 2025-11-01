@@ -94,14 +94,14 @@ class InvitationsSectionState extends State<InvitationsSection> {
     if (res.hasException) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('key_error_generic'))),
+        SnackBar(content: Text(tr('key_012'))),
       );
       return;
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('key_group_joined', args: [group.name]))),
+      SnackBar(content: Text(tr('key_060', args: [group.name]))),
     );
   }
 
@@ -128,14 +128,14 @@ class InvitationsSectionState extends State<InvitationsSection> {
     if (res.hasException) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('key_error_generic'))),
+        SnackBar(content: Text(tr('key_012'))),
       );
       return;
     }
 
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('key_group_declined', args: [group.name]))),
+      SnackBar(content: Text(tr('key_061', args: [group.name]))),
     );
   }
 

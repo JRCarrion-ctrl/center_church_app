@@ -62,6 +62,19 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  flutter_native_splash: ^2.4.7
+
+flutter_native_splash:
+  color: "#FFFFFF"
+  image: assets/logo_light.PNG
+  android: true
+  ios: true
+  web: false
+  android_12:
+    image: assets/logo_light.PNG
+    color: "#FFFFFF"
+    icon_background_color: "#FFFFFF"
+  ios_content_mode: "scaleAspectFit"
 
 flutter:
   uses-material-design: true

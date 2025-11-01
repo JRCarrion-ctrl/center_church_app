@@ -8,8 +8,8 @@ import 'dart:io';
 import '../models/group_event.dart';
 import '../event_service.dart';
 import 'package:ccf_app/app_state.dart';
-import 'package:ccf_app/core/media/presigned_uploader.dart';
 import 'package:ccf_app/core/media/image_picker_field.dart';
+import '../event_photo_storage_service.dart';
 
 class GroupEventFormModal extends StatefulWidget {
   final GroupEvent? existing;
@@ -24,6 +24,7 @@ class GroupEventFormModal extends StatefulWidget {
 class _GroupEventFormModalState extends State<GroupEventFormModal> {
   final _formKey = GlobalKey<FormState>();
   late EventService _service;
+  late EventPhotoStorageService _photoService;
   bool _svcReady = false;
 
   File? _localImageFile;
@@ -59,6 +60,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
       _service = EventService(client, currentUserId: userId);
+      _photoService = EventPhotoStorageService(client);
       _svcReady = true;
     }
   }
@@ -121,7 +123,8 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
       return null;
     } else if (_localImageFile != null) {
       final logicalId = widget.existing?.id ?? 'new';
-      return await PresignedUploader.upload(
+      
+      return await _photoService.uploadEventPhoto(
         file: _localImageFile!,
         keyPrefix: 'group_events',
         logicalId: logicalId,

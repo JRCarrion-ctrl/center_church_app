@@ -190,7 +190,7 @@ class _GroupsPageState extends State<GroupsPage> {
       await _refreshAllSections();
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_group_created".tr(args: []))),
+        SnackBar(content: Text("key_057a".tr(args: []))),
       );
     }
   }

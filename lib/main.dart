@@ -15,6 +15,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
+import 'policy_screen.dart';
 
 import 'app_state.dart';
 
@@ -22,7 +23,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await EasyLocalization.ensureInitialized();
 
-  // OneSignal init (ID set after session restore)
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
   OneSignal.initialize("a75771e7-9bd5-4497-adf3-18b7c8901bcb");
 
@@ -141,8 +141,18 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       value: appState,
       child: Consumer<AppState>(
         builder: (context, state, _) {
-          if (!state.isInitialized) {
-            return const MaterialApp(home: SplashScreen());
+          if (!state.isInitialized || !state.termsAccepted) {
+            
+            Widget initialWidget;
+            if (!state.termsAccepted) {
+              initialWidget = const PolicyAcceptanceScreen(
+                privacyPolicyUrl: 'https://privacy-policy.ccfapp.com/', 
+                termsAndConditionsUrl: 'https://terms-and-conditions.ccfapp.com/',
+              );
+            } else {
+              initialWidget = const SplashScreen();
+            }
+            return MaterialApp(home: initialWidget);
           }
           
           // Update the client notifier when the state changes
