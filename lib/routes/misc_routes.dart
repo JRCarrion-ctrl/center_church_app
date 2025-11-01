@@ -1,4 +1,3 @@
-// File: lib/routes/misc_routes.dart
 import 'package:ccf_app/features/home/models/group_announcements_page.dart';
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
@@ -25,8 +24,16 @@ import '../features/more/pages/family_page.dart';
 import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
 import '../features/more/pages/child_staff_profile.dart';
+import 'package:ccf_app/features/more/pages/role_management_page.dart';
 
 final List<GoRoute> miscRoutes = [
+  GoRoute(
+    path: '/more/role-management',
+    pageBuilder: (_, _) => buildSlidePage(
+      const RoleManagementPage(),
+      direction: SlideDirection.right,
+    ),
+  ),
   GoRoute(
     path: '/give',
     pageBuilder: (_, _) => buildSlidePage(

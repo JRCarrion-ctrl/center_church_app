@@ -548,7 +548,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     trailing: isChild && qrCode != null ? IconButton(
                         icon: const Icon(Icons.qr_code),
                         onPressed: () {
-                            showDialog(context: context, builder: (_) => AlertDialog(content: Image.network(qrCode)));
+                            showDialog(context: context, builder: (_) => AlertDialog(content: CachedNetworkImage(imageUrl: qrCode)));
                         },
                     ) : null,
                 );

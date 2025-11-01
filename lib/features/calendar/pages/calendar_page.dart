@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
@@ -250,11 +251,16 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                     )
                   : null,
               leading: e.imageUrl != null
-                  ? Image.network(
-                      e.imageUrl!,
-                      gaplessPlayback: true,
+                  ? CachedNetworkImage(
+                      imageUrl: e.imageUrl!,
                       fit: BoxFit.cover,
-                    )
+                      placeholder: (context, url) => const SizedBox(
+                        child: Center(child: CircularProgressIndicator())
+                      ),
+                      errorWidget: (context, url, error) => const SizedBox(
+                        child: Center(child: Icon(Icons.broken_image, size: 100))
+                      ),
+                  )
                   : const Icon(Icons.announcement, size: 40),
               title: Text(e.title),
               subtitle: Text(
@@ -268,11 +274,16 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
         child: ListTile(
           onTap: () => context.push('/group-event/${e.id}', extra: e),
           leading: e.imageUrl != null
-              ? Image.network(
-                  e.imageUrl!,
-                  gaplessPlayback: true,
+              ? CachedNetworkImage(
+                  imageUrl: e.imageUrl!,
                   fit: BoxFit.cover,
-                )
+                  placeholder: (context, url) => const SizedBox(
+                    child: Center(child: CircularProgressIndicator())
+                  ),
+                  errorWidget: (context, url, error) => const SizedBox(
+                    child: Center(child: Icon(Icons.broken_image, size: 100))
+                  ),
+              )
               : const Icon(Icons.event, size: 40),
           title: Text(e.title),
           subtitle: Text(

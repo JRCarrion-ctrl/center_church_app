@@ -22,7 +22,7 @@ class ChurchInfoCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Determine a theme-appropriate color for the text header background
-    final overlayColor = Theme.of(context).colorScheme.surface.withAlpha((0.9 * 255).toInt());
+
     
     return Center(
       child: ConstrainedBox(
@@ -53,16 +53,12 @@ class ChurchInfoCard extends StatelessWidget {
                     // Text header at the top
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                      decoration: BoxDecoration(
-                        color: overlayColor,
-                        // ✨ CHANGE: Increased the inner border radius to complement the outer curve.
-                        borderRadius: BorderRadius.circular(12),
-                      ),
                       child: Text(
-                        "key_178a".tr(), 
+                        "key_178a".tr(), //Learn more about our church
                         textAlign: TextAlign.center,
                         style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Theme.of(context).colorScheme.primary,
+                          // Use the overlayColor or White for better contrast against the dark background
+                          color: Colors.white, 
                           fontWeight: FontWeight.bold,
                         ),
                       ),

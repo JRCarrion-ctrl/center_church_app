@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/app_announcement_form_modal.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 class ManageAppAnnouncementsPage extends StatefulWidget {
   const ManageAppAnnouncementsPage({super.key});
@@ -140,7 +141,23 @@ class _ManageAppAnnouncementsPageState extends State<ManageAppAnnouncementsPage>
                           child: ListTile(
                             onTap: () => _openForm(existing: a),
                             leading: imageUrl != null
-                                ? Image.network(imageUrl, width: 60, fit: BoxFit.cover)
+                                ? ClipRRect(
+                                    borderRadius: BorderRadius.circular(8), // Add rounded corners for a modern look
+                                    child: SizedBox(
+                                      height: 40,
+                                      width: 40, // Constrain the size to fit well in the ListTile
+                                      child: CachedNetworkImage(
+                                        imageUrl: imageUrl,
+                                        fit: BoxFit.cover,
+                                        placeholder: (context, url) => const Center(
+                                          child: CircularProgressIndicator(strokeWidth: 2), 
+                                        ),
+                                        errorWidget: (context, url, error) => const Center(
+                                          child: Icon(Icons.broken_image, size: 24),
+                                        ),
+                                      ),
+                                    ),
+                                  )
                                 : const Icon(Icons.announcement, size: 40),
                             title: Text(title),
                             subtitle: Column(

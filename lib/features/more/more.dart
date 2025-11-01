@@ -1,4 +1,3 @@
-// File: lib/features/more/more_page.dart
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -15,8 +14,6 @@ class MorePage extends StatefulWidget {
 }
 
 class _MorePageState extends State<MorePage> {
-  
-  // NOTE: _getCurrentUserRole() is now safely removed.
 
   Future<void> _openFamily() async {
     // This function remains largely the same as it's called by an onTap event.
@@ -62,6 +59,8 @@ class _MorePageState extends State<MorePage> {
 
     final isAdmin = ['admin', 'supervisor', 'leader', 'owner'].contains(role);
     final isNurseryStaff = ['nursery_staff', 'owner'].contains(role);
+    // NEW: Check if the user is an owner
+    final isOwner = role == 'owner';
 
     final List<Map<String, dynamic>> moreItems = [
       {
@@ -102,6 +101,11 @@ class _MorePageState extends State<MorePage> {
         'title': "key_196i".tr(),
         'onTap': () => context.push('/more/faq'),
       },
+      if (isOwner)
+        {
+          'title': "key_admin_role_management_title".tr(),
+          'onTap': () => context.push('/more/role-management'),
+        },
     ];
 
     return Scaffold(

@@ -199,6 +199,7 @@ class _EventQueries {
         profiles {
           display_name
           email
+          photo_url
         }
       }
     }
@@ -211,6 +212,7 @@ class _EventQueries {
         profiles {
           display_name
           email
+          photo_url
         }
       }
     }
@@ -260,6 +262,7 @@ class _EventQueries {
         profile {
           display_name
           email
+          photo_url
         }
       }
     }

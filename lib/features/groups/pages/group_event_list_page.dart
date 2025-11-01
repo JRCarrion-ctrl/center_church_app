@@ -1,4 +1,5 @@
 // File: lib/features/groups/pages/group_event_list_page.dart
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:ccf_app/core/time_service.dart';
 import 'package:go_router/go_router.dart';
@@ -195,12 +196,24 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
       child: ListTile(
         onTap: () => context.push('/group-event/${e.id}', extra: e),
         leading: (e.imageUrl != null && e.imageUrl!.isNotEmpty)
-            ? Image.network(
-                e.imageUrl!,
-                width: 48,
-                height: 48,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => const Icon(Icons.broken_image),
+            ? ClipRRect( // <-- WRAP in ClipRRect
+                borderRadius: BorderRadius.circular(8), // <-- Add rounded corners
+                child: CachedNetworkImage(
+                    imageUrl: e.imageUrl!,
+                    width: 48,
+                    height: 48,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(child: CircularProgressIndicator())
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox(
+                      width: 48,
+                      height: 48,
+                      child: Center(child: Icon(Icons.broken_image))
+                    ),
+                ),
               )
             : const Icon(Icons.event, size: 40),
         title: Row(

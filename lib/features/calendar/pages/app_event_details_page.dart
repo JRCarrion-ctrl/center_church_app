@@ -4,6 +4,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/app_state.dart';
@@ -142,10 +143,15 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
           if (e.imageUrl != null)
             ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                e.imageUrl!,
-                gaplessPlayback: true,
+              child: CachedNetworkImage(
+                imageUrl: e.imageUrl!,
                 fit: BoxFit.cover,
+                placeholder: (context, url) => const SizedBox(
+                  child: Center(child: CircularProgressIndicator())
+                ),
+                errorWidget: (context, url, error) => const SizedBox(
+                  child: Center(child: Icon(Icons.broken_image, size: 100))
+                ),
               ),
             ),
           const SizedBox(height: 16),
@@ -206,9 +212,17 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
             Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
             ..._rsvps.map((rsvp) {
-              final profile = rsvp['profiles'] ?? {};
+              final profile = rsvp['profile'] ?? {};
+              final photoUrl = profile['photo_url'];
               return ListTile(
-                leading: const Icon(Icons.person),
+                leading: CircleAvatar(
+                  backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+                      ? CachedNetworkImageProvider(photoUrl)
+                      : null,
+                  child: (photoUrl == null || photoUrl.isEmpty)
+                      ? const Icon(Icons.person) // Fallback icon
+                      : null,
+                ),
                 title: Text(profile['display_name'] ?? 'Unknown'),
                 subtitle: Text(profile['email'] ?? ''),
                 trailing: Text('x${rsvp['attending_count']}'),

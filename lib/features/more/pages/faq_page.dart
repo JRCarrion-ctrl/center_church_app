@@ -31,11 +31,6 @@ class FAQPage extends StatelessWidget {
           "faq_a5".tr(),
     ),
     FAQItem(
-      question: "faq_q6".tr(),
-      answer:
-          "faq_a6".tr(),
-    ),
-    FAQItem(
       question: "faq_q7".tr(),
       answer:
           "faq_a7".tr(),
