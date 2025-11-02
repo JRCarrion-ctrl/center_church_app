@@ -62,6 +62,13 @@
 		<string>This app uses Bluetooth to connect to nearby devices.</string>
 		<key>NSMotionUsageDescription</key>
 		<string>This app may use motion data to enhance functionality.</string>
+		<key>io.flutter.embedded_views_preview</key>
+		<true/>
+		<key>NSAppTransportSecurity</key>
+		<dict>
+  			<key>NSAllowsArbitraryLoads</key>
+  			<true/>
+		</dict>
 		<key>UIApplicationSupportsIndirectInputEvents</key>
 		<true/>
 		<key>UIBackgroundModes</key>

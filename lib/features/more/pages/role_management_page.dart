@@ -224,7 +224,7 @@ class _RoleManagementPageState extends State<RoleManagementPage> {
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Role updated to $newRole for ${user.displayName}')),
+          SnackBar(content: Text("key_role_updated".tr(args: [newRole, user.displayName]))),
         );
       }
     } catch (e) {
@@ -244,7 +244,7 @@ class _RoleManagementPageState extends State<RoleManagementPage> {
 
     if (isSelf) {
        ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You cannot change your own role.')),
+        SnackBar(content: Text('key_no_change_role'.tr())),
       );
       return;
     }

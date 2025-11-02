@@ -600,9 +600,12 @@
   "key_posted_on": "Publicado el {}",
   "key_posted_by_on": "Publicado por {} el {}",
   "key_change_role": "Cambia Role",
+  "key_change_role_prompt": "Cambia Role",
   "key_cancel": "Cancelar",
   "key_admin_role_management_title": "Manejar Roles",
   "key_search_users": "Buscar Usuarios",
   "key_admin_unauthorized_message": "Inauthorizado",
-  "key_search_name_email": "Nombre o Correo Electrónico"
+  "key_search_name_email": "Nombre o Correo Electrónico",
+  "key_no_change_role": "You cannot change your own role.",
+  "key_role_updated": "Role updated to {} for {}"
 }

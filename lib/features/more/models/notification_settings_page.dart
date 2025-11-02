@@ -147,11 +147,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
 
-    await OneSignal.User.addTags({
-        groupId: muted ? 'muted' : 'active',
-    });
-
-    // Upsert the (user_id, group_id) row and set muted
     const m = r'''
       mutation UpsertNotificationSetting($user_id: String!, $group_id: uuid!, $muted: Boolean!) {
         update_group_memberships(where: {group_id: {_eq: $group_id}, user_id: {_eq: $user_id}}, _set: {is_muted: $muted}) {
@@ -174,12 +169,6 @@ class _NotificationSettingsPageState extends State<NotificationSettingsPage> {
       );
       if (res.hasException) {
         debugPrint('Upsert setting error: ${res.exception}');
-      }
-
-      if (muted) {
-        await OneSignal.User.addTags({groupId: 'muted'});
-      } else {
-        await OneSignal.User.addTags({groupId: 'active'});
       }
 
       if (!mounted) return;

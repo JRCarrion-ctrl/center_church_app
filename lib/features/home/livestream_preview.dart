@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'package:ccf_app/features/media/media_service.dart';
-import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+// REMOVED: import 'package:youtube_player_flutter/youtube_player_flutter.dart';
+import 'package:omni_video_player/omni_video_player.dart'; // NEW: Omni Player Import
+
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 
@@ -15,9 +17,12 @@ class LivestreamPreview extends StatefulWidget {
 }
 
 class _LivestreamPreviewState extends State<LivestreamPreview> {
-  // Made nullable so we can check for initial load in didChangeDependencies
-  Future<String?>? _videoIdFuture; 
-  YoutubePlayerController? _ytController;
+  // Now stores the full video URL
+  Future<String?>? _videoUrlFuture; 
+  // Changed to the playback controller type from the omni_video_player example
+  OmniPlaybackController? _omniPlaybackController;
+  // This state variable is no longer needed as the player updates via configuration changes
+  // String? _currentVideoId; 
 
   GraphQLClient? _gql;
 
@@ -32,34 +37,37 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
     
     _gql ??= GraphQLProvider.of(context).value;
 
-    _videoIdFuture ??= _loadVideoId();
+    // Load the video URL, not just the ID
+    _videoUrlFuture ??= _loadVideoUrl();
   }
 
-  // --- _loadUserRole() is DELETED as the role is read from AppState ---
-
-  Future<String?> _loadVideoId() async {
-    // Accessing context in an async function called after didChangeDependencies is safe
+  // Updated to return the full URL string from the API
+  Future<String?> _loadVideoUrl() async {
     try {
       final client = GraphQLProvider.of(context).value;
       final data = await MediaService(client).getLatestLivestream();
       final url = data['url'];
-      return YoutubePlayer.convertUrlToId(url ?? '');
+      // Simply return the URL, no conversion to YouTube ID is needed
+      return url;
     } catch (e) {
       debugPrint('Error loading livestream: $e');
-      return null;
+      return null; // Return null on error
     }
   }
 
+  // The previous _updateController method is no longer necessary. 
+  // The OmniVideoPlayer updates its source when the 'options' configuration changes.
+
   @override
   void dispose() {
-    _ytController?.dispose();
+    // Dispose the captured playback controller
+    _omniPlaybackController?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Fallback if _videoIdFuture somehow isn't initialized (shouldn't happen with the fix)
-    if (_videoIdFuture == null) {
+    if (_videoUrlFuture == null) {
         return const SizedBox(
             height: 200,
             child: Center(child: CircularProgressIndicator()),
@@ -67,67 +75,147 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
     }
 
     return FutureBuilder<String?>(
-      future: _videoIdFuture,
+      future: _videoUrlFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
         }
-
-        final videoId = snapshot.data;
-        if (videoId == null || videoId.isEmpty) {
-          return Center(child: Text("key_179".tr()));
+        // The result is the full video URL
+        final videoUrl = snapshot.data;
+        if (videoUrl == null || videoUrl.isEmpty) {
+          return SizedBox(
+            height: 200,
+            child: Center(
+              child: Text(
+                "key_181".tr(), // "Could not load livestream."
+                style: const TextStyle(color: Colors.grey),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          );
         }
 
-        return YoutubePlayerBuilder(
-          player: YoutubePlayer(
-            controller: YoutubePlayerController(
-              initialVideoId: videoId,
-              flags: const YoutubePlayerFlags(autoPlay: false),
-            ),
-            showVideoProgressIndicator: true,
-            width: double.infinity,
-          ),
-          builder: (context, player) {
-            // The rest of your layout goes here, using the 'player' widget
-            return Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        // We use an AspectRatio to constrain the player to the standard 16:9 ratio
+        // since the original YoutubePlayer was a child of YoutubePlayerBuilder.
+        return Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    // Your Row with Title and Refresh Button
-                    Row(
-                      children: [
-                        Text(
-                          "key_179a".tr(),
-                          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // --- Embed the player widget created above ---
-                    player, 
-                    const SizedBox(height: 8),
-                    // Your "Watch on Youtube" TextButton
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton.icon(
-                        onPressed: () async {
-                          final url = Uri.parse('https://www.youtube.com/@centerchurch8898/streams');
-                          if (await canLaunchUrl(url)) {
-                            await launchUrl(url, mode: LaunchMode.externalApplication);
-                          }
-                        },
-                        icon: const Icon(Icons.open_in_new),
-                        label: Text("key_180".tr()),
-                      ),
+                    Text(
+                      "key_179a".tr(),
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
-              ),
-            );
-          },
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: OmniVideoPlayer(
+                    callbacks: VideoPlayerCallbacks(
+                      onControllerCreated: (controller) {
+                        _omniPlaybackController = controller;
+                      },
+                      onFullScreenToggled: (isFullScreen) {},
+                      onOverlayControlsVisibilityChanged: (areVisible) {},
+                      onCenterControlsVisibilityChanged: (areVisible) {},
+                      onMuteToggled: (isMute) {},
+                      onSeekStart: (pos) {},
+                      onSeekEnd: (pos) {},
+                      onSeekRequest: (target) => true,
+                      onFinished: () {},
+                      onReplay: () {},
+                    ),
+                    options: VideoPlayerConfiguration(
+                      videoSourceConfiguration: VideoSourceConfiguration.youtube(
+                        videoUrl: Uri.parse(videoUrl),
+                        preferredQualities: [
+                          OmniVideoQuality.high720,
+                          OmniVideoQuality.low144,
+                        ],
+                        availableQualities: [
+                          OmniVideoQuality.high1080,
+                          OmniVideoQuality.high720,
+                          OmniVideoQuality.medium480,
+                          OmniVideoQuality.medium360,
+                          OmniVideoQuality.low144,
+                        ],
+                        enableYoutubeWebViewFallback: true,
+                        forceYoutubeWebViewOnly: false,
+                      ).copyWith(
+                        autoPlay: false,
+                        initialPosition: Duration.zero,
+                        initialVolume: 1.0,
+                        initialPlaybackSpeed: 1.0,
+                        availablePlaybackSpeed: [0.5, 1.0, 1.25, 1.5, 2.0],
+                        autoMuteOnStart: false,
+                        allowSeeking: true,
+                        synchronizeMuteAcrossPlayers: true,
+                        timeoutDuration: const Duration(seconds: 30),
+                      ),
+                      playerTheme: OmniVideoPlayerThemeData().copyWith(
+                        icons: VideoPlayerIconTheme().copyWith(
+                          error: Icons.warning,
+                          playbackSpeedButton: Icons.speed,
+                        ),
+                        overlays: VideoPlayerOverlayTheme().copyWith(
+                          backgroundColor: Colors.white,
+                          alpha: 25,
+                        ),
+                      ),
+                      playerUIVisibilityOptions: PlayerUIVisibilityOptions().copyWith(
+                        showSeekBar: true,
+                        showCurrentTime: true,
+                        showDurationTime: true,
+                        showRemainingTime: true,
+                        showLiveIndicator: true,
+                        showLoadingWidget: true,
+                        showErrorPlaceholder: true,
+                        showReplayButton: true,
+                        showThumbnailAtStart: true,
+                        showVideoBottomControlsBar: true,
+                        showBottomControlsBarOnEndedFullscreen: true,
+                        showFullScreenButton: false,
+                        showSwitchVideoQuality: true,
+                        showSwitchWhenOnlyAuto: true,
+                        showPlaybackSpeedButton: true,
+                        showMuteUnMuteButton: true,
+                        showPlayPauseReplayButton: true,
+                        useSafeAreaForBottomControls: true,
+                        showGradientBottomControl: true,
+                        enableForwardGesture: true,
+                        enableBackwardGesture: true,
+                        enableExitFullscreenOnVerticalSwipe: true,
+                        enableOrientationLock: true,
+                        controlsPersistenceDuration: const Duration(seconds: 3),
+                        customAspectRatioNormal: null,
+                        customAspectRatioFullScreen: null,
+                        fullscreenOrientation: null,
+                        showBottomControlsBarOnPause: false,
+                        alwaysShowBottomControlsBar: false,
+                      ),
+                    ),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final url = Uri.parse('https://www.youtube.com/@centerchurch8898/streams');
+                      if (await canLaunchUrl(url)) {
+                        await launchUrl(url, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    icon: const Icon(Icons.open_in_new),
+                    label: Text("key_180".tr()), // "Watch on Youtube"
+                  ),
+                ),
+              ],
+            ),
+          ),
         );
       },
     );

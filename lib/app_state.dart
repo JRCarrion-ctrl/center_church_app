@@ -401,13 +401,6 @@ class AppState extends ChangeNotifier {
       if (role != null && role.isNotEmpty) {
         await OneSignal.User.addTags({'role': role});
       }
-
-      if (_userGroups.isNotEmpty) {
-        await OneSignal.User.addTags({
-          for (final g in _userGroups) g.id: g.isMuted ? 'muted' : 'active',
-        });
-      }
-      _logger.i('OneSignal tags updated for user groups');
     } catch (e, st) {
       _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);
     }
