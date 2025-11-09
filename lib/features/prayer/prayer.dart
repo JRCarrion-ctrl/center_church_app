@@ -359,7 +359,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       if (!shouldShowName) {
                         subtitleText = "key_posted_on".tr(args: [createdAt]); 
                       } else if (!includeName && canClose) {
-                        subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
+                        subtitleText = "key_posted_on".tr(args: [createdAt]);
                       } else {
                         subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
                       }
