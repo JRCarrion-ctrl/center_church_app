@@ -228,11 +228,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
       (AppEvent e) => Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
-              onTap: !isLoggedIn
-                  ? () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("key_037".tr())),
-                      )
-                  : () => context.push('/app-event/${e.id}', extra: e),
+              onTap: () => context.push('/calendar/app-event/${e.id}', extra: e),
               // Use the passed 'canManageApp' boolean
               trailing: canManageApp
                   ? PopupMenuButton<String>(
@@ -251,16 +247,20 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                     )
                   : null,
               leading: e.imageUrl != null
-                  ? CachedNetworkImage(
-                      imageUrl: e.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const SizedBox(
-                        child: Center(child: CircularProgressIndicator())
+                  ? SizedBox(
+                      width: 40,
+                      height: 40,
+                      child: CachedNetworkImage(
+                          imageUrl: e.imageUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const Center(
+                              child: CircularProgressIndicator(strokeWidth: 2.0)
+                          ),
+                          errorWidget: (context, url, error) => const Center(
+                              child: Icon(Icons.broken_image, size: 24)
+                          ),
                       ),
-                      errorWidget: (context, url, error) => const SizedBox(
-                        child: Center(child: Icon(Icons.broken_image, size: 100))
-                      ),
-                  )
+                    )
                   : const Icon(Icons.announcement, size: 40),
               title: Text(e.title),
               subtitle: Text(
@@ -274,14 +274,18 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
         child: ListTile(
           onTap: () => context.push('/group-event/${e.id}', extra: e),
           leading: e.imageUrl != null
-              ? CachedNetworkImage(
-                  imageUrl: e.imageUrl!,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => const SizedBox(
-                    child: Center(child: CircularProgressIndicator())
-                  ),
-                  errorWidget: (context, url, error) => const SizedBox(
-                    child: Center(child: Icon(Icons.broken_image, size: 100))
+              ? SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CachedNetworkImage(
+                      imageUrl: e.imageUrl!,
+                      fit: BoxFit.cover,
+                      placeholder: (context, url) => const Center(
+                          child: CircularProgressIndicator(strokeWidth: 2.0)
+                      ),
+                      errorWidget: (context, url, error) => const Center(
+                          child: Icon(Icons.broken_image, size: 24)
+                      ),
                   ),
               )
               : const Icon(Icons.event, size: 40),

@@ -184,7 +184,7 @@ class _NurseryStaffPageState extends State<NurseryStaffPage> {
       appBar: AppBar(title: Text(tr('key_294'))),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
-          final res = await context.push('/nursery/qr_checkin');
+          final res = await context.push('/more/nursery/qr_checkin');
           if (!context.mounted) return;
 
           if (res != null) { 

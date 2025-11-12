@@ -174,6 +174,67 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     }
   }
 
+  static const mDelete = r'''
+    mutation DeleteStudy($id: uuid!) {
+      delete_bible_studies_by_pk(id: $id) { id }
+    }
+  ''';
+
+  Future<void> _delete() async {
+    final studyId = widget.study?['id'];
+    if (studyId == null) return; // Cannot delete a non-existent study
+
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text("key_073".tr()), // "Confirm Deletion"
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text("key_055".tr()), // "Cancel"
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: Text("key_039".tr()), // "Delete"
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => isSaving = true);
+
+    if (!mounted) return;
+    final client = graphql.GraphQLProvider.of(context).value;
+
+    try {
+      final res = await client.mutate(
+        graphql.MutationOptions(
+          document: graphql.gql(mDelete),
+          variables: {'id': studyId},
+        ),
+      );
+
+      if (res.hasException) throw res.exception!;
+      if (!mounted) return;
+
+      // Deletion successful, navigate back
+      Navigator.pop(context, true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_024i".tr())), // "Bible Study deleted."
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_182".tr())), // "Failed to delete Bible Study."
+      );
+    } finally {
+      if (mounted) setState(() => isSaving = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.study != null;
@@ -181,6 +242,14 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     return Scaffold(
       appBar: AppBar(
         title: Text(isEditing ? "key_264a".tr() : "key_264".tr()),
+        actions: [
+          if (isEditing)
+            IconButton(
+              icon: const Icon(Icons.delete),
+              tooltip: "key_039".tr(),
+              onPressed: isSaving ? null : _delete,
+            ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(16),

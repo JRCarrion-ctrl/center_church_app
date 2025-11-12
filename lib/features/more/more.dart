@@ -78,7 +78,7 @@ class _MorePageState extends State<MorePage> {
       if (isNurseryStaff)
         {
           'title': "key_196d".tr(),
-          'onTap': () => context.push('/nursery'),
+          'onTap': () => context.push('/more/nursery'),
         },
       {
         'title': "key_196e".tr(),

@@ -81,7 +81,7 @@ final List<GoRoute> miscRoutes = [
     ),
   ),
   GoRoute(
-    path: '/app-event/:id',
+    path: '/calendar/app-event/:id',
     pageBuilder: (context, state) {
       final event = state.extra as AppEvent;
       return buildSlidePage(
@@ -150,11 +150,11 @@ final List<GoRoute> miscRoutes = [
     },
   ),
   GoRoute(
-    path: '/nursery',
+    path: '/more/nursery',
     pageBuilder: (_, _) => buildSlidePage(const NurseryStaffPage(), direction: SlideDirection.right),
   ),
   GoRoute(
-    path: '/nursery/qr_checkin',
+    path: '/more/nursery/qr_checkin',
     pageBuilder: (_, _) => buildSlidePage(const QRCheckinScannerPage(), direction: SlideDirection.right),
   ),
   GoRoute(
@@ -183,7 +183,7 @@ final List<GoRoute> miscRoutes = [
     },
   ),
   GoRoute(
-    path: '/notes_viewer',
+    path: '/more/study/notes_viewer',
     pageBuilder: (context, state) {
       final url = state.extra as String;
       return buildSlidePage(
@@ -200,7 +200,7 @@ final List<GoRoute> miscRoutes = [
     ),
   ),
   GoRoute(
-    path: '/child-staff/:childId',
+    path: '/more/nursery/child-staff/:childId',
     name: 'child-staff',
     pageBuilder: (context, state) {
       final childId = state.pathParameters['childId']!;
@@ -211,28 +211,28 @@ final List<GoRoute> miscRoutes = [
     },
   ),
   GoRoute(
-    path: '/data-and-delete',
+    path: '/more/settings/data-and-delete',
     pageBuilder: (context, state) => buildSlidePage(
       const DataAndDeleteAccountPage(),
       direction: SlideDirection.right,
     ),
   ),
   GoRoute(
-    path: '/contact-support',
+    path: '/more/settings/contact-support',
     pageBuilder: (context, state) => buildSlidePage(
       const ContactSupportPage(),
       direction: SlideDirection.right,
     ),
   ),
   GoRoute(
-    path: '/settings/notifications',
+    path: '/more/settings/notifications',
     pageBuilder: (context, state) => buildSlidePage(
       const NotificationSettingsPage(),
       direction: SlideDirection.right,
     ),
   ),
   GoRoute(
-    path: '/media-settings',
+    path: '/more/settings/media-settings',
     pageBuilder: (context, state) => buildSlidePage(
       const MediaSettingsPage(),
       direction: SlideDirection.right,

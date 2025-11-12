@@ -10,7 +10,6 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'package:ccf_app/core/graph_provider.dart';
 import '../../../app_state.dart';
-import '../../../shared/user_roles.dart';
 import '../models/calendar_settings_modal.dart';
 
 // --- Helper Widgets for Settings UI ---
@@ -420,9 +419,9 @@ class _SettingsPageState extends State<SettingsPage> {
             title: "set_1".tr(), 
             children: [
               _TappableTile(title: "set_1a".tr(), onTap: () => _LanguageSelectorModal.show(context)),
-              _TappableTile(title: "set_1b".tr(), onTap: () => context.push('/settings/notifications')),
+              _TappableTile(title: "set_1b".tr(), onTap: () => context.push('/more/settings/notifications')),
               _TappableTile(title: "set_1c".tr(), onTap: () => CalendarSettingsModal.show(context)),
-              _TappableTile(title: "set_1d".tr(), onTap: () => context.push('/data-and-delete')),
+              _TappableTile(title: "set_1d".tr(), onTap: () => context.push('/more/settings/data-and-delete')),
             ],
           ),
 
@@ -432,7 +431,7 @@ class _SettingsPageState extends State<SettingsPage> {
             children: [
               _DisabledTile(title: "set_2a".tr(args: [_appVersion])), 
               _TappableTile(title: "set_2b".tr(), onTap: _checkForUpdates),
-              _TappableTile(title: "set_2c".tr(), onTap: () => context.push('/contact-support')),
+              _TappableTile(title: "set_2c".tr(), onTap: () => context.push('/more/settings/contact-support')),
               _TappableTile(title: "set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
               _TappableTile(title: "set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
             ],
@@ -476,18 +475,9 @@ class _SettingsPageState extends State<SettingsPage> {
                 value: _autoRefresh,
                 onChanged: _setAutoRefresh,
               ),
-              _TappableTile(title: "set_6b".tr(), onTap: () => context.push('/media-settings')),
+              _TappableTile(title: "set_6b".tr(), onTap: () => context.push('/more/settings/media-settings')),
             ],
           ),
-
-          // Group 7: Debug (Conditional)
-          if (appState.userRole == UserRole.owner)
-            _SettingsCard(
-              title: "set_7".tr(), 
-              children: [
-              _TappableTile(title: "set_7a".tr(), onTap: () => context.push('/debug-panel')),
-              ],
-            ),
         ],
       ),
     );

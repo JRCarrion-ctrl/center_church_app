@@ -60,10 +60,9 @@ final List<GoRoute> groupRoutes = [
   // I will update it, assuming the call site remains context.push('/groups/:id/members')
   // but note that nesting it under /info is a cleaner architectural approach.
   GoRoute(
-    path: '/groups/:id/members',
+    path: '/groups/:id/info/members',
     pageBuilder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      // FIX: Extract the isAdmin flag passed from GroupInfoPage via the extra parameter.
       final extra = state.extra as Map<String, dynamic>?; 
       final isAdmin = extra?['isAdmin'] as bool? ?? false;
       
@@ -84,7 +83,7 @@ final List<GoRoute> groupRoutes = [
     },
   ),
   GoRoute(
-    path: '/groups/:id/announcements',
+    path: '/groups/:id/info/announcements',
     pageBuilder: (context, state) { 
       final groupId = state.pathParameters['id']!;
       return buildSlidePage(
@@ -94,7 +93,7 @@ final List<GoRoute> groupRoutes = [
     },
   ),
   GoRoute(
-    path: '/groups/:id/events',
+    path: '/groups/:id/info/events',
     pageBuilder: (context, state) {
       final groupId = state.pathParameters['id']!;
       return buildSlidePage(
@@ -104,7 +103,7 @@ final List<GoRoute> groupRoutes = [
     },
   ),
   GoRoute(
-    path: '/groups/:id/media',
+    path: '/groups/:id/info/media',
     pageBuilder: (context, state) { 
       final groupId = state.pathParameters['id']!;
       return buildSlidePage(

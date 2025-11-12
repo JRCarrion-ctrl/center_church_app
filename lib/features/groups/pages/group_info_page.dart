@@ -356,7 +356,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           if (widget.isAdmin)
             TextButton.icon(
               label: Text("key_098".tr()),
-              onPressed: () => context.push('/groups/${widget.pageData.group.id}/events'),
+              onPressed: () => context.push('/groups/${widget.pageData.group.id}/info/events'),
               icon: const Icon(Icons.event),
             ),
         ],
@@ -370,7 +370,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () => context.push('/groups/${widget.pageData.group.id}/events'),
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/info/events'),
             child: Text("See All".tr()),
           ),
         ),
@@ -386,7 +386,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           if (widget.isAdmin)
             TextButton.icon(
               label: Text("key_101".tr()),
-              onPressed: () => context.push('/groups/${widget.pageData.group.id}/announcements'),
+              onPressed: () => context.push('/groups/${widget.pageData.group.id}/info/announcements'),
               icon: const Icon(Icons.campaign),
             ),
         ],
@@ -398,7 +398,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () => context.push('/groups/${widget.pageData.group.id}/announcements'),
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/info/announcements'),
             child: Text("See All".tr()),
           ),
         ),
@@ -500,7 +500,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         Align(
           alignment: Alignment.centerRight,
           child: TextButton(
-            onPressed: () => context.push('/groups/${widget.pageData.group.id}/media'),
+            onPressed: () => context.push('/groups/${widget.pageData.group.id}/info/media'),
             child: Text("key_104".tr()),
           ),
         ),
@@ -574,7 +574,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
           alignment: Alignment.centerRight,
           child: TextButton(
             onPressed: () => context.push(
-              '/groups/${widget.pageData.group.id}/members',
+              '/groups/${widget.pageData.group.id}/info/members',
               extra: {'isAdmin': widget.isAdmin},
             ),
             child: Text("key_107".tr()),

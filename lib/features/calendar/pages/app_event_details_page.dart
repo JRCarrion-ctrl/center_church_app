@@ -87,7 +87,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_028".tr())),
+        SnackBar(content: Text("key_please_log_in".tr())),
       );
     } finally {
       if (mounted) setState(() => _saving = false);

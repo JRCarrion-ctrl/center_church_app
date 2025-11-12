@@ -222,7 +222,7 @@ class _GroupsPageState extends State<GroupsPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "You must log in to view and manage groups.".tr(),
+                  "key_058b".tr(),
                   textAlign: TextAlign.center,
                   style: TextStyle(color: Colors.grey),
                 ),

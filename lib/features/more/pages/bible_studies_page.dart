@@ -275,7 +275,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
                               if (notesUrl.isNotEmpty)
                                 TextButton(
                                   // Navigating to a separate notes viewer page
-                                  onPressed: () => context.push('/notes_viewer', extra: notesUrl),
+                                  onPressed: () => context.push('/more/study/notes_viewer', extra: notesUrl),
                                   child: Text("key_247".tr()), // "Notes"
                                 ),
                               if (canCreate)

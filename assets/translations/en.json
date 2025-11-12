@@ -607,5 +607,6 @@
   "key_admin_unauthorized_message": "Unauthorized",
   "key_search_name_email": "Name or Email",
   "key_no_change_role": "You cannot change your own role.",
-  "key_role_updated": "Role updated to {} for {}"
+  "key_role_updated": "Role updated to {} for {}",
+  "key_please_log_in": "Please log in to RSVP"
 }
