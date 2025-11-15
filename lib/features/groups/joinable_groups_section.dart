@@ -124,6 +124,7 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
             ),
             itemBuilder: (context, index) {
               final group = filteredGroups[index];
+              final textColor = Theme.of(context).colorScheme.onSurface;
               return GestureDetector(
                 onTap: () => showGroupJoinModal(context, group.id),
                 child: Hero(
@@ -158,7 +159,7 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
                               padding: const EdgeInsets.only(top: 6),
                               child: Text(
                                 group.description!,
-                                style: const TextStyle(fontSize: 12, color: Colors.black54),
+                                style: TextStyle(fontSize: 12, color: textColor),
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 textAlign: TextAlign.center,
