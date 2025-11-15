@@ -225,7 +225,7 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canCreate = userRole == 'owner';
+    final canCreate = userRole == 'owner' || userRole == 'group_admin';
 
     return Scaffold(
       appBar: AppBar(

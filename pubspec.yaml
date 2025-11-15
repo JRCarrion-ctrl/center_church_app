@@ -14,25 +14,25 @@ dependencies:
   cupertino_icons: ^1.0.8
   table_calendar: ^3.2.0
   go_router: ^15.1.3
-  provider: ^6.1.5
+  provider: ^6.1.5+1
   app_links: ^6.4.0
-  logger: ^2.6.0
-  http: ^1.4.0
-  url_launcher: ^6.2.5
+  logger: ^2.6.2
+  http: ^1.6.0
+  url_launcher: ^6.3.2
   shared_preferences: ^2.2.2
   intl: ^0.20.0
-  uuid: ^4.5.1
-  file_picker: ^10.2.0
-  image_picker: ^1.1.2
+  uuid: ^4.5.2
+  file_picker: ^10.3.6
+  image_picker: ^1.2.1
   path: ^1.9.1
   path_provider: ^2.1.5
-  youtube_player_flutter: ^9.1.1
-  omni_video_player: ^3.2.1
+  youtube_player_flutter: ^9.1.3
+  omni_video_player: ^3.3.5
   emoji_picker_flutter: ^4.3.0
   flutter_image_compress: ^2.4.0
   cached_network_image: ^3.4.1
   sqflite: ^2.4.2
-  share_plus: ^11.0.0
+  share_plus: ^11.1.0
   image_gallery_saver_plus: ^4.0.1
   mime: ^2.0.0
   add_2_calendar: ^3.0.1
@@ -41,20 +41,20 @@ dependencies:
   flutter_link_previewer: ^3.2.2
   flutter_launcher_icons: ^0.14.4
   flutter_native_timezone_latest: ^1.0.0
-  mobile_scanner: ^7.0.1
-  dio: ^5.8.0+1
+  mobile_scanner: ^7.1.3
+  dio: ^5.9.0
   open_filex: ^4.7.0
   syncfusion_flutter_pdfviewer: ^30.1.39
   webview_flutter: ^4.13.0
   package_info_plus: ^9.0.0
   onesignal_flutter: ^5.3.4
   permission_handler: ^12.0.1
-  easy_localization: ^3.0.7+1
+  easy_localization: ^3.0.8
   flutter_localizations:
     sdk: flutter
-  connectivity_plus: ^6.1.4
-  graphql_flutter: ^5.2.0
-  gql: ^1.0.1-alpha+1730759315362
+  connectivity_plus: ^6.1.5
+  graphql_flutter: ^5.2.1
+  gql: ^1.0.1
   flutter_secure_storage: ^9.2.4
   jwt_decoder: ^2.0.1
   font_awesome_flutter: ^10.12.0
@@ -67,15 +67,11 @@ dev_dependencies:
 
 flutter_native_splash:
   color: "#FFFFFF"
-  image: assets/logo_light.PNG
   android: true
   ios: true
   web: false
   android_12:
-    image: assets/logo_light.PNG
     color: "#FFFFFF"
-    icon_background_color: "#FFFFFF"
-  ios_content_mode: "scaleAspectFit"
 
 flutter:
   uses-material-design: true

@@ -324,6 +324,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
   Widget _buildGroupEvents(List<Map<String, dynamic>> events) {
     // 1. FILTER THE EVENTS using 'event_date'
     final now = DateTime.now();
+    final today =DateTime.utc(now.year, now.month, now.day);
     final upcomingEvents = events.where((event) {
       // Use the 'event_date' key
       final eventDateString = event['event_date'];
@@ -340,7 +341,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
         // Using .isAfter(now) means an event that started in the past 
         // but hasn't ended might still be excluded if 'event_date' is the START time.
         // If 'event_date' is the start time, this strictly shows future events.
-        return eventTime.isAfter(now);
+        return eventTime.isAfter(today);
       } catch (e) {
         // Handle parsing errors
         debugPrint('Error parsing event date: $e for event: ${event['title']}');

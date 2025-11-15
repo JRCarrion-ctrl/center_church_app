@@ -129,7 +129,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
                       onFinished: () {},
                       onReplay: () {},
                     ),
-                    options: VideoPlayerConfiguration(
+                    configuration: VideoPlayerConfiguration(
                       videoSourceConfiguration: VideoSourceConfiguration.youtube(
                         videoUrl: Uri.parse(videoUrl),
                         preferredQualities: [

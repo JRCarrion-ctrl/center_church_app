@@ -57,7 +57,7 @@ class _MorePageState extends State<MorePage> {
     final appState = context.watch<AppState>();
     final role = appState.role ?? 'member'; // Fallback to 'member' if null
 
-    final isAdmin = ['admin', 'supervisor', 'leader', 'owner'].contains(role);
+    final isAdmin = ['group_admin', 'owner'].contains(role);
     final isNurseryStaff = ['nursery_staff', 'owner'].contains(role);
     // NEW: Check if the user is an owner
     final isOwner = role == 'owner';
