@@ -36,11 +36,6 @@ class HowToUsePage extends StatelessWidget {
           "how_a6".tr(),
     ),
     HowToSection(
-      title: "how_q7".tr(),
-      content:
-          "how_a7".tr(),
-    ),
-    HowToSection(
       title: "how_q8".tr(),
       content:
           "how_a8".tr(),
