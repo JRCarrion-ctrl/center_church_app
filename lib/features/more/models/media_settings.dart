@@ -15,11 +15,9 @@ class MediaSettingsPage extends StatefulWidget {
 
 class _MediaSettingsPageState extends State<MediaSettingsPage> {
   static const _imageKey = 'autoDownloadImages';
-  static const _videoKey = 'autoDownloadVideos';
   static const _wifiKey = 'mediaWifiOnly';
 
   bool _autoDownloadImages = true;
-  bool _autoDownloadVideos = false;
   bool _prefsLoaded = false;
   bool _clearingCache = false;
 
@@ -35,7 +33,6 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
     final appState = Provider.of<AppState>(context, listen: false);
     setState(() {
       _autoDownloadImages = prefs.getBool(_imageKey) ?? true;
-      _autoDownloadVideos = prefs.getBool(_videoKey) ?? false;
       appState.setWifiOnlyMediaDownload(prefs.getBool(_wifiKey) ?? true);
       _prefsLoaded = true;
     });
@@ -46,7 +43,6 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
     await prefs.setBool(key, value);
     setState(() {
       if (key == _imageKey) _autoDownloadImages = value;
-      if (key == _videoKey) _autoDownloadVideos = value;
     });
   }
 
@@ -98,11 +94,6 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
             title: Text("key_224".tr()),
             value: _autoDownloadImages,
             onChanged: _clearingCache ? null : (val) => _updatePreference(_imageKey, val),
-          ),
-          SwitchListTile(
-            title: Text("key_225".tr()),
-            value: _autoDownloadVideos,
-            onChanged: _clearingCache ? null : (val) => _updatePreference(_videoKey, val),
           ),
           SwitchListTile(
             title: Text("key_226".tr()),

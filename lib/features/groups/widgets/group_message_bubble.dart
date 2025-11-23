@@ -6,6 +6,12 @@ import '../models/group_message.dart';
 class GroupMessageBubble extends StatelessWidget {
   final GroupMessage message;
   final bool isMe;
+  
+  // --- ADD THESE TWO FIELDS ---
+  final bool showSenderName; 
+  final String? senderName; 
+  // ----------------------------
+
   final VoidCallback onLongPress;
   final Widget Function() contentBuilder;
   final String formattedTimestamp;
@@ -15,6 +21,12 @@ class GroupMessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isMe,
+    
+    // --- ADD TO CONSTRUCTOR ---
+    this.showSenderName = false,
+    this.senderName,
+    // --------------------------
+
     required this.onLongPress,
     required this.contentBuilder,
     required this.formattedTimestamp,
@@ -46,16 +58,16 @@ class GroupMessageBubble extends StatelessWidget {
     final showLargeEmoji = _isEmojiOnly(messageText);
 
     final backgroundColor = isMe
-        ? Color.fromARGB(255, 0, 122, 255)
+        ? const Color.fromARGB(255, 0, 122, 255)
         : (isDark
-            ? Color.fromARGB(255, 44, 44, 48)
-            : Color.fromARGB(255, 230, 230, 235));
+            ? const Color.fromARGB(255, 44, 44, 48)
+            : const Color.fromARGB(255, 230, 230, 235));
 
     final borderColor = isMe
-        ? Color.fromARGB(255, 0, 112, 230)
+        ? const Color.fromARGB(255, 0, 112, 230)
         : (isDark
-            ? Color.fromARGB(255, 70, 70, 75)
-            : Color.fromARGB(255, 210, 210, 215));
+            ? const Color.fromARGB(255, 70, 70, 75)
+            : const Color.fromARGB(255, 210, 210, 215));
 
     final textColor = isMe
         ? Colors.white
@@ -71,6 +83,21 @@ class GroupMessageBubble extends StatelessWidget {
             crossAxisAlignment:
                 isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
+              // --- ADD NAME WIDGET HERE ---
+              if (showSenderName && !isMe && senderName != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
+                  child: Text(
+                    senderName!, // Uses the passed name
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: isDark ? Colors.grey[400] : Colors.grey[700],
+                    ),
+                  ),
+                ),
+              // -----------------------------
+
               Stack(
                 clipBehavior: Clip.none,
                 children: [

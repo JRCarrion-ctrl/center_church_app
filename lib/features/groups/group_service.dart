@@ -344,17 +344,37 @@ class GroupService {
           where: {
             user_id: { _eq: $uid }
             status: { _eq: "pending" }
-            }
-        ) { group_id }
+          }
+        ) {
+          # You must fetch the relationship object, not just group_id
+          group {
+            id
+            name
+            description
+            photo_url
+            visibility
+            temporary
+            archived
+            created_at
+          }
+        }
       }
     ''';
     final res = await client.query(
-      QueryOptions(document: gql(q), variables: {'uid': userId}),
+      QueryOptions(
+        document: gql(q), 
+        variables: {'uid': userId},
+        fetchPolicy: FetchPolicy.networkOnly, // Good practice for invites to ensure they appear immediately
+      ),
     );
+    
     if (res.hasException) throw res.exception!;
+    
     final rows = (res.data?['group_invitations'] as List<dynamic>? ?? []);
+    
     return rows
-        .map((e) => e['groups'])
+        // Access 'group' (singular) because that matches the query structure above
+        .map((e) => e['group']) 
         .where((g) => g != null)
         .map<GroupModel>((g) => GroupModel.fromMap(Map<String, dynamic>.from(g)))
         .toList();

@@ -452,7 +452,6 @@ class _SettingsPageState extends State<SettingsPage> {
           _SettingsCard(
             title: "set_4".tr(), 
             children: [
-              _SwitchTile(title: "set_4a".tr(), value: appState.showCountdown, onChanged: appState.setShowCountdown),
               _SwitchTile(title: "set_4b".tr(), value: appState.showGroupAnnouncements, onChanged: appState.setShowGroupAnnouncements),
             ],
           ),

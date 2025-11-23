@@ -41,31 +41,28 @@ CustomTransitionPage<T> buildSlidePage<T>(
   Widget child, {
   SlideDirection direction = SlideDirection.right,
   Curve curve = Curves.easeInOut,
+  LocalKey? key, // <--- Add this parameter
 }) {
-  // 1. Calculate the reverse offset once
   final reverseOffset = _getReverseOffset(direction);
 
-  // 2. Forward Animation: Controls the page ENTERING the screen (from off-screen to 0)
   final forwardAnimation = Tween<Offset>(
     begin: _getOffset(direction),
     end: Offset.zero,
   ).chain(CurveTween(curve: curve));
 
-  // 3. Reverse Animation: Controls the page EXITING the screen (from 0 to reverse offset)
   final reverseTransition = Tween<Offset>(
     begin: Offset.zero,
     end: reverseOffset,
   ).chain(CurveTween(curve: curve));
 
   return CustomTransitionPage<T>(
-    key: ValueKey(child.hashCode),
+    // USE THE PASSED KEY. Fallback to child.hashCode only if null.
+    key: key ?? ValueKey(child.hashCode), 
     child: child,
     transitionsBuilder: (context, animation, secondaryAnimation, child) {
       return SlideTransition(
-        // The page being PUSHED (New page): Driven by 'animation'. Slides IN.
         position: animation.drive(forwardAnimation),
         child: SlideTransition(
-          // The page being PUSHED AWAY (Old page): Driven by 'secondaryAnimation'. Slides OUT.
           position: secondaryAnimation.drive(reverseTransition),
           child: child,
         ),

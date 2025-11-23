@@ -300,8 +300,7 @@ class _MessageListViewState extends State<MessageListView> {
       onRefresh: _handleRefresh,
       child: ListView.builder(
         controller: widget.scrollController,
-        // ✅ FIX: Apply conditional physics
-        physics: scrollPhysics, 
+        physics: scrollPhysics,
         padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
         reverse: true,
         itemCount: _displayList.length + (_hasMore ? 1 : 0),
@@ -315,7 +314,6 @@ class _MessageListViewState extends State<MessageListView> {
 
           final item = _displayList[index];
 
-          // ✅ FIX: Render either a date header or a message bubble
           if (item is String) {
             return Padding(
               padding: const EdgeInsets.symmetric(vertical: 16.0),
@@ -330,9 +328,41 @@ class _MessageListViewState extends State<MessageListView> {
           if (item is GroupMessage) {
             final message = item;
             final isMe = message.senderId == widget.userId;
+            
+            // --- LOGIC START: Determine if name should be shown ---
+            bool showName = false;
+            
+            if (!isMe) {
+              // Because list is reversed, index + 1 is the message "above" (older)
+              final isTopMessage = index + 1 >= _displayList.length;
+
+              if (isTopMessage) {
+                showName = true; // First message ever
+              } else {
+                final previousItem = _displayList[index + 1];
+                
+                if (previousItem is String) {
+                  showName = true; // Above is a date header
+                } else if (previousItem is GroupMessage) {
+                  // Only show if the previous sender was different
+                  if (previousItem.senderId != message.senderId) {
+                    showName = true;
+                  }
+                }
+              }
+            }
+            // --- LOGIC END ---
+
             return GroupMessageBubble(
               message: message,
               isMe: isMe,
+              
+              // --- PASS THE CALCULATED VALUES ---
+              showSenderName: showName,
+              // This matches the field in your GroupMessage model file
+              senderName: message.senderName ?? "Unknown", 
+              // ----------------------------------
+
               onLongPress: () => widget.onLongPress(message),
               contentBuilder: () => MessageContentView(message: message, isMe: isMe),
               formattedTimestamp: widget.formatTimestamp(message.createdAt),
@@ -340,7 +370,7 @@ class _MessageListViewState extends State<MessageListView> {
             );
           }
 
-          return const SizedBox.shrink(); // Should not happen
+          return const SizedBox.shrink();
         },
       ),
     );

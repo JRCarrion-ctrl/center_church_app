@@ -1,3 +1,4 @@
+// lib/routes/misc_routes.dart
 import 'package:ccf_app/features/home/models/group_announcements_page.dart';
 import 'package:ccf_app/features/more/models/contact_support.dart';
 import 'package:ccf_app/features/more/models/data_delete_account.dart';
@@ -29,16 +30,18 @@ import 'package:ccf_app/features/more/pages/role_management_page.dart';
 final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/role-management',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const RoleManagementPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/give',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const GivePage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -47,37 +50,42 @@ final List<GoRoute> miscRoutes = [
   ),
   GoRoute(
     path: '/more/profile',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const ProfilePage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/settings',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const SettingsPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/faq',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       FAQPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/how_to',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       HowToUsePage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/directory',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const DirectoryPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -87,6 +95,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         AppEventDetailsPage(event: event),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -95,15 +104,18 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       PublicProfile(userId: state.pathParameters['id']!),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/family',
     pageBuilder: (context, state) {
-      final familyId = (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
+      final familyId =
+          (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
       return buildSlidePage(
         FamilyPage(familyId: familyId),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -118,6 +130,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         AddChildProfilePage(familyId: familyId),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -132,6 +145,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         EditChildProfilePage(child: child),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -146,29 +160,40 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         ViewChildProfilePage(childId: childId),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
   GoRoute(
     path: '/more/nursery',
-    pageBuilder: (_, _) => buildSlidePage(const NurseryStaffPage(), direction: SlideDirection.right),
+    pageBuilder: (_, state) => buildSlidePage(
+      const NurseryStaffPage(),
+      direction: SlideDirection.right,
+      key: state.pageKey,
+    ),
   ),
   GoRoute(
     path: '/more/nursery/qr_checkin',
-    pageBuilder: (_, _) => buildSlidePage(const QRCheckinScannerPage(), direction: SlideDirection.right),
+    pageBuilder: (_, state) => buildSlidePage(
+      const QRCheckinScannerPage(),
+      direction: SlideDirection.right,
+      key: state.pageKey,
+    ),
   ),
   GoRoute(
     path: '/more/study',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const BibleStudiesPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
     path: '/more/study/requests',
-    pageBuilder: (_, _) => buildSlidePage(
+    pageBuilder: (_, state) => buildSlidePage(
       const BibleStudyRequestsPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -179,6 +204,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         EditBibleStudyPage(study: study),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -189,6 +215,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         NotesViewerPage(url: url),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -197,6 +224,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       ChildProfilePage(child: state.extra as Map<String, dynamic>),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -207,6 +235,7 @@ final List<GoRoute> miscRoutes = [
       return buildSlidePage(
         ChildStaffProfilePage(childId: childId),
         direction: SlideDirection.right,
+        key: state.pageKey,
       );
     },
   ),
@@ -215,6 +244,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const DataAndDeleteAccountPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -222,6 +252,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const ContactSupportPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -229,6 +260,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const NotificationSettingsPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -236,6 +268,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const MediaSettingsPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   ),
   GoRoute(
@@ -243,6 +276,7 @@ final List<GoRoute> miscRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const GroupAnnouncementsPage(),
       direction: SlideDirection.right,
+      key: state.pageKey,
     ),
   )
 ];

@@ -229,7 +229,12 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     // final userId = context.read<AppState>().profile?.id;
 
     return Scaffold(
-      appBar: AppBar(title: Text("key_271".tr())),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(), // Explicitly pop
+        ),
+        title: Text("key_271".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(

@@ -7,9 +7,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../photo_upload_service.dart'; // Assume this is where PhotoUploadService is defined
+import 'package:ccf_app/app_state.dart';
+import 'package:go_router/go_router.dart';
 
 class AddChildProfilePage extends StatefulWidget {
   final String familyId;
@@ -90,6 +93,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
 
   Future<void> _submit() async {
     if (!(_formKey.currentState?.validate() ?? false)) return;
+    final userId = context.read<AppState>().profile?.id;
 
     setState(() => _isSaving = true);
     final client = GraphQLProvider.of(context).value;
@@ -104,6 +108,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
       // 2) Insert child profile (qr_code_url null for now)
       const insertChild = r'''
         mutation InsertChildProfile(
+          $family_id: String!,
           $display_name: String!,
           $birthday: date,
           $photo_url: String,
@@ -112,6 +117,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
           $emergency_contact: String
         ) {
           insert_child_profiles_one(object: {
+            family_member_id: $family_id,
             display_name: $display_name,
             birthday: $birthday,
             photo_url: $photo_url,
@@ -127,6 +133,7 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
         MutationOptions(
           document: gql(insertChild),
           variables: {
+            'family_id': userId,
             'display_name': _nameController.text.trim(),
             'birthday': _birthday?.toUtc().toIso8601String(),
             'photo_url': photoUrl,
@@ -230,7 +237,12 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("key_238".tr())),
+      appBar: AppBar(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(), // Explicitly pop
+        ),
+        title: Text("key_238".tr())),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(

@@ -3,8 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'package:ccf_app/features/media/media_service.dart';
-// REMOVED: import 'package:youtube_player_flutter/youtube_player_flutter.dart';
-import 'package:omni_video_player/omni_video_player.dart'; // NEW: Omni Player Import
+import 'package:omni_video_player/omni_video_player.dart';
 
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -87,7 +86,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
             height: 200,
             child: Center(
               child: Text(
-                "key_181".tr(), // "Could not load livestream."
+                "key_179".tr(), // "Could not load livestream."
                 style: const TextStyle(color: Colors.grey),
                 textAlign: TextAlign.center,
               ),

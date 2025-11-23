@@ -140,7 +140,6 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
       },
     );
 
-    if (reason == null || reason.isEmpty) return;
     if (!mounted) return;
 
     // Access is safe here as this is called by an event handler long after initState

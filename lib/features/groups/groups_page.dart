@@ -263,11 +263,11 @@ class _GroupsPageState extends State<GroupsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    InvitationsSection(key: _invitationsKey),
+                    const SizedBox(height: 24),
                     YourGroupsSection(key: _yourGroupsKey),
                     const SizedBox(height: 24),
                     JoinableGroupsSection(key: _joinableGroupsKey),
-                    const SizedBox(height: 24),
-                    InvitationsSection(key: _invitationsKey),
                   ],
                 ),
               ),

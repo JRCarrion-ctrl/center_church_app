@@ -12,6 +12,7 @@ final List<GoRoute> authRoutes = [
     pageBuilder: (context, state) => buildSlidePage(
       const AuthPage(),
       direction: SlideDirection.right,
+      key: state.pageKey, // <--- Added key
     ),
     redirect: (context, state) {
       final app = context.read<AppState>();

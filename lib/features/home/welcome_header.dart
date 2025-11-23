@@ -2,6 +2,8 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:ccf_app/features/media/media_service.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 class WelcomeHeader extends StatefulWidget {
   const WelcomeHeader({super.key});
@@ -13,6 +15,7 @@ class WelcomeHeader extends StatefulWidget {
 class _WelcomeHeaderState extends State<WelcomeHeader> {
   late Timer _timer;
   DateTime _currentTime = DateTime.now();
+  Future<List<String>>? _serviceTimeFuture; 
 
   @override
   void initState() {
@@ -27,42 +30,74 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final client = GraphQLProvider.of(context).value;
+    
+    _serviceTimeFuture ??= _loadTimes(client);
+  }
+
+  // CHANGE 2: Return raw strings directly
+  Future<List<String>> _loadTimes(GraphQLClient client) async {
+    try {
+      final data = await MediaService(client).getServiceTime();
+      
+      final englishStr = data['english'];
+      final spanishStr = data['spanish'];
+
+      if (englishStr == null || englishStr.isEmpty || 
+          spanishStr == null || spanishStr.isEmpty) {
+        return []; 
+      }
+
+      // No parsing needed, just return what the server sent
+      return [englishStr, spanishStr];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  @override
   void dispose() {
     _timer.cancel();
     super.dispose();
   }
-  
-  DateTime _getNextServiceTime({required DateTime now, required int hour, required int minute}) {
-    const sunday = DateTime.sunday;
-    final currentDay = now.weekday;
-    final daysUntilSunday = (sunday - currentDay + 7) % 7;
-    
-    var serviceDate = now.add(Duration(days: daysUntilSunday));
-    var serviceTime = DateTime(serviceDate.year, serviceDate.month, serviceDate.day, hour, minute);
-
-    if (serviceTime.isBefore(now)) {
-      serviceTime = serviceTime.add(const Duration(days: 7));
-    }
-    
-    return serviceTime;
-  }
 
   @override
   Widget build(BuildContext context) {
-    final nextEnglish = _getNextServiceTime(now: _currentTime, hour: 9, minute: 30);
-    final nextSpanish = _getNextServiceTime(now: _currentTime, hour: 11, minute: 30);
+    // CHANGE 3: Builder expects List<String>
+    return FutureBuilder<List<String>>(
+      future: _serviceTimeFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const SizedBox(
+            height: 150, 
+            child: Center(child: CircularProgressIndicator())
+          );
+        }
 
-    return NextServiceCard(
-      nextEnglishService: nextEnglish,
-      nextSpanishService: nextSpanish,
-      currentTime: _currentTime,
+        if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+          return const SizedBox.shrink(); 
+        }
+
+        final times = snapshot.data!;
+        final englishTime = times[0]; 
+        final spanishTime = times[1]; 
+
+        return NextServiceCard(
+          nextEnglishService: englishTime,
+          nextSpanishService: spanishTime,
+          currentTime: _currentTime,
+        );
+      },
     );
   }
 }
 
 class NextServiceCard extends StatelessWidget {
-  final DateTime nextEnglishService;
-  final DateTime nextSpanishService;
+  // CHANGE 4: Fields are now Strings
+  final String nextEnglishService;
+  final String nextSpanishService;
   final DateTime currentTime;
 
   const NextServiceCard({
@@ -83,7 +118,6 @@ class NextServiceCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: colorScheme.surfaceContainerLowest,
         borderRadius: BorderRadius.circular(20),
-        // ✨ CHANGE: The border now has more contrast for a sharper look.
         border: Border.all(color: colorScheme.outline, width: 1.5),
       ),
       child: Column(
@@ -110,12 +144,13 @@ class NextServiceCard extends StatelessWidget {
           ),
           _ServiceTimeRow(
             title: "key_422".tr(), // "English Service"
-            time: DateFormat.jm().format(nextEnglishService),
+            // CHANGE 5: Pass string directly, no DateFormat needed
+            time: nextEnglishService,
           ),
           const SizedBox(height: 16),
           _ServiceTimeRow(
             title: "key_423".tr(), // "Spanish Service"
-            time: DateFormat.jm().format(nextSpanishService),
+            time: nextSpanishService,
           ),
         ],
       ),

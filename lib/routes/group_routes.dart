@@ -18,7 +18,8 @@ final List<GoRoute> groupRoutes = [
       final groupId = state.pathParameters['id']!;
       return buildSlidePage(
         GroupPage(groupId: groupId),
-        direction: SlideDirection.right, 
+        direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),
@@ -30,35 +31,30 @@ final List<GoRoute> groupRoutes = [
       final isAdmin = extra?['isAdmin'] as bool? ?? false;
       final isOwner = extra?['isOwner'] as bool? ?? false;
       return buildSlidePage(
-          GroupInfoPage(groupId: groupId, isAdmin: isAdmin, isOwner: isOwner),
-          direction: SlideDirection.right,
+        GroupInfoPage(groupId: groupId, isAdmin: isAdmin, isOwner: isOwner),
+        direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
-    // Add the /members route as a sub-route of /info (if you want to ensure
-    // that isAdmin/isOwner is available for the next hop)
+    // Add the /members route as a sub-route of /info
     routes: [
       GoRoute(
-        // The path should be relative to its parent route: /groups/:id/info/members
         path: 'members', 
         pageBuilder: (context, state) {
           final groupId = state.pathParameters['id']!;
-          // FIX: Extract the isAdmin flag passed from GroupInfoPage via the extra parameter.
-          // NOTE: If GroupInfoPage is navigating here, it must pass the data via 'extra'.
           final extra = state.extra as Map<String, dynamic>?; 
           final isAdmin = extra?['isAdmin'] as bool? ?? false;
           
           return buildSlidePage(
-            // Pass the isAdmin flag to the ManageMembersPage
             ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
             direction: SlideDirection.right,
+            key: state.pageKey, // <--- Added key
           );
         },
       ),
     ]
   ),
-  // The original /groups/:id/members route must be updated or removed
-  // I will update it, assuming the call site remains context.push('/groups/:id/members')
-  // but note that nesting it under /info is a cleaner architectural approach.
+  // The original /groups/:id/members route
   GoRoute(
     path: '/groups/:id/info/members',
     pageBuilder: (context, state) {
@@ -69,6 +65,7 @@ final List<GoRoute> groupRoutes = [
       return buildSlidePage(
         ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
         direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),
@@ -79,6 +76,7 @@ final List<GoRoute> groupRoutes = [
       return buildSlidePage(
         GroupEventDetailsPage(event: event),
         direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),
@@ -89,6 +87,7 @@ final List<GoRoute> groupRoutes = [
       return buildSlidePage(
         ManageAnnouncementsPage(groupId: groupId),
         direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),
@@ -99,6 +98,7 @@ final List<GoRoute> groupRoutes = [
       return buildSlidePage(
         GroupEventListPage(groupId: groupId),
         direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),
@@ -109,6 +109,7 @@ final List<GoRoute> groupRoutes = [
       return buildSlidePage(
         GroupMediaPage(groupId: groupId),
         direction: SlideDirection.right,
+        key: state.pageKey, // <--- Added key
       );
     },
   ),

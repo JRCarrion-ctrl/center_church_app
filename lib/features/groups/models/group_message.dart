@@ -38,7 +38,7 @@ class GroupMessage {
   factory GroupMessage.fromMap(Map<String, dynamic> map) {
     // Handles both the nested 'sender' object from the server
     // and the flat 'sender_name' that might exist in older cached data.
-    final senderData = map['sender'] as Map<String, dynamic>?;
+    final senderData = (map['sender'] ?? map['profile']) as Map<String, dynamic>?;
     final senderName = senderData?['display_name'] as String? ?? map['sender_name'] as String?;
 
     return GroupMessage(

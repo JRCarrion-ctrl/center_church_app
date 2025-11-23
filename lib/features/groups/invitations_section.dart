@@ -7,10 +7,14 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
-import 'package:ccf_app/features/groups/group_service.dart';
 
 class InvitationsSection extends StatefulWidget {
-  const InvitationsSection({super.key});
+  final VoidCallback? onInviteHandled;
+
+  const InvitationsSection({
+    super.key, 
+    this.onInviteHandled,
+  });
 
   @override
   State<InvitationsSection> createState() => InvitationsSectionState();
@@ -19,6 +23,8 @@ class InvitationsSection extends StatefulWidget {
 class InvitationsSectionState extends State<InvitationsSection> {
   List<GroupModel> _invites = [];
   bool _loading = true;
+  
+  // This tracks which card is expanded to show Accept/Decline buttons
   String? _expandedGroupId;
 
   @override
@@ -27,10 +33,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
     _loadInvitations();
   }
 
-  Future<GroupService> _svc() async {
-    final app = context.read<AppState>();
-    return app.groupService;
-  }
+  void refresh() => _loadInvitations();
 
   Future<void> _loadInvitations() async {
     setState(() => _loading = true);
@@ -44,7 +47,8 @@ class InvitationsSectionState extends State<InvitationsSection> {
       return;
     }
 
-    final svc = await _svc();
+    // Access service from AppState
+    final svc = context.read<AppState>().groupService;
     final invites = await svc.getGroupInvitations(userId);
 
     if (!mounted) return;
@@ -54,8 +58,6 @@ class InvitationsSectionState extends State<InvitationsSection> {
     });
   }
 
-  void refresh() => _loadInvitations();
-
   GraphQLClient _client() => GraphProvider.of(context);
 
   Future<void> _acceptInvite(GroupModel group) async {
@@ -63,7 +65,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
     if (userId == null || userId.isEmpty) return;
 
     const m = r'''
-      mutation AcceptInvite($gid: String!, $uid: String!) {
+      mutation AcceptInvite($gid: uuid!, $uid: String!) {
         insert_group_memberships_one(
           object: {
             group_id: $gid
@@ -91,18 +93,27 @@ class InvitationsSectionState extends State<InvitationsSection> {
       ),
     );
 
+    if (!mounted) return;
+
     if (res.hasException) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(tr('key_012'))),
+        SnackBar(content: Text(tr('key_012'))), // General error
       );
       return;
     }
 
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('key_060', args: [group.name]))),
+      SnackBar(content: Text(tr('key_060', args: [group.name]))), // "Joined {group}"
     );
+
+    setState(() {
+      // Safe removal by ID
+      _invites.removeWhere((g) => g.id == group.id);
+      _expandedGroupId = null;
+    });
+
+    // Notify parent to refresh "Your Groups"
+    widget.onInviteHandled?.call();
   }
 
   Future<void> _declineInvite(GroupModel group) async {
@@ -125,18 +136,27 @@ class InvitationsSectionState extends State<InvitationsSection> {
       ),
     );
 
+    if (!mounted) return;
+
     if (res.hasException) {
-      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(tr('key_012'))),
       );
       return;
     }
 
-    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('key_061', args: [group.name]))),
+      SnackBar(content: Text(tr('key_061', args: [group.name]))), // "Declined invitation..."
     );
+
+    setState(() {
+      // Safe removal by ID
+      _invites.removeWhere((g) => g.id == group.id);
+      _expandedGroupId = null;
+    });
+    
+    // Notify parent (optional, but keeps state clean)
+    widget.onInviteHandled?.call();
   }
 
   @override
@@ -148,6 +168,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
       );
     }
 
+    // If no invites, hide the section entirely
     if (_invites.isEmpty) return const SizedBox.shrink();
 
     return Column(
@@ -164,6 +185,8 @@ class InvitationsSectionState extends State<InvitationsSection> {
           itemCount: _invites.length,
           itemBuilder: (context, index) {
             final group = _invites[index];
+            
+            // This uses the _expandedGroupId variable
             final isExpanded = _expandedGroupId == group.id;
 
             return Card(
@@ -174,6 +197,7 @@ class InvitationsSectionState extends State<InvitationsSection> {
                   ListTile(
                     onTap: () {
                       setState(() {
+                        // Toggle expansion state
                         _expandedGroupId = isExpanded ? null : group.id;
                       });
                     },
@@ -200,6 +224,8 @@ class InvitationsSectionState extends State<InvitationsSection> {
                         : null,
                     trailing: Icon(isExpanded ? Icons.expand_less : Icons.expand_more),
                   ),
+                  
+                  // If expanded, show the buttons that call the "unused" methods
                   if (isExpanded)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 12, left: 16, right: 16),
@@ -207,26 +233,12 @@ class InvitationsSectionState extends State<InvitationsSection> {
                         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: () async {
-                              await _acceptInvite(group);
-                              if (!mounted) return;
-                              setState(() {
-                                _invites.removeAt(index);
-                                _expandedGroupId = null;
-                              });
-                            },
+                            onPressed: () => _acceptInvite(group), // Called here
                             icon: const Icon(Icons.check),
                             label: Text("key_059b".tr()), // Accept
                           ),
                           OutlinedButton.icon(
-                            onPressed: () async {
-                              await _declineInvite(group);
-                              if (!mounted) return;
-                              setState(() {
-                                _invites.removeAt(index);
-                                _expandedGroupId = null;
-                              });
-                            },
+                            onPressed: () => _declineInvite(group), // Called here
                             icon: const Icon(Icons.close),
                             label: Text("key_059c".tr()), // Decline
                           ),
