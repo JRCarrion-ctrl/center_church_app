@@ -55,7 +55,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>We need access to your photos to upload media to the group.</string>
 	<key>NSUserTrackingUsageDescription</key>
-	<string>This identifier will be used to deliver personalized notifications.</string>
+	<string>Your identifier helps us analyze how our notifications are interacted with and segment users to ensure you receive relevant notifications.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>This app may use your location to improve notification relevance.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>

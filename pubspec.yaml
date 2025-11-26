@@ -1,9 +1,9 @@
 name: ccf_app
-description: "A new Flutter project."
+description: "This app was created for the purposes of the Center Church Frederick / Centro Cristiano Frederick to connect with their community, stay up to date on church events, and access church resources."
 
 publish_to: 'none'
 
-version: 1.1.0
+version: 1.1.1+1
 
 environment:
   sdk: ^3.9.2
@@ -58,12 +58,13 @@ dependencies:
   flutter_secure_storage: ^9.2.4
   jwt_decoder: ^2.0.1
   font_awesome_flutter: ^10.12.0
+  flutter_native_splash: ^2.4.7
+  app_tracking_transparency: ^2.0.6+1
   
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
-  flutter_native_splash: ^2.4.7
 
 flutter_native_splash:
   color: "#FFFFFF"

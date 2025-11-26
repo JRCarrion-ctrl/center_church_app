@@ -16,6 +16,8 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
 import 'policy_screen.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
+import 'dart:io';
 
 import 'app_state.dart';
 
@@ -34,6 +36,19 @@ void main() async {
       child: const CCFAppBoot(),
     ),
   );
+}
+
+Future<void> requestTrackingAuthorization() async {
+  if (Platform.isIOS) {
+    TrackingStatus status = await AppTrackingTransparency.trackingAuthorizationStatus;
+
+    if (status == TrackingStatus.notDetermined) {
+      await Future.delayed(const Duration(milliseconds: 500)); 
+
+      status = await AppTrackingTransparency.requestTrackingAuthorization();
+      debugPrint('ATT permission status: $status');
+    }
+  }
 }
 
 Future<void> requestPushPermission() async {
@@ -112,6 +127,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
 
   Future<void> _initializeApp() async {
     await _requestPushPermissionOnce();
+    await requestTrackingAuthorization();
     appState = AppState();
     await appState.restoreSession();
     final loginId = appState.profile?.id;
