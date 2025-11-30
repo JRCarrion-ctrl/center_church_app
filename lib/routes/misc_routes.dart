@@ -91,9 +91,18 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/calendar/app-event/:id',
     pageBuilder: (context, state) {
-      final event = state.extra as AppEvent;
+      // 1. Get ID from URL
+      final eventId = state.pathParameters['id']!;
+    
+      // 2. Get Object from Extra (if available)
+      final extraEvent = state.extra as AppEvent?; 
+
       return buildSlidePage(
-        AppEventDetailsPage(event: event),
+        // 3. Use the Wrapper
+        AppEventDeepLinkWrapper(
+          eventId: eventId,
+          preloadedEvent: extraEvent,
+        ),
         direction: SlideDirection.right,
         key: state.pageKey,
       );

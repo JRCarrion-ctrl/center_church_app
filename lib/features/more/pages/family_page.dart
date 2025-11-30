@@ -42,7 +42,6 @@ class _FamilyPageState extends State<FamilyPage> {
   @override
   void initState() {
     super.initState();
-    // Delay to ensure Provider is available.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       currentUserId = context.read<AppState>().profile?.id;
       if (currentUserId == null) {
@@ -87,7 +86,6 @@ class _FamilyPageState extends State<FamilyPage> {
             relationship
             status
             is_child
-            # These relationship field names assume standard Hasura object relationships:
             user: profile {
               id
               display_name
@@ -156,6 +154,165 @@ class _FamilyPageState extends State<FamilyPage> {
     }
   }
 
+  // --- UI BUILDERS ---
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(
+        title,
+        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.1,
+            ),
+      ),
+    );
+  }
+
+  List<Widget> _buildSectionList(String title, List<Map<String, dynamic>> items) {
+    if (items.isEmpty) return [];
+    return [
+      _buildSectionHeader(title),
+      ...items.map(_buildMemberTile),
+    ];
+  }
+
+  List<Widget> _buildChildrenSectionList(List<Map<String, dynamic>> childrenItems) {
+    // Always return the list so the "Add Child" button is visible
+    return [
+      _buildSectionHeader("key_280b".tr()), // "Children"
+      
+      ...childrenItems.map(_buildMemberTile),
+
+      // The "Add Child" Button is essentially a list item at the end
+      ListTile(
+        leading: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(Icons.add, color: Theme.of(context).primaryColor, size: 20),
+        ),
+        title: Text(
+          "key_239".tr(), // "Add Child"
+          style: TextStyle(
+            color: Theme.of(context).primaryColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        onTap: _addChild,
+      ),
+    ];
+  }
+
+  Widget _buildMemberTile(Map<String, dynamic> m) {
+    final isChild = m['is_child'] == true;
+    final user = m['user'];
+    final child = m['child'];
+    final userId = user?['id'] as String?;
+    final name = user?['display_name'] ?? child?['display_name'] ?? 'Unnamed';
+    final photo = user?['photo_url'] ?? child?['photo_url'];
+    
+    final relationship = userId != null ? (userDefinedRelationships[userId] ?? '') : '';
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: (photo != null && photo.toString().isNotEmpty) 
+            ? NetworkImage(photo) 
+            : null,
+        child: (photo == null || photo.toString().isEmpty)
+            ? Icon(isChild ? Icons.child_care : Icons.person)
+            : null,
+      ),
+      title: Text(name),
+      subtitle: (isChild || userId == null || userId == currentUserId) 
+        ? null 
+        : Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 4.0),
+              child: ActionChip(
+                visualDensity: VisualDensity.compact,
+                label: Text(
+                  relationship.isEmpty ? "key_281".tr() : relationship, 
+                  style: TextStyle(
+                    color: relationship.isEmpty 
+                        ? Theme.of(context).hintColor 
+                        : Theme.of(context).colorScheme.primary,
+                    fontWeight: relationship.isEmpty ? FontWeight.normal : FontWeight.bold,
+                  ),
+                ),
+                backgroundColor: Theme.of(context).cardColor,
+                side: BorderSide(color: Theme.of(context).dividerColor),
+                onPressed: () => _showRelationshipPicker(userId, relationship),
+              ),
+            ),
+          ),
+      onTap: () {
+        if (isChild && child != null) {
+          context.pushNamed('view_child_profile', extra: child['id']);
+        } else if (user != null) {
+          context.push('/profile/${user['id']}');
+        }
+      },
+    );
+  }
+
+  // --- LOGIC METHODS ---
+
+  void _showRelationshipPicker(String userId, String currentRelationship) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (BuildContext sheetContext) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Text(
+                "key_281".tr(), 
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: defaultRelationships.length,
+                itemBuilder: (context, index) {
+                  final rel = defaultRelationships[index];
+                  final isSelected = rel == currentRelationship;
+                  return ListTile(
+                    title: Text(
+                      rel,
+                      style: TextStyle(
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                        color: isSelected ? Theme.of(context).colorScheme.primary : null,
+                      ),
+                    ),
+                    trailing: isSelected 
+                        ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary) 
+                        : null,
+                    onTap: () {
+                      Navigator.pop(sheetContext); 
+                      _updateRelationship(userId, rel);
+                    },
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        );
+      },
+    );
+  }
+
   Future<void> _updateRelationship(String relatedUserId, String value) async {
     final fid = widget.familyId;
     if (fid == null || currentUserId == null) return;
@@ -165,7 +322,7 @@ class _FamilyPageState extends State<FamilyPage> {
       const m = r'''
         mutation UpsertRelationship(
           $viewer: String!,
-          $related: uuid!,
+          $related: String!,
           $fid: uuid!,
           $relationship: String!
         ) {
@@ -177,7 +334,7 @@ class _FamilyPageState extends State<FamilyPage> {
               relationship: $relationship
             },
             on_conflict: {
-              constraint: user_family_relationships_viewer_id_related_user_id_family_id_key,
+              constraint: unique_rel_viewer_related_family,
               update_columns: [relationship]
             }
           ) {
@@ -203,13 +360,14 @@ class _FamilyPageState extends State<FamilyPage> {
         _showSnackbar('Could not update relationship');
         return;
       }
-
       setState(() => userDefinedRelationships[relatedUserId] = value);
     } catch (e) {
       logger.e('Failed to update relationship', error: e);
       _showSnackbar('Could not update relationship');
     }
   }
+
+  // --- SCAFFOLD BUILD ---
 
   @override
   Widget build(BuildContext context) {
@@ -247,36 +405,43 @@ class _FamilyPageState extends State<FamilyPage> {
       appBar: AppBar(
         title: Text("key_279".tr()),
         leading: BackButton(onPressed: () => context.go('/more')),
-        actions: [
-          IconButton(icon: const Icon(Icons.child_care), onPressed: _addChild),
-        ],
       ),
       body: RefreshIndicator(
         onRefresh: _loadFamily,
         child: Column(
           children: [
             if (familyCode != null)
-              Padding(
+              Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    "key_279a".tr(args: [familyCode ?? '']),
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-                  ),
+                color: Theme.of(context).colorScheme.surfaceContainerLow,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text("key_279a".tr(args: [familyCode ?? '']), style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold, 
+                        letterSpacing: 2.0
+                      ),),
+                  ],
                 ),
               ),
+
+            // --- REPLACED EXPANSION TILES WITH FLAT LIST ---
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 8),
+                padding: const EdgeInsets.symmetric(horizontal: 0), // Tiles have their own padding
                 children: [
-                  if (self.isNotEmpty) _buildSection("key_280a".tr(), self),
-                  if (children.isNotEmpty) _buildSection("key_280b".tr(), children),
-                  if (adults.isNotEmpty) _buildSection("key_280c".tr(), adults),
+                  ..._buildSectionList("key_280a".tr(), self), // Me
+                  
+                  ..._buildChildrenSectionList(children), // Children + Add Button
+                  
+                  ..._buildSectionList("key_280c".tr(), adults), // Adults
+                  
                   const SizedBox(height: 100),
                 ],
               ),
             ),
+            
             Padding(
               padding: const EdgeInsets.all(16),
               child: ElevatedButton.icon(
@@ -293,57 +458,6 @@ class _FamilyPageState extends State<FamilyPage> {
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildSection(String title, List<Map<String, dynamic>> items) {
-    return ExpansionTile(
-      title: Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
-      children: items.map(_buildMemberTile).toList(),
-    );
-  }
-
-  Widget _buildMemberTile(Map<String, dynamic> m) {
-    final isChild = m['is_child'] == true;
-    final user = m['user'];
-    final child = m['child'];
-    final userId = user?['id'] as String?;
-    final name = user?['display_name'] ?? child?['display_name'] ?? 'Unnamed';
-    final photo = user?['photo_url'] ?? child?['photo_url'];
-    final relationship = userId != null ? (userDefinedRelationships[userId] ?? '') : '';
-
-    return ListTile(
-      leading: CircleAvatar(
-        backgroundImage: (photo != null && photo.toString().isNotEmpty) ? NetworkImage(photo) : null,
-        child: (photo == null || photo.toString().isEmpty)
-            ? Icon(isChild ? Icons.child_care : Icons.person)
-            : null,
-      ),
-      title: Text(name),
-      subtitle: Wrap(
-        spacing: 6,
-        children: [
-          // fixed condition: hide for self, show for other adults
-          if (!isChild && userId != null && userId != currentUserId)
-            DropdownButton<String>(
-              value: relationship.isEmpty ? null : relationship,
-              hint: Text("key_281".tr()),
-              items: defaultRelationships
-                  .map((r) => DropdownMenuItem(value: r, child: Text(r)))
-                  .toList(),
-              onChanged: (value) {
-                if (value != null) _updateRelationship(userId, value);
-              },
-            ),
-        ],
-      ),
-      onTap: () {
-        if (isChild && child != null) {
-          context.pushNamed('view_child_profile', extra: child['id']);
-        } else if (user != null) {
-          context.push('/profile/${user['id']}');
-        }
-      },
     );
   }
 

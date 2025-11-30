@@ -184,6 +184,98 @@ class _ProfilePageState extends State<ProfilePage> {
         }
     }
 
+    Future<void> _removePhoto() async {
+        final userId = context.read<AppState>().profile?.id;
+        if (userId == null) return;
+
+        // Optimistic update for UI responsiveness
+        final previousUrl = _photoUrl;
+        setState(() => _photoUrl = null);
+
+        final client = GraphQLProvider.of(context).value;
+
+        const String mutation = r'''
+          mutation RemoveProfilePhoto($id: String!) {
+            update_profiles_by_pk(pk_columns: {id: $id}, _set: { photo_url: null }) {
+              id
+              photo_url
+            }
+          }
+        ''';
+
+        try {
+            final result = await client.mutate(
+                MutationOptions(
+                    document: gql(mutation),
+                    variables: {'id': userId},
+                ),
+            );
+
+            if (result.hasException) throw result.exception!;
+            if (!mounted) return;
+            
+            _showSnackbar(context, "Photo removed"); // Replace with localized key
+            
+            // Clear cache to ensure it doesn't reappear if they re-upload later
+            if (previousUrl != null) {
+                await CachedNetworkImage.evictFromCache(previousUrl);
+            }
+
+        } catch (e) {
+            _logger.e('Failed to remove photo', error: e);
+            // Revert state on error
+            if (mounted) {
+                setState(() => _photoUrl = previousUrl);
+                _showSnackbar(context, "Failed to remove photo");
+            }
+        }
+    }
+
+    // 2. The Menu to choose between Edit or Remove
+    void _showPhotoOptions() {
+        showModalBottomSheet(
+            context: context,
+            shape: const RoundedRectangleBorder(
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            builder: (ctx) {
+                return SafeArea(
+                    child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                            ListTile(
+                                leading: const Icon(Icons.photo_library),
+                                title: Text("key_305".tr()), // "Edit Photo"
+                                onTap: () {
+                                    Navigator.pop(ctx);
+                                    _editPhoto(); // Call your existing upload logic
+                                },
+                            ),
+                            // Only show remove option if there is a URL
+                            if (_photoUrl != null && _photoUrl!.isNotEmpty)
+                                ListTile(
+                                    leading: const Icon(Icons.delete, color: Colors.red),
+                                    title: Text(
+                                        "Remove Photo", // Add localization key
+                                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                                    ),
+                                    onTap: () {
+                                        Navigator.pop(ctx);
+                                        _removePhoto();
+                                    },
+                                ),
+                            ListTile(
+                                leading: const Icon(Icons.close),
+                                title: Text("key_cancel".tr()), // Add localization key or "Cancel"
+                                onTap: () => Navigator.pop(ctx),
+                            ),
+                        ],
+                    ),
+                );
+            },
+        );
+    }
+
     Future<void> _editField({
         required String label, 
         required String initialValue, 
@@ -314,7 +406,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         // 1. Photo Section
                         Center(
                             child: GestureDetector(
-                                onTap: _editPhoto,
+                                onTap: _showPhotoOptions,
                                 child: CircleAvatar(
                                     radius: 48,
                                     backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
@@ -329,7 +421,7 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                         Center(
                             child: TextButton(
-                                onPressed: _editPhoto, 
+                                onPressed: _showPhotoOptions,
                                 child: Text("key_305".tr()),
                             ),
                         ),

@@ -59,8 +59,6 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
 
   @override
   void dispose() {
-    // Dispose the captured playback controller
-    _omniPlaybackController?.dispose();
     super.dispose();
   }
 

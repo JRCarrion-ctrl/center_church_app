@@ -72,11 +72,14 @@ final List<GoRoute> groupRoutes = [
   GoRoute(
     path: '/group-event/:id',
     pageBuilder: (context, state) {
-      final event = state.extra as GroupEvent;
+      final eventId = state.pathParameters['id']!;
+      final extraEvent = state.extra as GroupEvent?; // Allow nullable
+
+      // Use a wrapper that handles fetching if the object is missing
       return buildSlidePage(
-        GroupEventDetailsPage(event: event),
+        GroupEventDeepLinkWrapper(eventId: eventId, preloadedEvent: extraEvent),
         direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
+        key: state.pageKey,
       );
     },
   ),

@@ -137,11 +137,32 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       OneSignal.logout();
     }
     
+    // 1. Create the router
     _router = createRouter(appState);
+
+    // 2. [INSERT THIS BLOCK] Handle Notification Clicks
+    OneSignal.Notifications.addClickListener((event) {
+      final data = event.notification.additionalData;
+      
+      if (data != null && data['route'] != null) {
+        String route = data['route'];
+
+        // Clean up the route if your backend sends full URLs (optional safety)
+        if (route.startsWith('ccfapp://')) {
+          route = route.replaceFirst('ccfapp://', '');
+        }
+        if (!route.startsWith('/')) {
+          route = '/$route';
+        }
+
+        debugPrint("OneSignal Deep Link: Navigating to $route");
+        
+        _router.go(route);
+      }
+    });
+
     await _handleIncomingLinks();
     
-    // Set the initial client based on the restored session.
-    // This connects the main.dart client notifier to the client in app_state.
     _clientNotifier.value = appState.isAuthenticated ? appState.client : buildPublicHasuraClient();
 
     if (mounted) setState(() => _ready = true);

@@ -5,7 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:cached_network_image/cached_network_image.dart';
+import 'package:syncfusion_flutter_calendar/calendar.dart';
+import 'package:cached_network_image/cached_network_image.dart'; // Don't forget this for the list view!
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
@@ -26,26 +27,41 @@ class CalendarPage extends StatefulWidget {
 
 class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late Future<_CalendarData> _calendarFuture;
-  // REMOVED: bool _canManageApp = false; // Now calculated synchronously in build
-
   String _refreshKey = UniqueKey().toString();
-
   late EventService _eventService;
   bool _svcReady = false;
 
+  // TOGGLE STATE: Start with Calendar view by default
+  bool _isCalendarView = true;
+
+  // Syncfusion Controller
+  final CalendarController _calendarController = CalendarController();
+
   @override
-  void initState() {
-    super.initState();
-    // initState remains empty as the initial service setup is in didChangeDependencies
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    routeObserver.unsubscribe(this);
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) routeObserver.subscribe(this, route);
+
+    if (!_svcReady) {
+      final client = GraphQLProvider.of(context).value;
+      final userId = context.read<AppState>().profile?.id;
+      _eventService = EventService(client, currentUserId: userId);
+      _svcReady = true;
+      _calendarFuture = _loadAllEvents();
+    }
   }
 
-  // DELETED: Future<void> _checkPermissions() async { ... } 
-  // The role check is now done via Provider in the build method.
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    _calendarController.dispose();
+    super.dispose();
+  }
 
   Future<_CalendarData> _loadAllEvents() async {
     final appState = context.read<AppState>();
-
-    // uses the ready service
     final appEvents = await _eventService.fetchAppEvents();
 
     List<GroupEvent> filteredGroupEvents = [];
@@ -57,7 +73,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
       filteredGroupEvents =
           groupEvents.where((e) => visibleGroupIds.contains(e.groupId)).toList();
     }
-
     return _CalendarData(appEvents: appEvents, groupEvents: filteredGroupEvents);
   }
 
@@ -80,39 +95,7 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   }
 
   @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-
-    // FIX 1: Memory Leak Fix - Always unsubscribe before subscribing
-    routeObserver.unsubscribe(this);
-
-    // subscribe to route changes
-    final route = ModalRoute.of(context);
-    if (route is PageRoute) {
-      routeObserver.subscribe(this, route);
-    }
-
-    // initialize EventService once we have inherited widgets
-    if (!_svcReady) {
-      final client = GraphQLProvider.of(context).value;
-      final userId = context.read<AppState>().profile?.id;
-      _eventService = EventService(client, currentUserId: userId);
-      _svcReady = true;
-
-      // now safe to load events
-      _calendarFuture = _loadAllEvents();
-    }
-  }
-
-  @override
-  void dispose() {
-    routeObserver.unsubscribe(this);
-    super.dispose();
-  }
-
-  @override
   void didPopNext() {
-    // refresh when returning to this page
     setState(() {
       _calendarFuture = _loadAllEvents();
       _refreshKey = UniqueKey().toString();
@@ -121,99 +104,160 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    final isLoggedIn = context.select<AppState, bool>((s) => s.profile?.id != null);
-    
-    // FIX 2: Synchronous Role Check for button visibility
     final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final bool canManageApp = userRole == UserRole.supervisor || userRole == UserRole.owner;
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
-      body: Stack(
-        children: [
-          FutureBuilder<_CalendarData>(
-            future: _calendarFuture,
-            key: Key(_refreshKey),
-            builder: (context, snap) {
-              if (snap.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snap.hasError) {
-                return Center(child: Text("key_035".tr()));
-              }
-
-              final appEvents = snap.data!.appEvents;
-              final groupEvents = snap.data!.groupEvents;
-
-              if (appEvents.isEmpty && groupEvents.isEmpty) {
-                return RefreshIndicator(
-                  onRefresh: () async {
-                    setState(() {
-                      _calendarFuture = _loadAllEvents();
-                      _refreshKey = UniqueKey().toString();
-                    });
-                    await _calendarFuture;
-                  },
-                  child: ListView(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      const SizedBox(height: 200),
-                      Center(child: Text("key_036".tr())),
-                    ],
-                  ),
-                );
-              }
-
-              final List<Widget> items = [];
-
-              if (appEvents.isNotEmpty) {
-                items.add(_sectionHeader("key_036a".tr()));
-                // Pass the permission down to the card builder
-                items.addAll(appEvents.map(_buildAppEventCard(isLoggedIn, canManageApp)));
-              }
-
-              if (groupEvents.isNotEmpty) {
-                items.add(_sectionHeader("key_036b".tr()));
-                items.addAll(groupEvents.map(_buildGroupEventCard));
-              }
-
-              return RefreshIndicator(
-                onRefresh: () async {
-                  setState(() {
-                    _calendarFuture = _loadAllEvents();
-                    _refreshKey = UniqueKey().toString();
-                  });
-                  await _calendarFuture;
-                },
-                child: ListView(
-                  padding: const EdgeInsets.all(16),
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  children: items,
-                ),
-              );
+      appBar: AppBar(
+        // Dynamic title based on view
+        title: Text(_isCalendarView ? "key_034".tr() : "key_list_view".tr()), 
+        actions: [
+          // 1. TOGGLE BUTTON (Switch between List and Calendar)
+          IconButton(
+            // Show the icon of the view you would switch TO
+            icon: Icon(_isCalendarView ? Icons.list : Icons.calendar_month),
+            tooltip: _isCalendarView ? "Switch to List" : "Switch to Calendar",
+            onPressed: () {
+              setState(() {
+                _isCalendarView = !_isCalendarView;
+              });
             },
           ),
-          Positioned(
-            bottom: 16,
-            left: 16,
-            child: FloatingActionButton.small(
-              heroTag: 'calendar-settings',
-              onPressed: _openCalendarSettings,
-              tooltip: 'Manage Calendars',
-              child: const Icon(Icons.tune),
+          
+          // 2. Calendar Specific Actions (Only show if in Calendar View)
+          if (_isCalendarView) ...[
+            IconButton(
+              icon: const Icon(Icons.today),
+              onPressed: () {
+                _calendarController.displayDate = DateTime.now();
+              },
             ),
-          ),
+            PopupMenuButton<CalendarView>(
+              icon: const Icon(Icons.view_agenda),
+              onSelected: (view) => _calendarController.view = view,
+              itemBuilder: (context) => [
+                const PopupMenuItem(value: CalendarView.month, child: Text("Month")),
+                const PopupMenuItem(value: CalendarView.week, child: Text("Week")),
+                const PopupMenuItem(value: CalendarView.schedule, child: Text("Schedule")),
+              ],
+            ),
+          ]
         ],
       ),
-      // Use the local 'canManageApp' boolean
-      floatingActionButton: canManageApp
-          ? FloatingActionButton(
+      body: FutureBuilder<_CalendarData>(
+        future: _calendarFuture,
+        key: Key(_refreshKey),
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snap.hasError) {
+            return Center(child: Text("key_035".tr()));
+          }
+
+          final data = snap.data!;
+          
+          // --- VIEW 1: CALENDAR ---
+          if (_isCalendarView) {
+            final dataSource = _EventDataSource(data.appEvents, data.groupEvents, colorScheme);
+            return SfCalendar(
+              controller: _calendarController,
+              view: CalendarView.month,
+              dataSource: dataSource,
+              initialSelectedDate: DateTime.now(),
+              monthViewSettings: const MonthViewSettings(
+                appointmentDisplayMode: MonthAppointmentDisplayMode.appointment,
+                showAgenda: true,
+              ),
+              onTap: (CalendarTapDetails details) {
+                if (details.targetElement == CalendarElement.appointment) {
+                  
+                  if (details.appointments == null || details.appointments!.isEmpty) return;
+
+                  final appointment = details.appointments!.first as Appointment;
+                  final originalObj = appointment.id;
+                  
+                  if (originalObj is AppEvent) {
+                    context.push('/calendar/app-event/${originalObj.id}', extra: originalObj);
+                  } else if (originalObj is GroupEvent) {
+                    context.push('/group-event/${originalObj.id}', extra: originalObj);
+                  }
+                }
+              },
+            );
+          }
+
+          // --- VIEW 2: LIST (Your Original Code) ---
+          final appEvents = data.appEvents;
+          final groupEvents = data.groupEvents;
+
+          if (appEvents.isEmpty && groupEvents.isEmpty) {
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(() {
+                  _calendarFuture = _loadAllEvents();
+                  _refreshKey = UniqueKey().toString();
+                });
+                await _calendarFuture;
+              },
+              child: ListView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                children: [
+                  const SizedBox(height: 200),
+                  Center(child: Text("key_036".tr())),
+                ],
+              ),
+            );
+          }
+
+          final List<Widget> items = [];
+          if (appEvents.isNotEmpty) {
+            items.add(_sectionHeader("key_036a".tr()));
+            items.addAll(appEvents.map(_buildAppEventCard(canManageApp)));
+          }
+          if (groupEvents.isNotEmpty) {
+            items.add(_sectionHeader("key_036b".tr()));
+            items.addAll(groupEvents.map(_buildGroupEventCard));
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(() {
+                _calendarFuture = _loadAllEvents();
+                _refreshKey = UniqueKey().toString();
+              });
+              await _calendarFuture;
+            },
+            child: ListView(
+              padding: const EdgeInsets.all(16),
+              physics: const AlwaysScrollableScrollPhysics(),
+              children: items,
+            ),
+          );
+        },
+      ),
+      floatingActionButton: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton.small(
+            heroTag: 'calendar-settings',
+            onPressed: _openCalendarSettings,
+            child: const Icon(Icons.tune),
+          ),
+          const SizedBox(height: 16),
+          if (canManageApp)
+            FloatingActionButton(
+              heroTag: 'add-event',
               onPressed: () => _openAppForm(),
-              tooltip: "key_036c".tr(),
               child: const Icon(Icons.add),
-            )
-          : null,
+            ),
+        ],
+      ),
     );
   }
+
+  // --- HELPER WIDGETS (Restored from your original code) ---
 
   Widget _sectionHeader(String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -223,13 +267,11 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
         ),
       );
 
-  // Updated function signature to accept canManageApp
-  Widget Function(AppEvent) _buildAppEventCard(bool isLoggedIn, bool canManageApp) =>
+  Widget Function(AppEvent) _buildAppEventCard(bool canManageApp) =>
       (AppEvent e) => Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
               onTap: () => context.push('/calendar/app-event/${e.id}', extra: e),
-              // Use the passed 'canManageApp' boolean
               trailing: canManageApp
                   ? PopupMenuButton<String>(
                       onSelected: (action) async {
@@ -301,4 +343,40 @@ class _CalendarData {
   final List<AppEvent> appEvents;
   final List<GroupEvent> groupEvents;
   _CalendarData({required this.appEvents, required this.groupEvents});
+}
+
+class _EventDataSource extends CalendarDataSource {
+  _EventDataSource(List<AppEvent> appEvents, List<GroupEvent> groupEvents, ColorScheme colors) {
+    final List<Appointment> _appointments = [];
+
+    _appointments.addAll(appEvents.map<Appointment>((e) {
+      return Appointment(
+        id: e,
+        // FIX: Convert UTC to Local time so it shows on the correct day
+        startTime: e.eventDate.toLocal(), 
+        endTime: e.eventDate.add(const Duration(hours: 1)).toLocal(),
+        
+        subject: e.title,
+        color: colors.primary,
+        isAllDay: false,
+        location: e.location,
+      );
+    }));
+
+    _appointments.addAll(groupEvents.map<Appointment>((e) {
+      return Appointment(
+        id: e,
+        // FIX: Convert UTC to Local time here too
+        startTime: e.eventDate.toLocal(),
+        endTime: e.eventDate.add(const Duration(hours: 1)).toLocal(),
+        
+        subject: e.title,
+        color: colors.secondary,
+        isAllDay: false,
+        location: e.location,
+      );
+    }));
+
+    appointments = _appointments;
+  }
 }

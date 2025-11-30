@@ -398,10 +398,17 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   @override
   Widget build(BuildContext context) {
     final list = filteredAnnouncements;
+    final canPop = GoRouter.of(context).canPop();
 
     return Scaffold(
       appBar: AppBar(
         title: Text(_canManage ? "key_133".tr() : "key_131".tr()),
+        leading: canPop
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => context.go('/'),
+              ),
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
