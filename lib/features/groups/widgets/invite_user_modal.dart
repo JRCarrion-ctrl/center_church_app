@@ -29,9 +29,14 @@ class _InviteUserModalState extends State<InviteUserModal> {
 
       // Bundle public profiles + current members + pending invites in one roundtrip.
       const searchOp = r'''
-        query InviteUserSearch($gid: uuid!, $emailPattern: String!) {
+        query InviteUserSearch($gid: uuid!, $searchQuery: String!) {
           public_profiles(
-            where: { email: { _ilike: $emailPattern } }
+            where: {
+              _or: [
+                { email: { _ilike: $searchQuery } },
+                { display_name: { _ilike: $searchQuery } }
+              ]
+            }
             limit: 25
           ) {
             id
@@ -61,7 +66,7 @@ class _InviteUserModalState extends State<InviteUserModal> {
         document: gql(searchOp),
         variables: {
           'gid': widget.groupId,
-          'emailPattern': '%$q%',
+          'searchQuery': '%$q%',
         },
         fetchPolicy: FetchPolicy.networkOnly,
       ));

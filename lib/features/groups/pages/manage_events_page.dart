@@ -4,6 +4,7 @@ import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:ccf_app/routes/router_observer.dart';
 import 'package:ccf_app/core/time_service.dart';
@@ -11,6 +12,7 @@ import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 class GroupEventDetailsPage extends StatefulWidget {
   final GroupEvent event;
@@ -112,14 +114,12 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
       if (currentUserId != null) {
         try {
-          // Use a try-catch block to safely find the existing RSVP
           final existingRsvp = data.firstWhere(
             (r) => r['user_id'] == currentUserId,
           );
           currentAttendingCount = existingRsvp['attending_count'] as int? ?? 1;
         } catch (e) {
-          // StateError means no element was found, which is okay.
-          // We just proceed with the default count of 1.
+          // No RSVP found for current user, safe to ignore
         }
       }
 
@@ -128,7 +128,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
         _attendingCount = currentAttendingCount;
       });
     } catch (e) {
-      // Handle potential errors from the network request itself
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("Failed to load RSVP data: $e")),
@@ -137,7 +136,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
     }
   }
 
-  // REFACTORED: Now uses the EventService for GraphQL logic
   Future<void> _submitRSVP() async {
     final uid = context.read<AppState>().profile?.id;
     if (uid == null || uid.isEmpty) {
@@ -150,7 +148,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
     setState(() => _saving = true);
 
-    // NOTE: This assumes EventService has an rsvpGroupEvent method
     try {
       await _eventService.rsvpGroupEvent(
         eventId: widget.event.id, 
@@ -163,7 +160,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
       _loadRSVPs();
     } catch (e) {
       if (!mounted) return;
-      // We rely on the service to provide an informative exception
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
       );
@@ -185,12 +181,36 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
 
   @override
   Widget build(BuildContext context) {
-    final currentUserId = context.watch<AppState>().profile?.id; // text id
-    final hasRSVP = currentUserId != null && _rsvps.any((r) => r['user_id'] == currentUserId);
+    final currentUserId = context.watch<AppState>().profile?.id; 
+    
+    // Find current user's RSVP entry safely
+    final myRsvpEntry = currentUserId != null && _rsvps.isNotEmpty
+        ? _rsvps.firstWhere((r) => r['user_id'] == currentUserId, orElse: () => {})
+        : <String, dynamic>{};
+
+    final hasRSVP = myRsvpEntry.isNotEmpty;
     final e = widget.event;
 
+    // --- NEW LOGIC: Calculate "Others" count ---
+    int othersCount = 0;
+    for (var rsvp in _rsvps) {
+      if (rsvp['user_id'] != currentUserId) {
+        othersCount += (rsvp['attending_count'] as int? ?? 0);
+      }
+    }
+
+    final canPop = GoRouter.of(context).canPop();
+
     return Scaffold(
-      appBar: AppBar(title: Text(e.title)),
+      appBar: AppBar(
+        title: Text(e.title),
+        leading: canPop
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () => context.go('/'),
+              ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -255,31 +275,183 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
             ],
           ),
           const Divider(height: 32),
-          if (_isSupervisor && _rsvps.isNotEmpty) ...[
+          
+          // --- UPDATED RSVP LIST LOGIC ---
+          if (_rsvps.isNotEmpty) ...[
             Text("key_143a".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
-            ..._rsvps.map((rsvp) {
-              // NOTE: If your fetchGroupEventRSVPs query uses 'profiles', 
-              // the key below should be 'profiles', otherwise it should be 'profile'
-              final profile = rsvp['profiles'] ?? {}; 
-              final photoUrl = profile['photo_url'];
-              return ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-                      ? CachedNetworkImageProvider(photoUrl)
-                      : null,
-                  child: (photoUrl == null || photoUrl.isEmpty)
-                      ? const Icon(Icons.person)
-                      : null,
+
+            // 1. Supervisor: Show All
+            if (_isSupervisor)
+               ..._rsvps.map((rsvp) => _buildRsvpTile(rsvp))
+
+            // 2. Regular User: Show Self + Count
+            else ...[
+              if (hasRSVP)
+                _buildRsvpTile(myRsvpEntry),
+              
+              if (othersCount > 0)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                  child: Text(
+                    "+ $othersCount others are attending",
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: Colors.grey[600],
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ),
-                title: Text(profile['display_name'] ?? 'Unknown'),
-                subtitle: Text(profile['email'] ?? ''),
-                trailing: Text('x${rsvp['attending_count']}'),
-              );
-            }),
+            ]
           ],
         ],
       ),
+    );
+  }
+
+  // Helper widget to keep build method clean
+  Widget _buildRsvpTile(Map<String, dynamic> rsvp) {
+    // Note: Group events usually return 'profiles' (plural) in the join, unlike app events
+    final profile = rsvp['profiles'] ?? {}; 
+    final photoUrl = profile['photo_url'];
+    final displayName = profile['display_name'] ?? 'Unknown';
+    final email = profile['email'] ?? '';
+    final count = rsvp['attending_count'];
+
+    return ListTile(
+      leading: CircleAvatar(
+        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+            ? CachedNetworkImageProvider(photoUrl)
+            : null,
+        child: (photoUrl == null || photoUrl.isEmpty)
+            ? const Icon(Icons.person)
+            : null,
+      ),
+      title: Text(displayName),
+      subtitle: Text(email),
+      trailing: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.primaryContainer,
+          shape: BoxShape.circle,
+        ),
+        child: Text(
+          '$count',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: Theme.of(context).colorScheme.onPrimaryContainer
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class GroupEventDeepLinkWrapper extends StatefulWidget {
+  final String eventId;
+  final GroupEvent? preloadedEvent;
+
+  const GroupEventDeepLinkWrapper({
+    super.key,
+    required this.eventId,
+    this.preloadedEvent,
+  });
+
+  @override
+  State<GroupEventDeepLinkWrapper> createState() => _GroupEventDeepLinkWrapperState();
+}
+
+class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
+  // Make this nullable to allow lazy initialization
+  Future<GroupEvent?>? _eventFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    
+    // Initialize the future here to safely access the Provider/Context
+    if (_eventFuture == null && widget.preloadedEvent == null) {
+      _eventFuture = _fetchEventById(widget.eventId);
+    }
+  }
+
+  Future<GroupEvent?> _fetchEventById(String id) async {
+    try {
+      final client = GraphProvider.of(context); // Using your existing GraphProvider utility
+
+      // Query to fetch a single group event by PK
+      // Note: We also need group_id to perform role checks inside the page
+      const String query = r'''
+        query GetGroupEvent($id: uuid!) {
+          group_events_by_pk(id: $id) {
+            id
+            group_id
+            title
+            description
+            event_date
+            location
+            image_url
+            created_at
+          }
+        }
+      ''';
+
+      final result = await client.query(QueryOptions(
+        document: gql(query),
+        variables: {'id': id},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      if (result.hasException) {
+        debugPrint('Group Event Deep Link Error: ${result.exception.toString()}');
+        return null;
+      }
+
+      final data = result.data?['group_events_by_pk'];
+      if (data == null) return null;
+
+      // Manually map to GroupEvent model
+      return GroupEvent(
+        id: data['id'],
+        groupId: data['group_id'],
+        title: data['title'],
+        description: data['description'],
+        eventDate: DateTime.parse(data['event_date']),
+        location: data['location'],
+        imageUrl: data['image_url'],
+      );
+    } catch (e) {
+      debugPrint('Error fetching deep link group event: $e');
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // SCENARIO 1: Normal Navigation (Data passed via extra)
+    if (widget.preloadedEvent != null) {
+      return GroupEventDetailsPage(event: widget.preloadedEvent!);
+    }
+
+    // SCENARIO 2: Deep Link (Data must be fetched)
+    return FutureBuilder<GroupEvent?>(
+      future: _eventFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Scaffold(
+            appBar: AppBar(), // Empty app bar for UI stability
+            body: const Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        if (snapshot.hasError || snapshot.data == null) {
+          return Scaffold(
+            appBar: AppBar(title: Text("key_error".tr())),
+            body: Center(child: Text("key_event_not_found".tr())),
+          );
+        }
+
+        return GroupEventDetailsPage(event: snapshot.data!);
+      },
     );
   }
 }

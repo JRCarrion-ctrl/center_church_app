@@ -107,6 +107,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
           id
           status
           user_id
+          checked
           request
           include_name
           created_at
@@ -143,6 +144,45 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text("key_331".tr(args: [e.toString()]))),
+        );
+      }
+    }
+  }
+
+  Future<void> _markPrayerAsChecked(String prayerId) async {
+    final client = _client(context);
+    const m = r'''
+      mutation MarkChecked($id: uuid!) {
+        update_prayer_requests_by_pk(
+          pk_columns: { id: $id }, 
+          _set: { checked: true }
+        ) { 
+          id 
+          checked 
+        }
+      }
+    ''';
+
+    try {
+      final res = await client.mutate(
+        MutationOptions(document: gql(m), variables: {'id': prayerId}),
+      );
+    
+      if (res.hasException) throw res.exception!;
+    
+      // Refresh the list to show the checkmark has disappeared
+      await _loadPrayerRequests();
+    
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          // You might want to create a specific translation key for this later
+          SnackBar(content: Text("Marked as checked".tr())), 
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")), // Replace with localized error if available
         );
       }
     }
@@ -342,6 +382,8 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                       final prayerUserId = item['user_id'] as String?;
                       final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
                       final canClose = isSupervisorOrOwner || isPrayerOwner;
+                      final isChecked = item['checked'] == true;
+                      final showCheckAction = isSupervisorOrOwner && !isChecked;
                       final createdAtDateTime = item['created_at'] != null 
                           ? DateTime.parse(item['created_at']).toLocal()
                           : null;
@@ -362,6 +404,29 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                         subtitleText = "key_posted_on".tr(args: [createdAt]);
                       } else {
                         subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
+                      }
+
+                      Widget? trailingWidget;
+
+                      if (showCheckAction || canClose) {
+                        trailingWidget = Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (showCheckAction)
+                              IconButton(
+                                icon: const Icon(Icons.check_circle_outline),
+                                color: Colors.green, // Visual distinction
+                                tooltip: "Mark as checked",
+                                onPressed: () => _markPrayerAsChecked(item['id'] as String),
+                              ),
+                            if (canClose)
+                              IconButton(
+                                icon: Icon(Icons.close, color: colorScheme.error),
+                                tooltip: "key_332".tr(),
+                                onPressed: () => _confirmAndClosePrayer(item['id'] as String),
+                              ),
+                          ],
+                        );
                       }
 
                       return Padding(
@@ -391,13 +456,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                               subtitleText,
                               style: textTheme.bodySmall?.copyWith(color: colorScheme.outline),
                             ),
-                            trailing: canClose
-                                ? IconButton(
-                                    icon: Icon(Icons.close, color: colorScheme.error),
-                                    tooltip: "key_332".tr(),
-                                    onPressed: () => _confirmAndClosePrayer(item['id'] as String),
-                                  )
-                                : null,
+                            trailing: trailingWidget,
                           ),
                         ),
                       );

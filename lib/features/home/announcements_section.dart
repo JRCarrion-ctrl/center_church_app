@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/routes/router_observer.dart';
@@ -77,6 +78,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
             id
             title
             body
+            image_url
             published_at
           }
         }
@@ -174,6 +176,74 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
       debugPrint('Error loading announcements: $e');
       if (mounted) setState(() => loading = false);
     }
+  }
+
+  void _showAnnouncementDialog(
+    BuildContext context, 
+    Map<String, dynamic> a, 
+    TextTheme textTheme
+  ) {
+    final imageUrl = a['image_url'] as String?;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    showDialog(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        contentPadding: EdgeInsets.zero,
+        content: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 500),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // HEADER IMAGE IN DIALOG
+              if (hasImage)
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    height: 200,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 200,
+                      color: colorScheme.surfaceContainerHighest,
+                      child: const Center(child: CircularProgressIndicator.adaptive()),
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox.shrink(),
+                  ),
+                ),
+              
+              Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
+                    const SizedBox(height: 8),
+                    Text(
+                      _formatDate(a['published_at'] as String),
+                      style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                    ),
+                    const SizedBox(height: 16),
+                    SingleChildScrollView(
+                      child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text("key_178".tr()), // Close
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -350,67 +420,70 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   }
 
   Widget _buildAnnouncementListItem(
-    Map<String, dynamic> a, 
-    TextTheme textTheme, 
-    ColorScheme colorScheme, 
-    BuildContext context
+    Map<String, dynamic> a,
+    TextTheme textTheme,
+    ColorScheme colorScheme,
+    BuildContext context,
   ) {
     final hasBody = (a['body'] ?? '') is String && (a['body'] as String).isNotEmpty;
+    final imageUrl = a['image_url'] as String?;
+    final hasImage = imageUrl != null && imageUrl.isNotEmpty;
 
     return InkWell(
-      onTap: () {
-        // Show full content dialog
-        showDialog(
-          context: context,
-          builder: (dialogContext) => AlertDialog(
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
-            content: SingleChildScrollView(
-              child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: Text("key_178".tr()), // Close
-              ),
-            ],
-          ),
-        );
-      },
+      onTap: () => _showAnnouncementDialog(context, a, textTheme),
       child: Padding(
-        // Apply the standard horizontal margin here
-        padding: const EdgeInsets.symmetric(vertical: 12.0, horizontal: 16.0), 
+        padding: const EdgeInsets.symmetric(vertical: 16.0, horizontal: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // TITLE (Bold, primary color)
+            // TITLE
             Text(
               (a['title'] ?? '') as String,
               style: textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
-                color: colorScheme.primary, 
+                color: colorScheme.primary,
               ),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
+            const SizedBox(height: 8),
 
-            // SUBTITLE (Body/Excerpt)
+            // IMAGE (Cached)
+            if (hasImage)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(12),
+                  child: CachedNetworkImage(
+                    imageUrl: imageUrl,
+                    height: 160,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      height: 160,
+                      color: colorScheme.surfaceContainerHighest,
+                    ),
+                    errorWidget: (context, url, error) => const SizedBox.shrink(),
+                  ),
+                ),
+              ),
+
+            // BODY
             if (hasBody)
               Text(
                 a['body'] as String,
                 style: textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),
-                maxLines: 2, 
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
               ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 12),
 
+            // FOOTER
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                // PUBLISHED DATE (Subtle label)
                 Text(
                   _formatDate(a['published_at'] as String),
                   style: textTheme.labelSmall?.copyWith(
@@ -418,8 +491,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                     fontWeight: FontWeight.w500,
                   ),
                 ),
-                
-                // Read More Text Link
                 Text(
                   "key_read_more".tr(),
                   style: textTheme.labelLarge?.copyWith(
@@ -437,70 +508,88 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
 
   Widget _buildGroupList(TextTheme textTheme, ColorScheme colorScheme) {
     return SizedBox(
-      height: 180, 
+      height: 200,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         itemCount: groupAnnouncements.length,
         separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final a = groupAnnouncements[index];
-          
+          final imageUrl = a['image_url'] as String?;
+          final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+
           return SizedBox(
-            // Card width increased for better visibility
-            width: 280, 
+            width: 280,
             child: Card(
-              elevation: 0, 
+              elevation: 0,
               color: colorScheme.surfaceContainerHigh,
+              clipBehavior: Clip.antiAlias,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: () {
-                  // Show the full announcement content in a modern dialog
-                  showDialog(
-                    context: context,
-                    builder: (dialogContext) => AlertDialog(
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      title: Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
-                      content: SingleChildScrollView(
-                        child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
-                      ),
-                      actions: [
-                        TextButton(
-                          onPressed: () => Navigator.of(dialogContext).pop(),
-                          child: Text("key_178".tr()), // Close
+                onTap: () => _showAnnouncementDialog(context, a, textTheme),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // IMAGE OR ICON HEADER
+                    if (hasImage)
+                      SizedBox(
+                        height: 100,
+                        width: double.infinity,
+                        child: CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            color: colorScheme.surfaceContainerHighest,
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            color: colorScheme.surfaceContainerHighest,
+                            child: Icon(Icons.broken_image_outlined, color: colorScheme.outline),
+                          ),
                         ),
-                      ],
-                    ),
-                  );
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(Icons.groups_2_outlined, color: colorScheme.tertiary, size: 28),
-                      const SizedBox(height: 8),
-                      Text(
-                        (a['title'] ?? '') as String,
-                        style: textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _formatDate(a['published_at'] as String),
-                        style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
-                      ),
-                      const Spacer(),
-                      Text(
-                        "key_read_more".tr(), 
-                        style: textTheme.labelLarge?.copyWith(color: colorScheme.tertiary, fontWeight: FontWeight.bold),
                       )
-                    ],
-                  ),
+                    else
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Icon(Icons.groups_2_outlined, color: colorScheme.tertiary, size: 28),
+                      ),
+
+                    // CONTENT
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              (a['title'] ?? '') as String,
+                              style: textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                                color: colorScheme.onSurface,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const Spacer(),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDate(a['published_at'] as String),
+                                  style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                                ),
+                                if (!hasImage)
+                                  Text(
+                                    "key_read_more".tr(),
+                                    style: textTheme.labelLarge?.copyWith(
+                                        color: colorScheme.tertiary, fontWeight: FontWeight.bold),
+                                  )
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
