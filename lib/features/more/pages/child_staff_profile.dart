@@ -85,12 +85,18 @@ class ChildStaffProfilePage extends StatelessWidget {
     );
   }
 
+  // --- UPDATED HELPER: Now accepts 'trailing' widget ---
   Widget _buildInfoTile(
     BuildContext context, 
-      String title, 
-      IconData icon, 
-      String? content,
-      {bool isPhone = false, VoidCallback? onTap, bool isThreeLine = false}) 
+    String title, 
+    IconData icon, 
+    String? content,
+    {
+      bool isPhone = false, 
+      VoidCallback? onTap, 
+      bool isThreeLine = false,
+      Widget? trailing, // <--- Added this parameter
+    }) 
   {
     if (content == null || content.isEmpty) {
       return const SizedBox.shrink();
@@ -106,6 +112,7 @@ class ChildStaffProfilePage extends StatelessWidget {
       isThreeLine: isThreeLine,
       dense: !isThreeLine,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0), 
+      trailing: trailing, // <--- Used here
     );
   }
 
@@ -132,6 +139,7 @@ class ChildStaffProfilePage extends StatelessWidget {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
+          // Add refresh logic if needed
         },
         child: SingleChildScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
@@ -212,13 +220,25 @@ class ChildStaffProfilePage extends StatelessWidget {
                           _nonEmptyOr(notes, "None".tr()),
                           isThreeLine: true,
                         ),
-                        // Emergency Contact (External number on the child's profile)
+                        
+                        // Emergency Contact (UPDATED WITH CALL BUTTON)
                         _buildInfoTile(
                           context,
                           "key_323".tr(), // "Emergency Contact"
                           Icons.contact_phone,
                           _nonEmptyOr(emergency, "None".tr()),
                           isPhone: true,
+                          // Add the call button if data exists
+                          trailing: (emergency != null && emergency.isNotEmpty) 
+                            ? IconButton(
+                                icon: const Icon(Icons.call),
+                                onPressed: () {
+                                  // Sanitize string to numbers only for the tel: scheme
+                                  final sanitized = emergency.replaceAll(RegExp(r'[^0-9]'), '');
+                                  launchUrl(Uri(scheme: 'tel', path: sanitized));
+                                },
+                              )
+                            : null,
                         ),
                       ],
                     ),
@@ -237,7 +257,6 @@ class ChildStaffProfilePage extends StatelessWidget {
                           if (parentPhone != null)
                             IconButton(
                               icon: const Icon(Icons.call),
-                              // launchUrl requires the 'package:url_launcher/url_launcher.dart' import
                               onPressed: () => launchUrl(Uri(scheme: 'tel', path: parentPhone.replaceAll(RegExp(r'[^0-9]'), ''))),
                             ),
                           // Navigate to parent's PublicProfile

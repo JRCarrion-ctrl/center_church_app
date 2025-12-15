@@ -7,7 +7,6 @@ import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:ccf_app/routes/router_observer.dart';
-import 'package:ccf_app/core/time_service.dart';
 import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
 import '../../calendar/event_service.dart';
@@ -110,7 +109,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
       if (!mounted) return;
 
       final currentUserId = context.read<AppState>().profile?.id;
-      int currentAttendingCount = 1; // Default to 1 if no RSVP is found
+      int currentAttendingCount = 1; 
 
       if (currentUserId != null) {
         try {
@@ -119,7 +118,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
           );
           currentAttendingCount = existingRsvp['attending_count'] as int? ?? 1;
         } catch (e) {
-          // No RSVP found for current user, safe to ignore
+          // No RSVP found for current user
         }
       }
 
@@ -173,17 +172,39 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
       title: event.title,
       description: event.description,
       startDate: event.eventDate,
-      endDate: event.eventDate.add(const Duration(hours: 1)),
+      // --- UPDATED: Use actual end time ---
+      endDate: event.eventEnd ?? event.eventDate.add(const Duration(hours: 1)),
       location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
     Add2Calendar.addEvent2Cal(calendarEvent);
+  }
+
+  // --- NEW: Helper to format "Start - End" time nicely ---
+  String _formatEventTime(DateTime startUtc, DateTime? endUtc) {
+    final start = startUtc.toLocal();
+    final dateStr = DateFormat('EEEE, MMM d, yyyy').format(start);
+    final startStr = DateFormat('h:mm a').format(start);
+    
+    if (endUtc != null) {
+      final end = endUtc.toLocal();
+      // If same day, just show time range: "Friday... 5:00 PM - 7:00 PM"
+      if (DateUtils.isSameDay(start, end)) {
+        final endStr = DateFormat('h:mm a').format(end);
+        return '$dateStr • $startStr - $endStr';
+      } else {
+        // If different day, show full end date
+         final endDateStr = DateFormat('MMM d, h:mm a').format(end);
+         return '$dateStr • $startStr - $endDateStr';
+      }
+    }
+    
+    return '$dateStr • $startStr';
   }
 
   @override
   Widget build(BuildContext context) {
     final currentUserId = context.watch<AppState>().profile?.id; 
     
-    // Find current user's RSVP entry safely
     final myRsvpEntry = currentUserId != null && _rsvps.isNotEmpty
         ? _rsvps.firstWhere((r) => r['user_id'] == currentUserId, orElse: () => {})
         : <String, dynamic>{};
@@ -191,7 +212,6 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
     final hasRSVP = myRsvpEntry.isNotEmpty;
     final e = widget.event;
 
-    // --- NEW LOGIC: Calculate "Others" count ---
     int othersCount = 0;
     for (var rsvp in _rsvps) {
       if (rsvp['user_id'] != currentUserId) {
@@ -228,12 +248,13 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
           const SizedBox(height: 16),
           Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
+          
+          // --- UPDATED: Use the new format helper ---
           Text(
-            TimeService.formatUtcToLocal(
-              e.eventDate,
-              pattern: 'EEEE, MMM d, yyyy • h:mm a',
-            ),
+            _formatEventTime(e.eventDate, e.eventEnd),
+            style: Theme.of(context).textTheme.bodyMedium, // Use explicit style for consistency
           ),
+          
           const SizedBox(height: 6),
           if (e.description?.isNotEmpty == true)
             Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
@@ -276,16 +297,13 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
           ),
           const Divider(height: 32),
           
-          // --- UPDATED RSVP LIST LOGIC ---
           if (_rsvps.isNotEmpty) ...[
             Text("key_143a".tr(), style: Theme.of(context).textTheme.titleMedium),
             const SizedBox(height: 8),
 
-            // 1. Supervisor: Show All
             if (_isSupervisor)
                ..._rsvps.map((rsvp) => _buildRsvpTile(rsvp))
 
-            // 2. Regular User: Show Self + Count
             else ...[
               if (hasRSVP)
                 _buildRsvpTile(myRsvpEntry),
@@ -308,9 +326,7 @@ class _GroupEventDetailsPageState extends State<GroupEventDetailsPage> with Rout
     );
   }
 
-  // Helper widget to keep build method clean
   Widget _buildRsvpTile(Map<String, dynamic> rsvp) {
-    // Note: Group events usually return 'profiles' (plural) in the join, unlike app events
     final profile = rsvp['profiles'] ?? {}; 
     final photoUrl = profile['photo_url'];
     final displayName = profile['display_name'] ?? 'Unknown';
@@ -361,14 +377,12 @@ class GroupEventDeepLinkWrapper extends StatefulWidget {
 }
 
 class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
-  // Make this nullable to allow lazy initialization
   Future<GroupEvent?>? _eventFuture;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     
-    // Initialize the future here to safely access the Provider/Context
     if (_eventFuture == null && widget.preloadedEvent == null) {
       _eventFuture = _fetchEventById(widget.eventId);
     }
@@ -376,10 +390,9 @@ class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
 
   Future<GroupEvent?> _fetchEventById(String id) async {
     try {
-      final client = GraphProvider.of(context); // Using your existing GraphProvider utility
+      final client = GraphProvider.of(context); 
 
-      // Query to fetch a single group event by PK
-      // Note: We also need group_id to perform role checks inside the page
+      // --- UPDATED: Fetch event_end ---
       const String query = r'''
         query GetGroupEvent($id: uuid!) {
           group_events_by_pk(id: $id) {
@@ -388,6 +401,7 @@ class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
             title
             description
             event_date
+            event_end
             location
             image_url
             created_at
@@ -409,13 +423,14 @@ class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
       final data = result.data?['group_events_by_pk'];
       if (data == null) return null;
 
-      // Manually map to GroupEvent model
       return GroupEvent(
         id: data['id'],
         groupId: data['group_id'],
         title: data['title'],
         description: data['description'],
         eventDate: DateTime.parse(data['event_date']),
+        // --- UPDATED: Parse event_end ---
+        eventEnd: data['event_end'] != null ? DateTime.parse(data['event_end']) : null,
         location: data['location'],
         imageUrl: data['image_url'],
       );
@@ -427,18 +442,16 @@ class _GroupEventDeepLinkWrapperState extends State<GroupEventDeepLinkWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // SCENARIO 1: Normal Navigation (Data passed via extra)
     if (widget.preloadedEvent != null) {
       return GroupEventDetailsPage(event: widget.preloadedEvent!);
     }
 
-    // SCENARIO 2: Deep Link (Data must be fetched)
     return FutureBuilder<GroupEvent?>(
       future: _eventFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return Scaffold(
-            appBar: AppBar(), // Empty app bar for UI stability
+            appBar: AppBar(), 
             body: const Center(child: CircularProgressIndicator()),
           );
         }

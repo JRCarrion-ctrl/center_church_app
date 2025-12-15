@@ -35,6 +35,8 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
   late TextEditingController _locationController;
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
+  DateTime? _endDate;
+  TimeOfDay? _endTime;
   bool _saving = false;
 
   @override
@@ -49,6 +51,11 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       final local = ev.eventDate.toLocal();
       _selectedDate = DateTime(local.year, local.month, local.day);
       _selectedTime = TimeOfDay.fromDateTime(local);
+      if (ev.eventEnd != null) {
+        final localEnd = ev.eventEnd!.toLocal();
+        _endDate = DateTime(localEnd.year, localEnd.month, localEnd.day);
+        _endTime = TimeOfDay.fromDateTime(localEnd);
+      }
     }
   }
 
@@ -91,6 +98,25 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     if (time != null && mounted) setState(() => _selectedTime = time);
   }
 
+  Future<void> _pickEndDate() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _endDate ?? _selectedDate ?? now,
+      firstDate: _selectedDate ?? now.subtract(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 365)),
+    );  
+    if (date != null && mounted) setState(() => _endDate = date);
+  }
+
+  Future<void> _pickEndTime() async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _endTime ?? TimeOfDay.now(),
+    );
+    if (time != null && mounted) setState(() => _endTime = time);
+  }
+
   Future<void> _save() async {
     if (!_svcReady) return;
 
@@ -127,11 +153,28 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       _selectedTime!.minute,
     );
 
+    DateTime? finalEndDt;
+    if (_endDate != null && _endTime != null) {
+      finalEndDt = DateTime(
+        _endDate!.year, _endDate!.month, _endDate!.day,
+        _endTime!.hour, _endTime!.minute,
+      );
+
+      // VALIDATION: Ensure End is after Start
+      if (finalEndDt.isBefore(dt)) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("End time cannot be before start time")),
+        );
+        return;
+      }
+    }
+
     final appEvent = AppEvent(
       id: widget.existing?.id ?? '',
       title: _titleController.text.trim(),
       description: _descController.text.trim(),
       eventDate: dt.toUtc(),
+      eventEnd: finalEndDt?.toUtc(),
       imageUrl: finalImageUrl,
       location: _locationController.text.trim(),
     );
@@ -216,6 +259,42 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
                         ),
                       ),
                     ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Text("End Time (Optional)", style: Theme.of(context).textTheme.bodyMedium),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _pickEndDate,
+                        child: Text(
+                          _endDate == null
+                              ? "Select Date"
+                              : DateFormat.yMMMd().format(_endDate!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _pickEndTime,
+                        child: Text(
+                          _endTime == null
+                              ? "Select Time"
+                              : _endTime!.format(context),
+                        ),
+                      ),
+                    ),
+                    // Optional: Clear button
+                    if (_endDate != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() {
+                          _endDate = null;
+                          _endTime = null;
+                        }),
+                      )
                   ],
                 ),
                 const SizedBox(height: 16),

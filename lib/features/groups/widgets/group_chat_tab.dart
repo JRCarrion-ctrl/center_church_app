@@ -7,7 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/core/time_service.dart';
-import 'package:ccf_app/routes/router_observer.dart'; // Ensure router_observer is available
+import 'package:ccf_app/routes/router_observer.dart';
 
 import '../../../app_state.dart';
 import '../models/group_message.dart';
@@ -19,8 +19,9 @@ import 'input_row.dart';
 class GroupChatTab extends StatefulWidget {
   final String groupId;
   final bool isAdmin;
+  final bool onlyAdminsCanMessage;
 
-  const GroupChatTab({super.key, required this.groupId, required this.isAdmin});
+  const GroupChatTab({super.key, required this.groupId, required this.isAdmin, this.onlyAdminsCanMessage = false});
 
   @override
   State<GroupChatTab> createState() => _GroupChatTabState();
@@ -38,7 +39,6 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
   
-  // FIX 1: Store userId safely here
   String? _safeUserId; 
 
   late GroupChatService _chatService;
@@ -50,7 +50,6 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   Timer? _reactionsTimer;
 
-  // FIX 2: Use the safe local variable
   String? get _userId => _safeUserId;
 
   @override
@@ -64,30 +63,24 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     super.didChangeDependencies();
 
     if (!_isInitialized) {
-      // 1) FIX 3: Read and store the UserId while context is safe
       _safeUserId = context.read<AppState>().profile?.id;
 
-      // 2) Build and initialize services
       final GraphQLClient gql = GraphProvider.of(context);
       _chatService = GroupChatService(
         gql,
-        // Pass the safe ID getter, or simply use the stored ID if preferred
         getCurrentUserId: () => _safeUserId,
       );
       _storageService = ChatStorageService(gql);
       
       _isInitialized = true;
 
-      // 3) Initialize subscriptions and listeners
       _initializeChat();
       _subscribeToMemberStatus();
     }
 
-    // 4) Route observer logic
     final route = ModalRoute.of(context);
     if (route is PageRoute) routeObserver.subscribe(this, route);
     
-    // Signal presence when the chat screen becomes active
     _chatService.updateLastSeen(widget.groupId); 
   }
 
@@ -98,11 +91,9 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     _statusSub?.cancel();
     _typingThrottleTimer?.cancel();
     
-    // FIX 4: Safely signal stop typing/viewing using the stored _safeUserId
-    // Wrap in a check because the service call might still execute async.
     if (_safeUserId != null) {
       _chatService.updateLastTyped(widget.groupId, isTyping: false);
-      _chatService.updateLastSeen(widget.groupId); // Final update for last seen
+      _chatService.updateLastSeen(widget.groupId); 
     }
     
     _messageController.removeListener(_onTypingUpdate);
@@ -113,27 +104,19 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   @override
   void didPopNext() {
-    // Signal presence when returning to the chat screen
     _chatService.updateLastSeen(widget.groupId);
     setState(() {});
   }
   
   @override
   void didPushNext() {
-    // Signal the user is no longer viewing the chat when navigating away
-    // FIX 5: Ensure typing status is cleared when leaving the page
     if (_safeUserId != null) {
       _chatService.updateLastTyped(widget.groupId, isTyping: false);
       _chatService.updateLastSeen(widget.groupId);
     }
-    
-    // Cancel the timer to prevent spurious updates in the background
     _typingThrottleTimer?.cancel();
     _isTyping = false;
   }
-
-
-  // --- Status and Presence Logic (Remains mostly unchanged, now uses _safeUserId safely) ---
 
   void _subscribeToMemberStatus() {
     _statusSub = _chatService.streamMemberMetadata(groupId: widget.groupId).listen((statuses) {
@@ -165,7 +148,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
   }
   
   void _onTypingUpdate() {
-    if (_safeUserId == null) return; // Prevent updates if not authenticated
+    if (_safeUserId == null) return; 
 
     if (_messageController.text.isNotEmpty && !_isTyping) {
       _isTyping = true;
@@ -191,13 +174,10 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     });
   }
 
-  // --- Existing Chat Logic (Remaining methods use _safeUserId implicitly via _chatService) ---
-
   Future<void> _initializeChat() async {
-    // ... (unchanged)
     _reactionMap.addAll(await _chatService.getReactions(widget.groupId));
 
-    _reactionsTimer = Timer.periodic(const Duration(seconds: 5), (_) async {
+    _reactionsTimer = Timer.periodic(const Duration(seconds: 15), (_) async {
       if (!mounted) return;
       final latest = await _chatService.getReactions(widget.groupId);
       if (!mounted) return;
@@ -247,7 +227,6 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     final content = _messageController.text.trim();
     if (content.isEmpty) return;
     
-    // Clear typing status immediately upon sending
     _isTyping = false;
     _typingThrottleTimer?.cancel();
     await _chatService.updateLastTyped(widget.groupId, isTyping: false);
@@ -257,76 +236,158 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     _scrollToBottom();
   }
 
-  void _showMessageOptions(GroupMessage message) {
-    // ... (rest of _showMessageOptions remains unchanged)
+  void _showMessageOptions(GroupMessage message, Offset tapPosition) {
     final isSender = message.senderId == _userId;
-    showModalBottomSheet(
+  
+    final position = RelativeRect.fromLTRB(
+      tapPosition.dx,
+      tapPosition.dy,
+      tapPosition.dx + 1, 
+      tapPosition.dy + 1, 
+    );
+
+    showMenu(
       context: context,
-      builder: (_) => Wrap(children: [
+      position: position,
+      elevation: 8,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      items: [
+        PopupMenuItem(
+          value: 'react',
+          child: Row(
+            children: [
+              const Icon(Icons.emoji_emotions, color: Colors.grey),
+              const SizedBox(width: 12),
+              Text("key_165".tr()), 
+            ],
+          ),
+        ),
+      
         if (widget.isAdmin || isSender)
-          ListTile(
-            leading: const Icon(Icons.delete),
-            title: Text("key_162".tr()),
-            onTap: () async {
-              Navigator.pop(context);
-              await _chatService.deleteMessage(message.id);
-            },
+          PopupMenuItem(
+            value: 'delete',
+            child: Row(
+              children: [
+                const Icon(Icons.delete, color: Colors.red),
+                const SizedBox(width: 12),
+                Text("key_162".tr(), style: const TextStyle(color: Colors.red)), 
+              ],
+            ),
           ),
+
         if (!isSender)
-          ListTile(
-            leading: const Icon(Icons.report),
-            title: Text("key_164".tr()),
-            onTap: () async {
-              Navigator.pop(context);
-              await _chatService.reportMessage(message.id);
-            },
+          PopupMenuItem(
+            value: 'report',
+            child: Row(
+              children: [
+                const Icon(Icons.report, color: Colors.orange),
+                const SizedBox(width: 12),
+                Text("key_164".tr()), 
+              ],
+            ),
           ),
-        ListTile(
-          leading: const Icon(Icons.emoji_emotions),
-          title: Text("key_165".tr()),
-          onTap: () {
-            Navigator.pop(context);
-            _showReactionPicker(context, message);
-          },
-        ),
-      ]),
-    );
+      ],
+    ).then((value) async {
+      if (value == null) return;
+
+      if (value == 'react') {
+        await Future.delayed(const Duration(milliseconds: 100));
+        if (mounted) _showFloatingReactionPicker(context, message, tapPosition);
+      } else if (value == 'delete') {
+        await _chatService.deleteMessage(message.id);
+      } else if (value == 'report') {
+        try {
+          await _chatService.reportMessage(message.id);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Successfully Reported"),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("Failed to report message."),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        }
+      }
+    });
   }
 
-  void _showReactionPicker(BuildContext context, GroupMessage message) {
-    // ... (rest of _showReactionPicker remains unchanged)
+  void _handleMessageDoubleTap(GroupMessage message, Offset position) {
+    _showFloatingReactionPicker(context, message, position);
+  }
+
+  void _showFloatingReactionPicker(BuildContext context, GroupMessage message, Offset tapPosition) {
     final emojis = ['❤️', '🔥', '🙏', '😂', '👍', '👀'];
-    showModalBottomSheet(
+  
+    final screenWidth = MediaQuery.of(context).size.width;
+    double leftPos = tapPosition.dx - 100; 
+    if (leftPos < 10) leftPos = 10;
+    if (leftPos + 220 > screenWidth) leftPos = screenWidth - 230;
+
+    showGeneralDialog(
       context: context,
-      builder: (_) => Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Wrap(
-          spacing: 10,
-          children: emojis
-              .map(
-                (e) => GestureDetector(
-                  onTap: () async {
-                    Navigator.pop(context);
-                    await _chatService.addReaction(message.id, e);
-                    if (!mounted) return;
-                    final latest = await _chatService.getReactions(widget.groupId);
-                    if (!mounted) return;
-                    setState(() {
-                      _reactionMap
-                        ..clear()
-                        ..addAll(latest);
-                    });
-                  },
-                  child: Text(e, style: const TextStyle(fontSize: 28)),
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      barrierColor: Colors.black12, 
+      transitionDuration: const Duration(milliseconds: 200),
+      pageBuilder: (context, anim1, anim2) {
+        return Stack(
+          children: [
+            Positioned(
+              top: tapPosition.dy - 70, 
+              left: leftPos,
+              child: Material(
+                color: Colors.transparent,
+                child: ScaleTransition(
+                  scale: CurvedAnimation(parent: anim1, curve: Curves.easeOutBack),
+                  child: Container(
+                    height: 50,
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).cardColor,
+                      borderRadius: BorderRadius.circular(30),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withValues(alpha: 0.2),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        )
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: emojis.map((e) {
+                        return GestureDetector(
+                          onTap: () async {
+                            Navigator.pop(context);
+                            await _chatService.addReaction(message.id, e);
+                            final latest = await _chatService.getReactions(widget.groupId);
+                            if(mounted) setState(() => _reactionMap..clear()..addAll(latest));
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text(e, style: const TextStyle(fontSize: 24)),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
                 ),
-              )
-              .toList(),
-        ),
-      ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
-
-  // --- UI Build ---
 
   Widget _buildTypingIndicator() {
     if (_typingMembers.isEmpty) {
@@ -366,6 +427,8 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final canSendMessage = !widget.onlyAdminsCanMessage || widget.isAdmin;
+
     return NotificationListener<ScrollNotification>(
       onNotification: (notification) {
         if (notification is ScrollUpdateNotification &&
@@ -392,6 +455,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                       scrollController: _scrollController,
                       reactionMap: _reactionMap,
                       onLongPress: _showMessageOptions,
+                      onDoubleTap: _handleMessageDoubleTap,
                       formatTimestamp: TimeService.formatSmartTimestamp,
                       onMessagesRendered: () {
                         if (!_initialScrollDone) {
@@ -403,57 +467,70 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                     ),
                   ),
 
-                  // Typing Indicator (NEW)
+                  // Typing Indicator
                   _buildTypingIndicator(),
 
-                  // Input Row
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: InputRow(
-                      controller: _messageController,
-                      onSend: _sendMessage,
-                      onFilePicked: (file) async {
-                        final url =
-                            await _storageService.uploadFile(file, widget.groupId);
-                        final isImage = url.endsWith('.png') ||
-                            url.endsWith('.jpg') ||
-                            url.endsWith('.jpeg') ||
-                            url.endsWith('.webp');
+                  // Input Row - FIX: Removed curly braces from else block
+                  if (canSendMessage)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 16),
+                      child: InputRow(
+                        controller: _messageController,
+                        onSend: _sendMessage,
+                        onFilePicked: (file) async {
+                          final url = await _storageService.uploadFile(file, widget.groupId);
+                          final isImage = url.endsWith('.png') ||
+                              url.endsWith('.jpg') ||
+                              url.endsWith('.jpeg') ||
+                              url.endsWith('.webp');
                         
-                        // Clear typing status
-                        _isTyping = false;
-                        _typingThrottleTimer?.cancel();
-                        await _chatService.updateLastTyped(widget.groupId, isTyping: false);
+                          _isTyping = false;
+                          _typingThrottleTimer?.cancel();
+                          await _chatService.updateLastTyped(widget.groupId, isTyping: false);
 
-                        await _chatService.sendMessage(
-                          widget.groupId,
-                          isImage ? '[Image]' : '[File]',
-                          fileUrl: url,
-                        );
-                        _scrollToBottom();
-                      },
-                      onGifPicked: (gifUrl) async {
-                        // Clear typing status
-                        _isTyping = false;
-                        _typingThrottleTimer?.cancel();
-                        await _chatService.updateLastTyped(widget.groupId, isTyping: false);
+                          await _chatService.sendMessage(
+                            widget.groupId,
+                            isImage ? '[Image]' : '[File]',
+                            fileUrl: url,
+                          );
+                          _scrollToBottom();
+                        },
+                        onGifPicked: (gifUrl) async {
+                          _isTyping = false;
+                          _typingThrottleTimer?.cancel();
+                          await _chatService.updateLastTyped(widget.groupId, isTyping: false);
                         
-                        await _chatService.sendMessage(
-                          widget.groupId,
-                          '[GIF]',
-                          fileUrl: gifUrl,
-                          type: 'gif',
-                        );
-                        _scrollToBottom();
-                      },
+                          await _chatService.sendMessage(
+                            widget.groupId,
+                            '[GIF]',
+                            fileUrl: gifUrl,
+                            type: 'gif',
+                          );
+                          _scrollToBottom();
+                        },
+                      ),
+                    )
+                  else
+                    // ✅ Fixed syntax here
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "Only admins can send messages.",
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ),
             if (_showJumpToLatest)
               Positioned(
-                bottom: 80 + (_typingMembers.isNotEmpty ? 18 : 0), // Adjust position based on indicator height
+                bottom: 80 + (_typingMembers.isNotEmpty ? 18 : 0), 
                 right: 16,
                 child: FloatingActionButton.small(
                   onPressed: _scrollToBottom,

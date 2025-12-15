@@ -47,6 +47,18 @@ class GroupChatService {
     }
   ''';
 
+  static const String reportMessageMutation = r'''
+    mutation ReportMessage($message_id: uuid!, $reporter_id: String!, $reason: String) {
+      insert_message_reports_one(object: {
+        message_id: $message_id, 
+        reporter_id: $reporter_id,
+        reason: $reason
+      }) {
+        id
+      }
+    }
+  ''';
+
   // ======= Queries =======
 
   /// ✅ FIX: Added optional `upTo` parameter to prevent race condition.
@@ -334,23 +346,50 @@ class GroupChatService {
     if (res.hasException) throw res.exception!;
   }
 
-  Future<void> reportMessage(String messageId) async {
-    final uid = getCurrentUserId?.call();
-    if (uid == null || uid.isEmpty) {
-      throw Exception('User not authenticated');
+  Future<void> reportMessage(String messageId, {String? reason}) async {
+    final userId = getCurrentUserId?.call();
+    if (userId == null) {
+      dev.log("❌ Report Message Failed: No User ID found");
+      return;
     }
 
-    const mFn = r'''
-      mutation Report($msgId: uuid!, $uid: String!) {
-        report_group_message(args: { msg_id: $msgId, uid: $uid })
-      }
-    ''';
+    // Temporary: Log what we are sending
+    dev.log("🚀 Attempting to report message: $messageId by user: $userId");
 
-    final res = await client.mutate(
-      MutationOptions(document: gql(mFn), variables: {'msgId': messageId, 'uid': uid}),
+    final options = MutationOptions(
+      document: gql(reportMessageMutation),
+      variables: {
+        'message_id': messageId,
+        'reporter_id': userId,
+        'reason': reason ?? 'User reported this message',
+      },
     );
 
-    if (res.hasException) throw res.exception!;
+    final result = await client.mutate(options);
+
+    // --- TEMPORARY ERROR LOGGING ---
+    if (result.hasException) {
+      dev.log("❌ GraphQL Error in reportMessage:");
+      
+      // 1. Log Network Errors (Connection issues)
+      if (result.exception!.linkException != null) {
+        dev.log("   Link Exception: ${result.exception!.linkException}");
+      }
+
+      // 2. Log GraphQL Errors (Schema/Logic issues)
+      if (result.exception!.graphqlErrors.isNotEmpty) {
+        for (final error in result.exception!.graphqlErrors) {
+          dev.log("   GraphQL Error: ${error.message}");
+          dev.log("   Path: ${error.path}");
+          dev.log("   Extensions: ${error.extensions}");
+        }
+      }
+      
+      // Rethrow so the UI knows it failed
+      throw result.exception!;
+    }
+    
+    dev.log("✅ Message reported successfully!");
   }
 
   Future<void> addReaction(String messageId, String emoji) async {
@@ -375,6 +414,30 @@ class GroupChatService {
       variables: {'mid': messageId, 'uid': uid, 'emoji': emoji},
     ));
     if (res.hasException) throw res.exception!;
+  }
+
+  Future<List<Map<String, dynamic>>> getReactionDetails(String messageId) async {
+    const String query = r'''
+      query GetReactionDetails($messageId: uuid!) {
+        message_reactions(where: {message_id: {_eq: $messageId}}) {
+          emoji
+          profile {
+            display_name
+            photo_url
+          }
+        }
+      }
+    ''';
+
+    final result = await client.query(QueryOptions(
+      document: gql(query),
+      variables: {'messageId': messageId},
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+
+    if (result.hasException) throw result.exception!;
+
+    return List<Map<String, dynamic>>.from(result.data?['message_reactions'] ?? []);
   }
 
   Future<GroupMessage?> getMessageById(String id) async {

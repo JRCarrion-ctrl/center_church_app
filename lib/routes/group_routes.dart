@@ -1,6 +1,5 @@
 // File: lib/routes/group_routes.dart
 import 'package:go_router/go_router.dart';
-import '../transitions/slide.dart'; 
 import '../features/groups/group_page.dart';
 import '../features/calendar/models/group_event.dart';
 import '../features/groups/pages/group_info_page.dart';
@@ -14,106 +13,72 @@ final List<GoRoute> groupRoutes = [
   GoRoute(
     path: '/groups/:id',
     name: 'group',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      return buildSlidePage(
-        GroupPage(groupId: groupId),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      return GroupPage(groupId: groupId);
     },
   ),
   GoRoute(
     path: '/groups/:id/info',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final groupId = state.pathParameters['id']!;
       final extra = state.extra as Map<String, dynamic>?; 
       final isAdmin = extra?['isAdmin'] as bool? ?? false;
       final isOwner = extra?['isOwner'] as bool? ?? false;
-      return buildSlidePage(
-        GroupInfoPage(groupId: groupId, isAdmin: isAdmin, isOwner: isOwner),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      
+      return GroupInfoPage(groupId: groupId, isAdmin: isAdmin, isOwner: isOwner);
     },
-    // Add the /members route as a sub-route of /info
     routes: [
       GoRoute(
         path: 'members', 
-        pageBuilder: (context, state) {
+        builder: (context, state) {
           final groupId = state.pathParameters['id']!;
           final extra = state.extra as Map<String, dynamic>?; 
           final isAdmin = extra?['isAdmin'] as bool? ?? false;
           
-          return buildSlidePage(
-            ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
-            direction: SlideDirection.right,
-            key: state.pageKey, // <--- Added key
-          );
+          return ManageMembersPage(groupId: groupId, isAdmin: isAdmin);
         },
       ),
     ]
   ),
-  // The original /groups/:id/members route
   GoRoute(
     path: '/groups/:id/info/members',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final groupId = state.pathParameters['id']!;
       final extra = state.extra as Map<String, dynamic>?; 
       final isAdmin = extra?['isAdmin'] as bool? ?? false;
       
-      return buildSlidePage(
-        ManageMembersPage(groupId: groupId, isAdmin: isAdmin),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      return ManageMembersPage(groupId: groupId, isAdmin: isAdmin);
     },
   ),
   GoRoute(
     path: '/group-event/:id',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final eventId = state.pathParameters['id']!;
-      final extraEvent = state.extra as GroupEvent?; // Allow nullable
+      final extraEvent = state.extra as GroupEvent?; 
 
-      // Use a wrapper that handles fetching if the object is missing
-      return buildSlidePage(
-        GroupEventDeepLinkWrapper(eventId: eventId, preloadedEvent: extraEvent),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return GroupEventDeepLinkWrapper(eventId: eventId, preloadedEvent: extraEvent);
     },
   ),
   GoRoute(
     path: '/groups/:id/info/announcements',
-    pageBuilder: (context, state) { 
+    builder: (context, state) { 
       final groupId = state.pathParameters['id']!;
-      return buildSlidePage(
-        ManageAnnouncementsPage(groupId: groupId),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      return ManageAnnouncementsPage(groupId: groupId);
     },
   ),
   GoRoute(
     path: '/groups/:id/info/events',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      return buildSlidePage(
-        GroupEventListPage(groupId: groupId),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      return GroupEventListPage(groupId: groupId);
     },
   ),
   GoRoute(
     path: '/groups/:id/info/media',
-    pageBuilder: (context, state) { 
+    builder: (context, state) { 
       final groupId = state.pathParameters['id']!;
-      return buildSlidePage(
-        GroupMediaPage(groupId: groupId),
-        direction: SlideDirection.right,
-        key: state.pageKey, // <--- Added key
-      );
+      return GroupMediaPage(groupId: groupId);
     },
   ),
 ];

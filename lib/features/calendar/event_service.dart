@@ -19,30 +19,33 @@ class _EventQueries {
         description
         image_url
         event_date
+        event_end
         location
       }
     }
   ''';
 
   static const insertAppEvent = r'''
-    mutation InsertAppEvent($title: String!, $description: String, $image_url: String, $event_date: timestamptz!, $location: String) {
+    mutation InsertAppEvent($title: String!, $description: String, $image_url: String, $event_date: timestamptz!, $event_end: timestamptz, $location: String) {
       insert_app_events_one(object: {
         title: $title,
         description: $description,
         image_url: $image_url,
         event_date: $event_date,
+        event_end: $event_end,
         location: $location
       }) { id }
     }
   ''';
 
   static const updateAppEvent = r'''
-    mutation UpdateAppEvent($id: uuid!, $title: String!, $description: String, $image_url: String, $event_date: timestamptz!, $location: String) {
+    mutation UpdateAppEvent($id: uuid!, $title: String!, $description: String, $image_url: String, $event_date: timestamptz!, $event_end: timestamptz, $location: String) {
       update_app_events_by_pk(pk_columns: {id: $id}, _set: {
         title: $title,
         description: $description,
         image_url: $image_url,
         event_date: $event_date,
+        event_end: $event_end,
         location: $location
       }) { id }
     }
@@ -86,7 +89,9 @@ class _EventQueries {
         description
         image_url
         event_date
+        event_end
         location
+        group { name }
       }
     }
   ''';
@@ -101,7 +106,9 @@ class _EventQueries {
         description
         image_url
         event_date
+        event_end
         location
+        group { name }
         rsvps_aggregate {
           aggregate {
             sum {
@@ -125,7 +132,9 @@ class _EventQueries {
         description
         image_url
         event_date
+        event_end
         location
+        group { name }
       }
     }
   ''';
@@ -139,7 +148,9 @@ class _EventQueries {
         description
         image_url
         event_date
+        event_end
         location
+        group { name }
       }
     }
   ''';
@@ -151,6 +162,7 @@ class _EventQueries {
       $description: String,
       $image_url: String,
       $event_date: timestamptz!,
+      $event_end: timestamptz,
       $location: String
     ) {
       insert_group_events_one(object: {
@@ -159,6 +171,7 @@ class _EventQueries {
         description: $description,
         image_url: $image_url,
         event_date: $event_date,
+        event_end: $event_end,
         location: $location
       }) { id }
     }
@@ -171,6 +184,7 @@ class _EventQueries {
       $description: String,
       $image_url: String,
       $event_date: timestamptz!,
+      $event_end: timestamptz,
       $location: String
     ) {
       update_group_events_by_pk(pk_columns: {id: $id}, _set: {
@@ -178,6 +192,7 @@ class _EventQueries {
         description: $description,
         image_url: $image_url,
         event_date: $event_date,
+        event_end: $event_end,
         location: $location
       }) { id }
     }
@@ -395,6 +410,7 @@ class EventService {
       'description': event.description,
       'image_url': event.imageUrl,
       'event_date': event.eventDate.toUtc().toIso8601String(),
+      'event_end': event.eventEnd?.toUtc().toIso8601String(),
       'location': event.location,
     };
     await _saveEvent(
@@ -486,6 +502,7 @@ class EventService {
       'description': event.description,
       'image_url': event.imageUrl,
       'event_date': event.eventDate.toUtc().toIso8601String(),
+      'event_end': event.eventEnd?.toUtc().toIso8601String(),
       'location': event.location,
     };
     await _saveEvent(

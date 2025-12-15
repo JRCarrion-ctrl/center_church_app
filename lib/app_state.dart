@@ -197,7 +197,7 @@ class AppState extends ChangeNotifier {
             display_name: $display 
             email: $email
           }
-            on_conflict: { constraint: profiles_pkey, update_columns: [display_name] }
+            on_conflict: { constraint: profiles_pkey, update_columns: [] }
           ) { id }
         }
       ''';

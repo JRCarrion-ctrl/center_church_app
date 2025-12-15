@@ -86,10 +86,11 @@ class GroupService {
           visibility
           created_at
           archived
+          only_admins_message
           group_memberships(limit: 5, order_by: {profile: {display_name: asc}}) {
             user_id
             role
-            profile {
+            public_profile {
               display_name
             }
             metadata: metadata {
@@ -157,6 +158,7 @@ class GroupService {
           temporary
           archived
           created_at
+          only_admins_message
         }
       }
     ''';
@@ -801,6 +803,27 @@ class GroupService {
     ''';
     final res = await client.mutate(
       MutationOptions(document: gql(m), variables: {'gid': groupId, 'uid': userId}),
+    );
+    if (res.hasException) throw res.exception!;
+  }
+
+  Future<void> updateGroupSettings({
+    required String groupId,
+    required bool onlyAdminsMessage,
+  }) async {
+    const m = r'''
+      mutation UpdateGroupSettings($id: uuid!, $val: Boolean!) {
+        update_groups_by_pk(
+          pk_columns: { id: $id },
+          _set: { only_admins_message: $val }
+        ) { id only_admins_message }
+      }
+    ''';
+    final res = await client.mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {'id': groupId, 'val': onlyAdminsMessage},
+      ),
     );
     if (res.hasException) throw res.exception!;
   }

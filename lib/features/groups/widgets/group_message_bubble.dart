@@ -1,18 +1,17 @@
 // File: lib/features/groups/widgets/group_message_bubble.dart
 import 'dart:ui';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../models/group_message.dart';
 
-class GroupMessageBubble extends StatelessWidget {
+class GroupMessageBubble extends StatefulWidget {
   final GroupMessage message;
   final bool isMe;
-  
-  // --- ADD THESE TWO FIELDS ---
   final bool showSenderName; 
   final String? senderName; 
-  // ----------------------------
-
-  final VoidCallback onLongPress;
+  final Function(GroupMessage, Offset) onLongPress;
+  final Function(GroupMessage, Offset) onDoubleTap;
+  final VoidCallback? onReactionsTap; // <--- 1. Add Callback
   final Widget Function() contentBuilder;
   final String formattedTimestamp;
   final List<String> reactions;
@@ -21,17 +20,22 @@ class GroupMessageBubble extends StatelessWidget {
     super.key,
     required this.message,
     required this.isMe,
-    
-    // --- ADD TO CONSTRUCTOR ---
     this.showSenderName = false,
     this.senderName,
-    // --------------------------
-
     required this.onLongPress,
+    required this.onDoubleTap,
+    this.onReactionsTap, // <--- Add to constructor
     required this.contentBuilder,
     required this.formattedTimestamp,
     required this.reactions,
   });
+
+  @override
+  State<GroupMessageBubble> createState() => _GroupMessageBubbleState();
+}
+
+class _GroupMessageBubbleState extends State<GroupMessageBubble> {
+  Offset? _tapPosition;
 
   Map<String, int> _groupedReactions(List<String> reactions) {
     final Map<String, int> grouped = {};
@@ -54,41 +58,53 @@ class GroupMessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final messageText = message.content;
+    
+    final messageText = widget.message.content; 
     final showLargeEmoji = _isEmojiOnly(messageText);
 
-    final backgroundColor = isMe
+    final backgroundColor = widget.isMe
         ? const Color.fromARGB(255, 0, 122, 255)
         : (isDark
             ? const Color.fromARGB(255, 44, 44, 48)
             : const Color.fromARGB(255, 230, 230, 235));
 
-    final borderColor = isMe
+    final borderColor = widget.isMe
         ? const Color.fromARGB(255, 0, 112, 230)
         : (isDark
             ? const Color.fromARGB(255, 70, 70, 75)
             : const Color.fromARGB(255, 210, 210, 215));
 
-    final textColor = isMe
+    final textColor = widget.isMe
         ? Colors.white
         : (isDark ? Colors.white : Colors.black);
 
     return GestureDetector(
-      onLongPress: onLongPress,
+      onLongPressStart: (details) {
+        HapticFeedback.mediumImpact();
+        widget.onLongPress(widget.message, details.globalPosition);
+      },
+      onDoubleTapDown: (details) {
+        _tapPosition = details.globalPosition;
+      },
+      onDoubleTap: () {
+        if (_tapPosition != null) {
+          HapticFeedback.mediumImpact();
+          widget.onDoubleTap(widget.message, _tapPosition!);
+        }
+      },
       child: Align(
-        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
           child: Column(
             crossAxisAlignment:
-                isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
             children: [
-              // --- ADD NAME WIDGET HERE ---
-              if (showSenderName && !isMe && senderName != null)
+              if (widget.showSenderName && !widget.isMe && widget.senderName != null)
                 Padding(
                   padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
                   child: Text(
-                    senderName!, // Uses the passed name
+                    widget.senderName!, 
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
@@ -96,7 +112,6 @@ class GroupMessageBubble extends StatelessWidget {
                     ),
                   ),
                 ),
-              // -----------------------------
 
               Stack(
                 clipBehavior: Clip.none,
@@ -124,16 +139,16 @@ class GroupMessageBubble extends StatelessWidget {
                                 height: 1.4,
                                 color: textColor,
                               ),
-                              child: contentBuilder(),
+                              child: widget.contentBuilder(), 
                             ),
                             const SizedBox(height: 4),
                             Semantics(
-                              label: 'Sent at $formattedTimestamp',
+                              label: 'Sent at ${widget.formattedTimestamp}', 
                               child: Text(
-                                formattedTimestamp,
+                                widget.formattedTimestamp, 
                                 style: TextStyle(
                                   fontSize: 11,
-                                  color: isMe
+                                  color: widget.isMe
                                     ? const Color.fromARGB(160, 255, 255, 255)
                                     : isDark
                                       ? const Color.fromARGB(160, 255, 255, 255)
@@ -148,28 +163,32 @@ class GroupMessageBubble extends StatelessWidget {
                   ),
                 ],
               ),
-              if (reactions.isNotEmpty)
+              if (widget.reactions.isNotEmpty)
                 Transform.translate(
-                  offset: isMe ? const Offset(-12, -4) : const Offset(12, -4),
-                  child: Wrap(
-                    spacing: 6,
-                    children: _groupedReactions(reactions).entries.map((entry) {
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: backgroundColor,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: borderColor),
-                        ),
-                        child: Text(
-                          '${entry.key} ${entry.value}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: textColor,
+                  offset: widget.isMe ? const Offset(-12, -4) : const Offset(12, -4),
+                  // 2. Wrap in GestureDetector
+                  child: GestureDetector(
+                    onTap: widget.onReactionsTap, 
+                    child: Wrap(
+                      spacing: 6,
+                      children: _groupedReactions(widget.reactions).entries.map((entry) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: backgroundColor,
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: borderColor),
                           ),
-                        ),
-                      );
-                    }).toList(),
+                          child: Text(
+                            '${entry.key} ${entry.value}',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: textColor,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
                   ),
                 ),
             ],

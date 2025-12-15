@@ -6,7 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
-import 'package:cached_network_image/cached_network_image.dart'; // Don't forget this for the list view!
+import 'package:cached_network_image/cached_network_image.dart'; 
+import 'package:shared_preferences/shared_preferences.dart'; // <--- 1. ADD IMPORT
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
@@ -31,11 +32,17 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late EventService _eventService;
   bool _svcReady = false;
 
-  // TOGGLE STATE: Start with Calendar view by default
+  // Default to true, but will be overwritten by SharedPreferences
   bool _isCalendarView = true;
 
-  // Syncfusion Controller
   final CalendarController _calendarController = CalendarController();
+
+  @override
+  void initState() {
+    super.initState();
+    // <--- 2. LOAD PREFERENCE ON STARTUP
+    _loadViewPreference();
+  }
 
   @override
   void didChangeDependencies() {
@@ -58,6 +65,27 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
     routeObserver.unsubscribe(this);
     _calendarController.dispose();
     super.dispose();
+  }
+
+  // <--- 3. ADD HELPER TO LOAD STATE
+  Future<void> _loadViewPreference() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        // Default to true (Calendar) if no preference is found
+        _isCalendarView = prefs.getBool('calendar_is_calendar_view') ?? true;
+      });
+    }
+  }
+
+  // <--- 4. ADD HELPER TO TOGGLE & SAVE STATE
+  Future<void> _toggleView() async {
+    final newValue = !_isCalendarView;
+    setState(() {
+      _isCalendarView = newValue;
+    });
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('calendar_is_calendar_view', newValue);
   }
 
   Future<_CalendarData> _loadAllEvents() async {
@@ -110,22 +138,14 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
     return Scaffold(
       appBar: AppBar(
-        // Dynamic title based on view
         title: Text(_isCalendarView ? "key_034".tr() : "key_list_view".tr()), 
         actions: [
-          // 1. TOGGLE BUTTON (Switch between List and Calendar)
           IconButton(
-            // Show the icon of the view you would switch TO
             icon: Icon(_isCalendarView ? Icons.list : Icons.calendar_month),
             tooltip: _isCalendarView ? "Switch to List" : "Switch to Calendar",
-            onPressed: () {
-              setState(() {
-                _isCalendarView = !_isCalendarView;
-              });
-            },
+            // <--- 5. USE THE NEW TOGGLE METHOD
+            onPressed: _toggleView,
           ),
-          
-          // 2. Calendar Specific Actions (Only show if in Calendar View)
           if (_isCalendarView) ...[
             IconButton(
               icon: const Icon(Icons.today),
@@ -158,7 +178,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
           final data = snap.data!;
           
-          // --- VIEW 1: CALENDAR ---
           if (_isCalendarView) {
             final dataSource = _EventDataSource(data.appEvents, data.groupEvents, colorScheme);
             return SfCalendar(
@@ -172,7 +191,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
               ),
               onTap: (CalendarTapDetails details) {
                 if (details.targetElement == CalendarElement.appointment) {
-                  
                   if (details.appointments == null || details.appointments!.isEmpty) return;
 
                   final appointment = details.appointments!.first as Appointment;
@@ -188,7 +206,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
             );
           }
 
-          // --- VIEW 2: LIST (Your Original Code) ---
           final appEvents = data.appEvents;
           final groupEvents = data.groupEvents;
 
@@ -256,8 +273,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
       ),
     );
   }
-
-  // --- HELPER WIDGETS (Restored from your original code) ---
 
   Widget _sectionHeader(String text) => Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -332,9 +347,23 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
               )
               : const Icon(Icons.event, size: 40),
           title: Text(e.title),
-          subtitle: Text(
-            TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (e.groupName != null)
+                Text(
+                  e.groupName!,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+              Text(
+                TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
+              ),
+            ],
           ),
+          isThreeLine: e.groupName != null,
         ),
       );
 }
@@ -350,12 +379,16 @@ class _EventDataSource extends CalendarDataSource {
     final List<Appointment> _appointments = [];
 
     _appointments.addAll(appEvents.map<Appointment>((e) {
+      final start = e.eventDate.toLocal();
+      // Use End Time if available, otherwise default to 1 hour
+      final end = e.eventEnd != null 
+          ? e.eventEnd!.toLocal() 
+          : start.add(const Duration(hours: 1));
+
       return Appointment(
         id: e,
-        // FIX: Convert UTC to Local time so it shows on the correct day
-        startTime: e.eventDate.toLocal(), 
-        endTime: e.eventDate.add(const Duration(hours: 1)).toLocal(),
-        
+        startTime: start, 
+        endTime: end,
         subject: e.title,
         color: colors.primary,
         isAllDay: false,
@@ -364,16 +397,21 @@ class _EventDataSource extends CalendarDataSource {
     }));
 
     _appointments.addAll(groupEvents.map<Appointment>((e) {
+      final start = e.eventDate.toLocal();
+      // Use End Time if available, otherwise default to 1 hour
+      final end = e.eventEnd != null 
+          ? e.eventEnd!.toLocal() 
+          : start.add(const Duration(hours: 1));
+
       return Appointment(
         id: e,
-        // FIX: Convert UTC to Local time here too
-        startTime: e.eventDate.toLocal(),
-        endTime: e.eventDate.add(const Duration(hours: 1)).toLocal(),
-        
+        startTime: start,
+        endTime: end,
         subject: e.title,
         color: colors.secondary,
         isAllDay: false,
         location: e.location,
+        notes: e.groupName, 
       );
     }));
 

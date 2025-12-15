@@ -190,15 +190,15 @@ class _FamilyPageState extends State<FamilyPage> {
         leading: Container(
           padding: const EdgeInsets.all(8),
           decoration: BoxDecoration(
-            color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.add, color: Theme.of(context).primaryColor, size: 20),
+          child: Icon(Icons.add, color: Theme.of(context).colorScheme.onSurface, size: 20),
         ),
         title: Text(
           "key_239".tr(), // "Add Child"
           style: TextStyle(
-            color: Theme.of(context).primaryColor,
+            color: Theme.of(context).colorScheme.onSurface,
             fontWeight: FontWeight.w600,
           ),
         ),
