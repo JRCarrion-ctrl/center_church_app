@@ -1,4 +1,4 @@
-// File: lib/features/groups/widgets/reaction_details_modal.dart
+// File: lib/features/groups/widgets/reaction_details_modal.dart 
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../group_chat_service.dart';
