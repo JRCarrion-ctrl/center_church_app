@@ -99,11 +99,16 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     return source.where((g) => g.name.toLowerCase().contains(q)).toList();
   }
 
-  void _openGroup(GroupModel group) {
+  Future<void> _openGroup(GroupModel group) async {
     if ((group.archived) == true) {
       return;
     }
-    context.push('/groups/${group.id}');
+
+    await context.push('/groups/${group.id}');
+
+    if (mounted) {
+      await refresh();
+    }
   }
 
   @override

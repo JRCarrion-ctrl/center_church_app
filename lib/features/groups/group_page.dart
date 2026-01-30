@@ -165,7 +165,11 @@ class _GroupPageState extends State<GroupPage> {
         children: [
           _buildTopBar(context, group),
           Expanded(
-            child: GroupChatTab(groupId: widget.groupId, isAdmin: _isGroupAdmin),
+            child: GroupChatTab(
+              groupId: widget.groupId,
+              isAdmin: _isGroupAdmin, 
+              onlyAdminsCanMessage: group.onlyAdminsMessage,
+            ),
           ),
         ],
       ),

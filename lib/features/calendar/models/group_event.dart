@@ -6,9 +6,10 @@ class GroupEvent {
   final String? description;
   final String? imageUrl;
   final DateTime eventDate;
+  final DateTime? eventEnd;
   final String? location;
-  // ✅ 1. ADD THIS FIELD: A new property to store the RSVP count.
   final int? attendingCount;
+  final String? groupName;
 
   GroupEvent({
     required this.id,
@@ -17,8 +18,10 @@ class GroupEvent {
     this.description,
     this.imageUrl,
     required this.eventDate,
+    this.eventEnd,
     this.location,
-    this.attendingCount, // Add to constructor
+    this.attendingCount,
+    this.groupName,
   });
 
   factory GroupEvent.fromMap(Map<String, dynamic> map) {
@@ -36,8 +39,12 @@ class GroupEvent {
       description: map['description'],
       imageUrl: map['image_url'] as String?,
       eventDate: DateTime.parse(map['event_date']).toUtc(),
+      eventEnd: map['event_end'] != null 
+          ? DateTime.parse(map['event_end']).toUtc() 
+          : null,
       location: map['location'],
-      attendingCount: count, // Assign the parsed count
+      attendingCount: count,
+      groupName: map['group']?['name'] as String?,
     );
   }
 

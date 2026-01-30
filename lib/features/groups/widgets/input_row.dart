@@ -45,8 +45,7 @@ Future<List<String>> searchKlipyGifs(BuildContext context, String query) async {
   _logger.i('Fetching GIFs from: $url');
 
   final response = await http.get(url);
-  _logger.i('Klipy API response status: ${response.statusCode}');
-  _logger.i('Klipy API response body: ${response.body}');
+  // _logger.i('Klipy API response status: ${response.statusCode}'); // Reduced log spam
 
   if (response.statusCode != 200) throw Exception('Failed to fetch GIFs');
 
@@ -83,7 +82,9 @@ class InputRow extends StatefulWidget {
 }
 
 class _InputRowState extends State<InputRow> {
-  File? _selectedFile;
+  // CHANGED: Support multiple files
+  final List<File> _selectedFiles = [];
+  
   final FocusNode _focusNode = FocusNode();
   bool _canSend = false;
 
@@ -95,7 +96,8 @@ class _InputRowState extends State<InputRow> {
 
   void _handleInputChange() {
     final trimmed = widget.controller.text.trim();
-    final valid = trimmed.isNotEmpty || _selectedFile != null;
+    // CHANGED: Check list not empty
+    final valid = trimmed.isNotEmpty || _selectedFiles.isNotEmpty;
     if (valid != _canSend) {
       setState(() => _canSend = valid);
     }
@@ -116,45 +118,54 @@ class _InputRowState extends State<InputRow> {
           children: [
             ListTile(
               leading: const Icon(Icons.photo_camera),
-              title: Text("key_167".tr()),
+              title: Text("key_167".tr()), // "Camera"
               onTap: () async {
                 Navigator.pop(context);
                 final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
                 if (picked != null) {
                   File file = File(picked.path);
                   file = await _compressImage(file);
-                  setState(() => _selectedFile = file);
+                  setState(() => _selectedFiles.add(file)); // Add to list
                   _handleInputChange();
                 }
               },
             ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: Text("key_168".tr()),
+              title: Text("key_168".tr()), // "Gallery"
               onTap: () async {
                 Navigator.pop(context);
-                final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
-                if (picked != null) {
-                  File file = File(picked.path);
-                  file = await _compressImage(file);
-                  setState(() => _selectedFile = file);
+                // CHANGED: Use pickMultiImage to allow multiple selections
+                final pickedList = await ImagePicker().pickMultiImage(imageQuality: 75);
+                if (pickedList.isNotEmpty) {
+                  for (var picked in pickedList) {
+                    File file = File(picked.path);
+                    file = await _compressImage(file);
+                    _selectedFiles.add(file);
+                  }
+                  setState(() {}); // Trigger rebuild
                   _handleInputChange();
                 }
               },
             ),
             ListTile(
               leading: const Icon(Icons.insert_drive_file),
-              title: Text("key_169".tr()),
+              title: Text("key_169".tr()), // "File"
               onTap: () async {
                 Navigator.pop(context);
-                final result = await FilePicker.platform.pickFiles();
-                if (result != null && result.files.isNotEmpty && result.files.first.path != null) {
-                  File file = File(result.files.first.path!);
-                  final ext = file.path.toLowerCase();
-                  if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
-                    file = await _compressImage(file);
+                // CHANGED: allowMultiple: true
+                final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+                if (result != null && result.files.isNotEmpty) {
+                  for (var f in result.files) {
+                    if (f.path == null) continue;
+                    File file = File(f.path!);
+                    final ext = file.path.toLowerCase();
+                    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
+                      file = await _compressImage(file);
+                    }
+                    _selectedFiles.add(file);
                   }
-                  setState(() => _selectedFile = file);
+                  setState(() {}); // Trigger rebuild
                   _handleInputChange();
                 }
               },
@@ -165,23 +176,6 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
-  // If you later re-enable the GIF picker, pass context to the search helper.
-  // Future<void> _openGifPicker() async {
-  //   final gifUrl = await showModalBottomSheet<String>(
-  //     context: context,
-  //     isScrollControlled: true,
-  //     builder: (_) => const _KlipyGifPicker(),
-  //   );
-  //   if (gifUrl != null) {
-  //     await widget.onGifPicked(gifUrl);
-  //     widget.controller.clear();
-  //     setState(() {
-  //       _selectedFile = null;
-  //       _canSend = false;
-  //     });
-  //   }
-  // }
-
   bool _isGifUrl(String text) {
     return text.toLowerCase().endsWith('.gif') && text.startsWith('http');
   }
@@ -189,13 +183,16 @@ class _InputRowState extends State<InputRow> {
   Future<void> _handleSend() async {
     final text = widget.controller.text.trim();
     _logger.i('[InputRow] handleSend start text="${text.replaceAll('\n',' ')}" '
-              'hasFile=${_selectedFile != null} isGif=${_isGifUrl(text)}');
+              'files=${_selectedFiles.length} isGif=${_isGifUrl(text)}');
 
     try {
-      if (_selectedFile != null) {
-        _logger.i('[InputRow] onFilePicked: ${_selectedFile!.path}');
-        await widget.onFilePicked(_selectedFile!);
-        _logger.i('[InputRow] onFilePicked done');
+      // CHANGED: Iterate and send all selected files
+      if (_selectedFiles.isNotEmpty) {
+        for (final file in _selectedFiles) {
+          _logger.i('[InputRow] onFilePicked: ${file.path}');
+          await widget.onFilePicked(file);
+        }
+        _logger.i('[InputRow] onFilePicked loop done');
       }
 
       if (_isGifUrl(text)) {
@@ -204,22 +201,21 @@ class _InputRowState extends State<InputRow> {
         _logger.i('[InputRow] onGifPicked done');
       } else if (text.isNotEmpty) {
         _logger.i('[InputRow] onSend() begin');
-        await widget.onSend();                  // ← await it so failures surface here
+        await widget.onSend();
         _logger.i('[InputRow] onSend() done');
       }
 
       widget.controller.clear();
       setState(() {
-        _selectedFile = null;
+        _selectedFiles.clear(); // Clear list
         _canSend = false;
       });
       _logger.i('[InputRow] cleared UI state');
     } catch (e, st) {
       _logger.e('[InputRow] send failed', error: e, stackTrace: st);
-      // Optional: show a SnackBar / toast here
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send')),
+          const SnackBar(content: Text('Failed to send')),
         );
       }
     }
@@ -233,48 +229,74 @@ class _InputRowState extends State<InputRow> {
 
     return Column(
       mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_selectedFile != null)
-          Padding(
+        // CHANGED: Display horizontal list of selected files
+        if (_selectedFiles.isNotEmpty)
+          Container(
+            height: 70,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-            child: Dismissible(
-              key: ValueKey(_selectedFile!.path),
-              direction: DismissDirection.horizontal,
-              onDismissed: (_) => setState(() => _selectedFile = null),
-              child: Card(
-                margin: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                child: ListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-                  leading: _selectedFile!.path.endsWith('.png') ||
-                           _selectedFile!.path.endsWith('.jpg') ||
-                           _selectedFile!.path.endsWith('.jpeg') ||
-                           _selectedFile!.path.endsWith('.webp') ||
-                           _selectedFile!.path.endsWith('.heic')
-                      ? ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(_selectedFile!, width: 48, height: 48, fit: BoxFit.cover),
-                        )
-                      : const Icon(Icons.insert_drive_file),
-                  title: Text(_selectedFile!.path.split('/').last),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => setState(() => _selectedFile = null),
-                  ),
-                ),
-              ),
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _selectedFiles.length,
+              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              itemBuilder: (context, index) {
+                final file = _selectedFiles[index];
+                final isImage = file.path.toLowerCase().endsWith('.jpg') ||
+                                file.path.toLowerCase().endsWith('.jpeg') ||
+                                file.path.toLowerCase().endsWith('.png') ||
+                                file.path.toLowerCase().endsWith('.webp') ||
+                                file.path.toLowerCase().endsWith('.heic');
+
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    Container(
+                      width: 60,
+                      height: 60,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.grey[800] : Colors.grey[200],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: borderColor),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: isImage
+                            ? Image.file(file, fit: BoxFit.cover)
+                            : const Center(child: Icon(Icons.insert_drive_file, size: 24)),
+                      ),
+                    ),
+                    Positioned(
+                      top: -6,
+                      right: -6,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedFiles.removeAt(index);
+                            _handleInputChange();
+                          });
+                        },
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
             ),
           ),
+        
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              // IconButton.filledTonal(
-              //   icon: const Icon(Icons.gif_box_outlined),
-              //   tooltip: 'GIF',
-              //   onPressed: _openGifPicker,
-              // ),
               IconButton.filledTonal(
                 icon: const Icon(Icons.attach_file),
                 tooltip: 'Attach',

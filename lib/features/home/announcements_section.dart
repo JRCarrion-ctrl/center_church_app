@@ -57,7 +57,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     _loadData();
   }
 
-  // ... (_loadData method remains unchanged)
   Future<void> _loadData() async {
     final client = _gql;
     if (client == null) return;
@@ -126,6 +125,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
         // Group announcements (published_at <= now, for the user’s groups)
         List<Map<String, dynamic>> groups = [];
         if (groupIds.isNotEmpty) {
+          // ✅ CHANGED: Added 'group { name }' to query
           const qGroupAnnouncements = r'''
             query GroupAnnouncements($groupIds: [uuid!]!, $now: timestamptz!) {
               group_announcements(
@@ -138,6 +138,7 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                 body
                 image_url
                 published_at
+                group { name }
               }
             }
           ''';
@@ -185,6 +186,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   ) {
     final imageUrl = a['image_url'] as String?;
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+    // ✅ EXTRACT GROUP NAME
+    final groupName = a['group']?['name'] as String?;
     final colorScheme = Theme.of(context).colorScheme;
 
     showDialog(
@@ -220,6 +223,25 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ✅ SHOW GROUP NAME IN DIALOG
+                    if (groupName != null) ...[
+                      Chip(
+                        label: Text(
+                          groupName,
+                          style: TextStyle(
+                            color: colorScheme.onTertiaryContainer,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                        backgroundColor: colorScheme.secondaryContainer,
+                        side: BorderSide.none,
+                        padding: EdgeInsets.zero,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+
                     Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
                     const SizedBox(height: 8),
                     Text(
@@ -517,6 +539,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
           final a = groupAnnouncements[index];
           final imageUrl = a['image_url'] as String?;
           final hasImage = imageUrl != null && imageUrl.isNotEmpty;
+          // ✅ EXTRACT GROUP NAME
+          final groupName = a['group']?['name'] as String?;
 
           return SizedBox(
             width: 280,
@@ -560,6 +584,22 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // ✅ DISPLAY GROUP NAME
+                            if (groupName != null)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 4),
+                                child: Text(
+                                  groupName.toUpperCase(),
+                                  style: textTheme.labelSmall?.copyWith(
+                                    color: colorScheme.tertiary,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.5,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+
                             Text(
                               (a['title'] ?? '') as String,
                               style: textTheme.titleMedium?.copyWith(

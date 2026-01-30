@@ -197,6 +197,13 @@ class _CCFAppBootState extends State<CCFAppBoot> {
           if (!identical(_clientNotifier.value, nextClient)) {
             _clientNotifier.value = nextClient;
           }
+
+          const pageTransitionsTheme = PageTransitionsTheme(
+            builders: {
+              TargetPlatform.android: CupertinoPageTransitionsBuilder(),
+              TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+            },
+          );
           
           return MediaQuery(
             data: MediaQuery.of(context).copyWith(
@@ -207,8 +214,12 @@ class _CCFAppBootState extends State<CCFAppBoot> {
               client: _clientNotifier,
               child: MaterialApp.router(
                 debugShowCheckedModeBanner: false,
-                theme: ccfLightTheme,
-                darkTheme: ccfDarkTheme,
+                theme: ccfLightTheme.copyWith(
+                  pageTransitionsTheme: pageTransitionsTheme,
+                ),
+                darkTheme: ccfDarkTheme.copyWith(
+                  pageTransitionsTheme: pageTransitionsTheme,
+                ),
                 themeMode: state.themeMode,
                 routerConfig: _router,
                 locale: context.locale,

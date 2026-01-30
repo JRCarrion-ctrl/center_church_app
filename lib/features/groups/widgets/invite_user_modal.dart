@@ -170,7 +170,7 @@ class _InviteUserModalState extends State<InviteUserModal> {
           const SizedBox(height: 8),
           TextField(
             controller: _searchController,
-            decoration: InputDecoration(labelText: "key_172b".tr()),
+            decoration: InputDecoration(labelText: "key_search_name_email".tr()),
             onChanged: _searchUsers,
           ),
           const SizedBox(height: 12),

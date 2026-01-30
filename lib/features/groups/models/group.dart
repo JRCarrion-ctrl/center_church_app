@@ -7,6 +7,7 @@ class Group {
   final String? photoUrl;
   final String visibility;
   final DateTime createdAt;
+  final bool onlyAdminsMessage;
 
   const Group({
     required this.id,
@@ -15,6 +16,7 @@ class Group {
     this.photoUrl,
     required this.visibility,
     required this.createdAt,
+    this.onlyAdminsMessage = false,
   });
 
   factory Group.fromMap(Map<String, dynamic> map) {
@@ -25,6 +27,7 @@ class Group {
       photoUrl: map['photo_url'] as String?,
       visibility: map['visibility'] as String? ?? 'public',
       createdAt: _parseDate(map['created_at']),
+      onlyAdminsMessage: map['only_admins_message'] as bool? ?? false,
     );
   }
 

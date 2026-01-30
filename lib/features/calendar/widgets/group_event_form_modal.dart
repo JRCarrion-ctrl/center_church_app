@@ -36,6 +36,11 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   late TextEditingController _locationController;
 
   DateTime? _selectedDateTime;
+  
+  // --- ADDED: End Time State ---
+  DateTime? _endDateTime; 
+  // -----------------------------
+
   String? _dateTimeError;
   bool _saving = false;
 
@@ -50,6 +55,10 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
 
     if (ev != null) {
       _selectedDateTime = ev.eventDate.toLocal();
+      // --- ADDED: Initialize End Time ---
+      if (ev.eventEnd != null) {
+        _endDateTime = ev.eventEnd!.toLocal();
+      }
     }
   }
 
@@ -118,6 +127,45 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     }
   }
 
+  // --- ADDED: End Date Picker ---
+  Future<void> _pickEndDate() async {
+    final now = DateTime.now();
+    // Default to start date if end date is null
+    final initial = _endDateTime ?? _selectedDateTime ?? now;
+    
+    final date = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: _selectedDateTime ?? now.subtract(const Duration(days: 1)),
+      lastDate: now.add(const Duration(days: 365)),
+    );
+    if (date != null && mounted) {
+      setState(() {
+        final time = _endDateTime != null ? TimeOfDay.fromDateTime(_endDateTime!) : const TimeOfDay(hour: 12, minute: 0);
+        _endDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      });
+    }
+  }
+
+  // --- ADDED: End Time Picker ---
+  Future<void> _pickEndTime() async {
+    final initial = _endDateTime != null 
+        ? TimeOfDay.fromDateTime(_endDateTime!) 
+        : const TimeOfDay(hour: 12, minute: 0);
+        
+    final time = await showTimePicker(
+      context: context,
+      initialTime: initial,
+    );
+    
+    if (time != null && mounted) {
+      setState(() {
+        final baseDate = _endDateTime ?? _selectedDateTime ?? DateTime.now();
+        _endDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, time.hour, time.minute);
+      });
+    }
+  }
+
   Future<String?> _handleImageUpload() async {
     if (_imageRemoved && _localImageFile == null) {
       return null;
@@ -142,6 +190,16 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
       return;
     }
 
+    // --- ADDED: Validation ---
+    if (_endDateTime != null && _endDateTime!.isBefore(_selectedDateTime!)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("End time cannot be before start time")),
+        );
+      }
+      return;
+    }
+
     setState(() => _saving = true);
 
     try {
@@ -154,6 +212,8 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         eventDate: _selectedDateTime!.toUtc(),
+        // --- ADDED: Save End Time ---
+        eventEnd: _endDateTime?.toUtc(),
         location: _locationController.text.trim(),
         imageUrl: finalImageUrl,
       );
@@ -215,6 +275,8 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                   decoration: InputDecoration(labelText: "key_041e".tr()),
                 ),
                 const SizedBox(height: 12),
+                
+                // START TIME ROW
                 Row(
                   children: [
                     Expanded(
@@ -248,6 +310,45 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                       style: TextStyle(color: Theme.of(context).colorScheme.error),
                     ),
                   ),
+
+                // --- ADDED: END TIME ROW ---
+                const SizedBox(height: 16),
+                Align(
+                  alignment: Alignment.centerLeft, 
+                  child: Text("End Time (Optional)", style: Theme.of(context).textTheme.bodyMedium)
+                ),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _pickEndDate,
+                        child: Text(
+                          _endDateTime == null
+                              ? "Select Date"
+                              : DateFormat.yMMMd().format(_endDateTime!),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _pickEndTime,
+                        child: Text(
+                          _endDateTime == null
+                              ? "Select Time"
+                              : TimeOfDay.fromDateTime(_endDateTime!).format(context),
+                        ),
+                      ),
+                    ),
+                     if (_endDateTime != null)
+                      IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () => setState(() => _endDateTime = null),
+                      )
+                  ],
+                ),
+                // ---------------------------
+                
                 const SizedBox(height: 16),
                 ElevatedButton(
                   onPressed: _saving ? null : _validateAndSave,

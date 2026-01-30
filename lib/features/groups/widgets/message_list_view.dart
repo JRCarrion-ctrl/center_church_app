@@ -11,13 +11,15 @@ import '../../../features/groups/models/group_message.dart';
 import '../../../features/groups/group_chat_service.dart';
 import 'group_message_bubble.dart';
 import 'message_content_view.dart';
+import 'reaction_details_modal.dart';
 
 class MessageListView extends StatefulWidget {
   final String groupId;
   final String userId;
   final ScrollController scrollController;
   final Map<String, List<String>> reactionMap;
-  final void Function(GroupMessage) onLongPress;
+  final Function(GroupMessage, Offset) onLongPress;
+  final Function(GroupMessage, Offset) onDoubleTap;
   final String Function(DateTime) formatTimestamp;
   final VoidCallback? onMessagesRendered;
   final GroupChatService chatService;
@@ -29,6 +31,7 @@ class MessageListView extends StatefulWidget {
     required this.scrollController,
     required this.reactionMap,
     required this.onLongPress,
+    required this.onDoubleTap,
     required this.formatTimestamp,
     this.onMessagesRendered,
     required this.chatService,
@@ -43,9 +46,7 @@ class _MessageListViewState extends State<MessageListView> {
   static const _cacheCap = 200;
   static const _scrollLoadThreshold = 200.0;
 
-  // Source of truth for messages, ordered newest to oldest.
   final List<GroupMessage> _messages = [];
-  // ✅ FIX: List for rendering, includes GroupMessage objects and String date headers.
   final List<dynamic> _displayList = [];
 
   bool _isLoading = false;
@@ -81,7 +82,7 @@ class _MessageListViewState extends State<MessageListView> {
     _displayList.clear();
     _isLoading = false;
     _hasMore = true;
-    setState(() {}); // Clear the view immediately
+    setState(() {}); 
     _initialize();
   }
 
@@ -91,13 +92,11 @@ class _MessageListViewState extends State<MessageListView> {
     if (mounted && cached.isNotEmpty) {
       _messages.addAll(cached);
       _rebuildDisplayList();
-      setState(() {}); // Render cached messages immediately
+      setState(() {}); 
     }
-    // ✅ FIX: This function now handles the race condition.
     await _fetchAndSubscribe();
   }
 
-  /// ✅ FIX: This function atomically fetches initial messages and subscribes to new ones.
   Future<void> _fetchAndSubscribe() async {
     final syncTime = DateTime.now().toUtc();
     _listenToNewMessages(since: syncTime);
@@ -111,7 +110,6 @@ class _MessageListViewState extends State<MessageListView> {
     }
   }
 
-  /// Optimistically adds a sent message to the top of the list.
   void addSentMessage(GroupMessage message) {
     if (!mounted || _messages.any((m) => m.id == message.id)) return;
     setState(() {
@@ -148,7 +146,6 @@ class _MessageListViewState extends State<MessageListView> {
     double? oldScrollOffset;
     double? oldMaxScrollExtent;
     
-    // 1. Store old scroll metrics before loading new data
     if (!isInitial && widget.scrollController.hasClients) {
       oldScrollOffset = widget.scrollController.offset;
       oldMaxScrollExtent = widget.scrollController.position.maxScrollExtent;
@@ -160,7 +157,7 @@ class _MessageListViewState extends State<MessageListView> {
         groupId: widget.groupId,
         limit: _pageSize,
         offset: offset,
-        upTo: upTo, // Pass the sync timestamp for the initial fetch
+        upTo: upTo, 
       );
 
       if (!mounted) return;
@@ -182,14 +179,11 @@ class _MessageListViewState extends State<MessageListView> {
         });
       }
       
-      // 2. Restore scroll position after setState and list rebuild (ONLY if new data loaded)
       if (!isInitial && newMessagesLoaded) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (widget.scrollController.hasClients && oldMaxScrollExtent != null) {
             final newMaxScrollExtent = widget.scrollController.position.maxScrollExtent;
             final extentChange = newMaxScrollExtent - oldMaxScrollExtent;
-            
-            // Adjust the scroll position to keep the current messages in view
             widget.scrollController.jumpTo(oldScrollOffset! + extentChange);
           }
         });
@@ -202,17 +196,15 @@ class _MessageListViewState extends State<MessageListView> {
     }
   }
 
-  /// ✅ FIX: Fetches the latest messages by resetting and re-initializing, bypassing cache.
   Future<void> _handleRefresh() async {
     _newMsgSub?.cancel();
     _messages.clear();
     _displayList.clear();
     _hasMore = true;
-    setState(() {}); // Show loading indicator
+    setState(() {}); 
     await _fetchAndSubscribe();
   }
   
-  /// ✅ FIX: Pre-processes messages to insert date headers for efficient rendering.
   void _rebuildDisplayList() {
     _displayList.clear();
     if (_messages.isEmpty) return;
@@ -231,7 +223,6 @@ class _MessageListViewState extends State<MessageListView> {
         showHeader = !DateUtils.isSameDay(msgDate, nextMsgDate);
       }
       
-      // Add the message bubble first because the list is reversed.
       _displayList.add(message);
       if (showHeader) {
         _displayList.add(_formatDateHeader(message.createdAt.toLocal()));
@@ -295,83 +286,93 @@ class _MessageListViewState extends State<MessageListView> {
     final scrollPhysics = _hasMore
         ? const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics())
         : const ClampingScrollPhysics(parent: AlwaysScrollableScrollPhysics());
-        
-    return RefreshIndicator(
-      onRefresh: _handleRefresh,
-      child: ListView.builder(
-        controller: widget.scrollController,
-        physics: scrollPhysics,
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
-        reverse: true,
-        itemCount: _displayList.length + (_hasMore ? 1 : 0),
-        itemBuilder: (context, index) {
-          if (index >= _displayList.length) {
-            return const Padding(
-              padding: EdgeInsets.symmetric(vertical: 16.0),
-              child: Center(child: CircularProgressIndicator()),
-            );
-          }
+    
+    // --- CHANGED: Wrapped in NotificationListener for smoother keyboard dismissal ---
+    return NotificationListener<ScrollUpdateNotification>(
+      onNotification: (notification) {
+        // Dismiss keyboard only if user is dragging and moves more than 15 pixels
+        if (notification.dragDetails != null && 
+            notification.scrollDelta != null && 
+            notification.scrollDelta!.abs() > 15) { 
+          FocusManager.instance.primaryFocus?.unfocus();
+        }
+        return false;
+      },
+      child: RefreshIndicator(
+        onRefresh: _handleRefresh,
+        child: ListView.builder(
+          controller: widget.scrollController,
+          physics: scrollPhysics,
+          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          reverse: true,
+          itemCount: _displayList.length + (_hasMore ? 1 : 0),
+          itemBuilder: (context, index) {
+            if (index >= _displayList.length) {
+              return const Padding(
+                padding: EdgeInsets.symmetric(vertical: 16.0),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
 
-          final item = _displayList[index];
+            final item = _displayList[index];
 
-          if (item is String) {
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16.0),
-              child: Text(
-                item,
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            );
-          }
-          
-          if (item is GroupMessage) {
-            final message = item;
-            final isMe = message.senderId == widget.userId;
+            if (item is String) {
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 16.0),
+                child: Text(
+                  item,
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              );
+            }
             
-            // --- LOGIC START: Determine if name should be shown ---
-            bool showName = false;
-            
-            if (!isMe) {
-              // Because list is reversed, index + 1 is the message "above" (older)
-              final isTopMessage = index + 1 >= _displayList.length;
+            if (item is GroupMessage) {
+              final message = item;
+              final isMe = message.senderId == widget.userId;
+              
+              bool showName = false;
+              
+              if (!isMe) {
+                final isTopMessage = index + 1 >= _displayList.length;
 
-              if (isTopMessage) {
-                showName = true; // First message ever
-              } else {
-                final previousItem = _displayList[index + 1];
-                
-                if (previousItem is String) {
-                  showName = true; // Above is a date header
-                } else if (previousItem is GroupMessage) {
-                  // Only show if the previous sender was different
-                  if (previousItem.senderId != message.senderId) {
-                    showName = true;
+                if (isTopMessage) {
+                  showName = true; 
+                } else {
+                  final previousItem = _displayList[index + 1];
+                  
+                  if (previousItem is String) {
+                    showName = true; 
+                  } else if (previousItem is GroupMessage) {
+                    if (previousItem.senderId != message.senderId) {
+                      showName = true;
+                    }
                   }
                 }
               }
+
+              return GroupMessageBubble(
+                message: message,
+                isMe: isMe,
+                
+                showSenderName: showName,
+                senderName: message.senderName ?? "Unknown", 
+                
+                onLongPress: (msg, pos) => widget.onLongPress(msg, pos),
+                onDoubleTap: (msg, pos) => widget.onDoubleTap(msg, pos),
+                onReactionsTap: () {
+                  // Import the modal first: import 'reaction_details_modal.dart';
+                  ReactionDetailsModal.show(context, message.id, widget.chatService);
+                },
+                contentBuilder: () => MessageContentView(message: message, isMe: isMe),
+                formattedTimestamp: widget.formatTimestamp(message.createdAt),
+                reactions: widget.reactionMap[message.id] ?? [],
+              );
             }
-            // --- LOGIC END ---
 
-            return GroupMessageBubble(
-              message: message,
-              isMe: isMe,
-              
-              // --- PASS THE CALCULATED VALUES ---
-              showSenderName: showName,
-              // This matches the field in your GroupMessage model file
-              senderName: message.senderName ?? "Unknown", 
-              // ----------------------------------
-
-              onLongPress: () => widget.onLongPress(message),
-              contentBuilder: () => MessageContentView(message: message, isMe: isMe),
-              formattedTimestamp: widget.formatTimestamp(message.createdAt),
-              reactions: widget.reactionMap[message.id] ?? [],
-            );
-          }
-
-          return const SizedBox.shrink();
-        },
+            return const SizedBox.shrink();
+          },
+        ),
       ),
     );
   }

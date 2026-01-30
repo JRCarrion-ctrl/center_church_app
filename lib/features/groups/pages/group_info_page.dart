@@ -186,6 +186,23 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     }
   }
 
+  Future<void> _toggleAdminOnlyMessaging(bool value) async {
+    try {
+      // You might need to add this method to your GroupService first
+      await _groupService.updateGroupSettings(
+        groupId: widget.pageData.group.id,
+        onlyAdminsMessage: value,
+      );
+      await widget.onDataChange(); // Refresh UI
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to update settings: $e')),
+        );
+      }
+    }
+  }
+
   void _openInviteModal() {
     showModalBottomSheet(
       context: context,
@@ -279,6 +296,18 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
             ),
             const SizedBox(height: 12),
             _buildEditableGroupInfo(),
+            if (widget.isAdmin) ...[
+              const SizedBox(height: 24),
+              _SectionCard(
+                title: "Settings", // Localization key: "key_settings"
+                child: SwitchListTile(
+                  title: const Text("Only Admins Can Send Messages"),
+                  subtitle: const Text("Participants will only be able to read messages."),
+                  value: widget.pageData.group.onlyAdminsMessage,
+                  onChanged: (val) => _toggleAdminOnlyMessaging(val),
+                ),
+              ),
+            ],
             const SizedBox(height: 24),
             _SectionCard(title: "key_112b".tr(), child: _buildGroupEvents(widget.pageData.events)),
             const SizedBox(height: 24),
@@ -527,7 +556,7 @@ class _GroupInfoViewState extends State<_GroupInfoView> {
     if (members.isEmpty) return Text("key_105".tr());
     
     final memberWidgets = members.map((m) {
-      final displayName = m['profile']?['display_name'] as String?;
+      final displayName = m['public_profile']?['display_name'] as String?;
       final online = _isOnline(m);
       
       return Padding(

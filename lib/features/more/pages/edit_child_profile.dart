@@ -6,7 +6,6 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 
-// Import the service used in add_child_profile.dart
 import '../photo_upload_service.dart';
 
 class EditChildProfilePage extends StatefulWidget {
@@ -25,18 +24,22 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   late TextEditingController _allergiesController;
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
-  late PhotoUploadService _photoUploadService; // New service
-  DateTime? _birthday; // Stored as DateTime, like in add_child_profile
+  
+  late PhotoUploadService _photoUploadService;
+  DateTime? _birthday; 
 
   File? _photoFile;
   String? _initialPhotoUrl;
   bool _saving = false;
+  
+  // Cache the familyId if we have to fetch it
+  String? _cachedFamilyId;
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.child['display_name'] ?? '');
-    // Convert initial birthday string (YYYY-MM-DD) to DateTime
+    
     final birthdayString = widget.child['birthday'];
     if (birthdayString != null) {
       try {
@@ -45,13 +48,16 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
         _birthday = null;
       }
     }
+    
     _allergiesController = TextEditingController(text: widget.child['allergies'] ?? '');
     _notesController = TextEditingController(text: widget.child['notes'] ?? '');
     _emergencyContactController = TextEditingController(text: widget.child['emergency_contact'] ?? '');
     _initialPhotoUrl = widget.child['photo_url'];
+    
+    // Initialize cached ID from widget args if available
+    _cachedFamilyId = widget.child['family_id']?.toString();
   }
 
-  // Use didChangeDependencies to safely access the GraphQL client from context
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -72,19 +78,68 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked != null) setState(() => _photoFile = File(picked.path));
   }
+  
+  // --- NEW: Helper to fetch Family ID if missing ---
+  Future<String?> _fetchFamilyId() async {
+    if (_cachedFamilyId != null) return _cachedFamilyId;
 
-  // REFACTOR: Use PhotoUploadService for consistency
-  Future<String?> _uploadPhoto(File file) async {
+    final client = GraphQLProvider.of(context).value;
+    const query = r'''
+      query GetChildFamilyId($child_id: uuid!) {
+        family_members(where: {child_profile_id: {_eq: $child_id}}, limit: 1) {
+          family_id
+        }
+      }
+    ''';
+
     try {
-      final familyId = widget.child['family_id'] as String;
-      // Note: Assumes family_id is available in the child object, which is
-      // needed by the service in add_child_profile.dart's implementation.
+      final res = await client.query(
+        QueryOptions(
+          document: gql(query), 
+          variables: {'child_id': widget.child['id']},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+
+      if (res.hasException) throw res.exception!;
+      
+      final rows = res.data?['family_members'] as List?;
+      if (rows != null && rows.isNotEmpty) {
+        _cachedFamilyId = rows.first['family_id'] as String?;
+      }
+    } catch (e) {
+      debugPrint("Error fetching family ID: $e");
+    }
+    
+    return _cachedFamilyId;
+  }
+
+  Future<String?> _uploadPhotoWithPresigned(File file) async {
+    try {
+      // 1. Try to get ID from widget or cache
+      String? familyId = _cachedFamilyId;
+      
+      // 2. If missing, fetch it from backend
+      if (familyId == null || familyId.isEmpty) {
+        familyId = await _fetchFamilyId();
+      }
+
+      if (familyId == null || familyId.isEmpty) {
+        throw Exception("Family ID could not be found for this child.");
+      }
+
       final url = await _photoUploadService.uploadProfilePhoto(file, familyId);
-      // Append timestamp like the original code did to bust cache
+      
       return url.isEmpty
           ? null
           : '$url?ts=${DateTime.now().millisecondsSinceEpoch}';
-    } catch (_) {
+    } catch (e) {
+      debugPrint("Photo upload error: $e");
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Photo upload failed: $e")),
+        );
+      }
       return null;
     }
   }
@@ -95,54 +150,62 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
 
     final client = GraphQLProvider.of(context).value;
 
-    // Upload if new photo selected
-    final photoUrl = _photoFile != null ? await _uploadPhoto(_photoFile!) : _initialPhotoUrl;
-
-    // REFACTOR: Use birthday stored as DateTime?
-    // Pass ISO8601 string or null for the 'date' type in Hasura.
-    final birthday = _birthday?.toIso8601String().split('T').first;
-
-    const mUpdate = r'''
-      mutation UpdateChildProfile(
-        $id: uuid!,
-        $display_name: String!,
-        $birthday: date,
-        $allergies: String,
-        $notes: String,
-        $emergency_contact: String,
-        $photo_url: String
-      ) {
-        update_child_profiles_by_pk(
-          pk_columns: { id: $id },
-          _set: {
-            display_name: $display_name,
-            birthday: $birthday,
-            allergies: $allergies,
-            notes: $notes,
-            emergency_contact: $emergency_contact,
-            photo_url: $photo_url
-          }
-        ) { id }
-      }
-    ''';
-
-    final vars = {
-      'id': widget.child['id'],
-      'display_name': _nameController.text.trim(),
-      'birthday': birthday,
-      'allergies': _allergiesController.text.trim().isEmpty ? null : _allergiesController.text.trim(),
-      'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
-      'emergency_contact': _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
-      'photo_url': photoUrl,
-    };
-
     try {
+      // 1. Upload new photo if selected
+      String? photoUrl = _initialPhotoUrl;
+      if (_photoFile != null) {
+        final uploadedUrl = await _uploadPhotoWithPresigned(_photoFile!);
+        if (uploadedUrl != null) {
+          photoUrl = uploadedUrl;
+        }
+      }
+
+      // 2. Prepare Variables
+      final birthday = _birthday?.toIso8601String().split('T').first;
+
+      const mUpdate = r'''
+        mutation UpdateChildProfile(
+          $id: uuid!,
+          $display_name: String!,
+          $birthday: date,
+          $allergies: String,
+          $notes: String,
+          $emergency_contact: String,
+          $photo_url: String
+        ) {
+          update_child_profiles_by_pk(
+            pk_columns: { id: $id },
+            _set: {
+              display_name: $display_name,
+              birthday: $birthday,
+              allergies: $allergies,
+              notes: $notes,
+              emergency_contact: $emergency_contact,
+              photo_url: $photo_url
+            }
+          ) { id }
+        }
+      ''';
+
+      final vars = {
+        'id': widget.child['id'],
+        'display_name': _nameController.text.trim(),
+        'birthday': birthday,
+        'allergies': _allergiesController.text.trim().isEmpty ? null : _allergiesController.text.trim(),
+        'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+        'emergency_contact': _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
+        'photo_url': photoUrl,
+      };
+
+      // 3. Execute Mutation
       final res = await client.mutate(
         MutationOptions(document: gql(mUpdate), variables: vars),
       );
+
       if (res.hasException) {
         throw res.exception!;
       }
+      
       if (mounted) Navigator.pop(context);
     } catch (e) {
       if (mounted) {
@@ -197,8 +260,20 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
         MutationOptions(document: gql(m), variables: {'child_id': widget.child['id']}),
       );
       if (res.hasException) throw res.exception!;
+      
+      // Try to ensure we have a familyId for the redirect, otherwise assume current user context 
+      // or just go back safely.
+      String? familyId = _cachedFamilyId ?? widget.child['family_id'];
+      familyId ??= await _fetchFamilyId();
+
       if (!mounted) return;
-      context.go('/more', extra: {'familyId': widget.child['family_id']});
+      
+      if (familyId != null) {
+        context.go('/more/family', extra: {'familyId': familyId});
+      } else {
+        // Fallback navigation if we really can't find where to go
+        context.go('/more'); 
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
@@ -208,7 +283,6 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     }
   }
 
-  // REFACTOR: The date picker now updates the _birthday DateTime field
   Future<void> _selectBirthday() async {
     final today = DateTime.now();
     final initial = _birthday ?? DateTime(today.year - 9, 1, 1);
@@ -225,14 +299,11 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // If you need the user id for role checks later:
-    // final userId = context.read<AppState>().profile?.id;
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.pop(), // Explicitly pop
+          onPressed: () => context.pop(), 
         ),
         title: Text("key_271".tr())),
       body: Padding(
@@ -241,9 +312,10 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
           key: _formKey,
           child: ListView(
             children: [
-              // Photo section is kept for consistency in display
-              if (_photoFile != null || (_initialPhotoUrl ?? '').isNotEmpty)
-                CircleAvatar(
+              // Photo Area
+              GestureDetector(
+                onTap: _pickPhoto,
+                child: CircleAvatar(
                   radius: 40,
                   backgroundImage: _photoFile != null
                       ? FileImage(_photoFile!)
@@ -251,47 +323,47 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
                           ? NetworkImage(_initialPhotoUrl!)
                           : null) as ImageProvider<Object>?,
                   child: (_photoFile == null && (_initialPhotoUrl ?? '').isEmpty)
-                      ? const Icon(Icons.person)
+                      ? const Icon(Icons.add_a_photo, size: 40)
                       : null,
                 ),
-              const SizedBox(height: 12),
-              ElevatedButton.icon(
-                onPressed: _pickPhoto,
-                icon: const Icon(Icons.photo),
-                label: Text("key_272".tr()),
               ),
               const SizedBox(height: 12),
+              
               TextFormField(
                 controller: _nameController,
                 decoration: InputDecoration(labelText: "key_238a".tr()),
                 validator: (v) => v == null || v.isEmpty ? "key_238b".tr() : null,
               ),
               const SizedBox(height: 12),
-              // REFACTOR: Use ListTile for date selection, similar to add_child_profile.dart
+
               ListTile(
                 title: Text(
                   _birthday != null
                       ? 'Birthday: ${_birthday!.toLocal().toString().split(' ')[0]}'
-                      : 'key_271a'.tr(), // Use the existing label key if appropriate
+                      : 'key_271a'.tr(),
                 ),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: _selectBirthday,
               ),
               const SizedBox(height: 12),
+              
               TextFormField(
                 controller: _allergiesController,
                 decoration: InputDecoration(labelText: "key_238c".tr()),
               ),
               const SizedBox(height: 12),
+              
               TextFormField(
                 controller: _notesController,
                 decoration: InputDecoration(labelText: "key_238d".tr()),
               ),
               const SizedBox(height: 12),
+              
               TextFormField(
                 controller: _emergencyContactController,
                 decoration: InputDecoration(labelText: "key_238e".tr()),
               ),
+              
               const SizedBox(height: 24),
               ElevatedButton(
                 onPressed: _saving ? null : _save,

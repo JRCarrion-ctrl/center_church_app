@@ -16,7 +16,6 @@ import 'package:ccf_app/features/more/pages/notes_viewer_page.dart';
 import 'package:ccf_app/features/more/pages/view_child_profile.dart';
 import 'package:ccf_app/features/more/pages/public_profile.dart';
 import 'package:go_router/go_router.dart';
-import '../transitions/transitions.dart';
 import '../features/features.dart';
 import '../features/giving/give_page.dart';
 import 'package:ccf_app/features/calendar/pages/app_event_details_page.dart';
@@ -30,19 +29,11 @@ import 'package:ccf_app/features/more/pages/role_management_page.dart';
 final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/role-management',
-    pageBuilder: (_, state) => buildSlidePage(
-      const RoleManagementPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const RoleManagementPage(),
   ),
   GoRoute(
     path: '/give',
-    pageBuilder: (_, state) => buildSlidePage(
-      const GivePage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const GivePage(),
   ),
   GoRoute(
     path: '/landing',
@@ -50,242 +41,143 @@ final List<GoRoute> miscRoutes = [
   ),
   GoRoute(
     path: '/more/profile',
-    pageBuilder: (_, state) => buildSlidePage(
-      const ProfilePage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const ProfilePage(),
   ),
   GoRoute(
     path: '/more/settings',
-    pageBuilder: (_, state) => buildSlidePage(
-      const SettingsPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const SettingsPage(),
   ),
   GoRoute(
     path: '/more/faq',
-    pageBuilder: (_, state) => buildSlidePage(
-      FAQPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => FAQPage(),
   ),
   GoRoute(
     path: '/more/how_to',
-    pageBuilder: (_, state) => buildSlidePage(
-      HowToUsePage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => HowToUsePage(),
   ),
   GoRoute(
     path: '/more/directory',
-    pageBuilder: (_, state) => buildSlidePage(
-      const DirectoryPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const DirectoryPage(),
   ),
   GoRoute(
     path: '/calendar/app-event/:id',
-    pageBuilder: (context, state) {
-      // 1. Get ID from URL
+    builder: (context, state) {
       final eventId = state.pathParameters['id']!;
-    
-      // 2. Get Object from Extra (if available)
       final extraEvent = state.extra as AppEvent?; 
 
-      return buildSlidePage(
-        // 3. Use the Wrapper
-        AppEventDeepLinkWrapper(
-          eventId: eventId,
-          preloadedEvent: extraEvent,
-        ),
-        direction: SlideDirection.right,
-        key: state.pageKey,
+      return AppEventDeepLinkWrapper(
+        eventId: eventId,
+        preloadedEvent: extraEvent,
       );
     },
   ),
   GoRoute(
     path: '/profile/:id',
-    pageBuilder: (context, state) => buildSlidePage(
-      PublicProfile(userId: state.pathParameters['id']!),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => PublicProfile(userId: state.pathParameters['id']!),
   ),
   GoRoute(
     path: '/more/family',
-    pageBuilder: (context, state) {
-      final familyId =
-          (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
-      return buildSlidePage(
-        FamilyPage(familyId: familyId),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+    builder: (context, state) {
+      final familyId = (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
+      return FamilyPage(familyId: familyId);
     },
   ),
   GoRoute(
     path: '/more/family/add_child',
     name: 'add_child_profile',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final familyId = state.extra;
       if (familyId is! String) {
         throw Exception('Missing or invalid family ID');
       }
-      return buildSlidePage(
-        AddChildProfilePage(familyId: familyId),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return AddChildProfilePage(familyId: familyId);
     },
   ),
   GoRoute(
     path: '/more/family/edit_child',
     name: 'edit_child_profile',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final child = state.extra;
       if (child is! Map<String, dynamic>) {
         throw Exception('Missing or invalid child data for edit');
       }
-      return buildSlidePage(
-        EditChildProfilePage(child: child),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return EditChildProfilePage(child: child);
     },
   ),
   GoRoute(
     path: '/more/family/view_child',
     name: 'view_child_profile',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final childId = state.extra;
       if (childId is! String) {
         throw Exception('Missing or invalid child ID for view');
       }
-      return buildSlidePage(
-        ViewChildProfilePage(childId: childId),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return ViewChildProfilePage(childId: childId);
     },
   ),
   GoRoute(
     path: '/more/nursery',
-    pageBuilder: (_, state) => buildSlidePage(
-      const NurseryStaffPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const NurseryStaffPage(),
   ),
   GoRoute(
     path: '/more/nursery/qr_checkin',
-    pageBuilder: (_, state) => buildSlidePage(
-      const QRCheckinScannerPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const QRCheckinScannerPage(),
   ),
   GoRoute(
     path: '/more/study',
-    pageBuilder: (_, state) => buildSlidePage(
-      const BibleStudiesPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const BibleStudiesPage(),
   ),
   GoRoute(
     path: '/more/study/requests',
-    pageBuilder: (_, state) => buildSlidePage(
-      const BibleStudyRequestsPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (_, state) => const BibleStudyRequestsPage(),
   ),
   GoRoute(
     path: '/more/study/edit',
     name: 'edit_bible_study',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final study = state.extra as Map<String, dynamic>?;
-      return buildSlidePage(
-        EditBibleStudyPage(study: study),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return EditBibleStudyPage(study: study);
     },
   ),
   GoRoute(
     path: '/more/study/notes_viewer',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final url = state.extra as String;
-      return buildSlidePage(
-        NotesViewerPage(url: url),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return NotesViewerPage(url: url);
     },
   ),
   GoRoute(
     path: '/nursery/child-profile',
-    pageBuilder: (context, state) => buildSlidePage(
-      ChildProfilePage(child: state.extra as Map<String, dynamic>),
-      direction: SlideDirection.right,
-      key: state.pageKey,
+    builder: (context, state) => ChildProfilePage(
+      child: state.extra as Map<String, dynamic>
     ),
   ),
   GoRoute(
     path: '/more/nursery/child-staff/:childId',
     name: 'child-staff',
-    pageBuilder: (context, state) {
+    builder: (context, state) {
       final childId = state.pathParameters['childId']!;
-      return buildSlidePage(
-        ChildStaffProfilePage(childId: childId),
-        direction: SlideDirection.right,
-        key: state.pageKey,
-      );
+      return ChildStaffProfilePage(childId: childId);
     },
   ),
   GoRoute(
     path: '/more/settings/data-and-delete',
-    pageBuilder: (context, state) => buildSlidePage(
-      const DataAndDeleteAccountPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => const DataAndDeleteAccountPage(),
   ),
   GoRoute(
     path: '/more/settings/contact-support',
-    pageBuilder: (context, state) => buildSlidePage(
-      const ContactSupportPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => const ContactSupportPage(),
   ),
   GoRoute(
     path: '/more/settings/notifications',
-    pageBuilder: (context, state) => buildSlidePage(
-      const NotificationSettingsPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => const NotificationSettingsPage(),
   ),
   GoRoute(
     path: '/more/settings/media-settings',
-    pageBuilder: (context, state) => buildSlidePage(
-      const MediaSettingsPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => const MediaSettingsPage(),
   ),
   GoRoute(
     path: '/group-announcements',
-    pageBuilder: (context, state) => buildSlidePage(
-      const GroupAnnouncementsPage(),
-      direction: SlideDirection.right,
-      key: state.pageKey,
-    ),
+    builder: (context, state) => const GroupAnnouncementsPage(),
   )
 ];

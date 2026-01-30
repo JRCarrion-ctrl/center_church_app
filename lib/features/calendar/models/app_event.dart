@@ -4,6 +4,7 @@ class AppEvent {
   final String title;
   final String? description;
   final DateTime eventDate;
+  final DateTime? eventEnd;
   final String? imageUrl;
   final String? location;
 
@@ -12,6 +13,7 @@ class AppEvent {
     required this.title,
     this.description,
     required this.eventDate,
+    this.eventEnd,
     this.imageUrl,
     this.location,
   });
@@ -31,6 +33,9 @@ class AppEvent {
         title: map['title'] as String,
         description: map['description'] as String?,
         eventDate: DateTime.parse(map['event_date'] as String).toUtc(),
+        eventEnd: map['event_end'] != null 
+            ? DateTime.parse(map['event_end'] as String).toUtc() 
+            : null,
         imageUrl: map['image_url'] as String?,
         location: map['location'] as String?,          // ensure typed as String?
       );
@@ -40,7 +45,8 @@ class AppEvent {
         'title': title,
         'description': description,
         'event_date': eventDate.toUtc().toIso8601String(),
-        'image_url': imageUrl,         // ← important
+        'event_end': eventEnd?.toUtc().toIso8601String(),
+        'image_url': imageUrl,
         'location': location,
       };
 
