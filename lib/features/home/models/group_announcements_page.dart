@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import '../../../app_state.dart';
@@ -149,7 +151,29 @@ class _GroupAnnouncementsPageState extends State<GroupAnnouncementsPage> {
                             const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         children: [
                           if ((a['body'] ?? '') is String && (a['body'] as String).isNotEmpty)
-                            Text(a['body'] as String),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: SelectableLinkify(
+                                text: a['body']!,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                                // This styling makes links look like traditional blue clickable links
+                                linkStyle: const TextStyle(
+                                  color: Colors.blue,
+                                  decoration: TextDecoration.underline,
+                                ),
+                                onOpen: (link) async {
+                                  final Uri url = Uri.parse(link.url);
+                                  final messenger = ScaffoldMessenger.of(context);
+                                  if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                                    if (mounted) {
+                                      messenger.showSnackBar(
+                                        const SnackBar(content: Text("Error")),
+                                      );
+                                    }
+                                  }
+                                },
+                              ),
+                            ),
                         ],
                       ),
                     );

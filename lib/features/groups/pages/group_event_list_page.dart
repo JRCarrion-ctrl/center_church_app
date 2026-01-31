@@ -11,9 +11,8 @@ import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
 import '../../calendar/event_service.dart';
 import '../../calendar/models/group_event.dart';
-import '../../calendar/widgets/group_event_form_modal.dart';
+// Note: GroupEventFormModal import removed as we now navigate via string paths
 
-// ✅ STEP 1: Create a data model for the page, like in calendar_page.dart.
 class _PageData {
   final List<GroupEvent> events;
   final bool isAdmin;
@@ -31,7 +30,6 @@ class GroupEventListPage extends StatefulWidget {
 }
 
 class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware {
-  // ✅ STEP 2: Use a single Future to manage the page's entire state.
   late Future<_PageData> _pageDataFuture;
   late EventService _service;
   bool _bootstrapped = false;
@@ -49,7 +47,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
       _bootstrapped = true;
       final gql = GraphProvider.of(context);
       _service = EventService(gql);
-      _pageDataFuture = _loadPageData(); // Initial data load
+      _pageDataFuture = _loadPageData(); 
     }
   }
 
@@ -61,14 +59,11 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
 
   @override
   void didPopNext() {
-    // Refresh data when returning to this page
     _refreshData();
   }
 
-  // ✅ STEP 3: Create a single function to load all necessary data.
   Future<_PageData> _loadPageData() async {
     try {
-      // Run fetches in parallel for better performance
       final results = await Future.wait([
         _service.fetchGroupEvents(widget.groupId),
         _checkAdminRole(),
@@ -79,55 +74,54 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
 
       return _PageData(events: events, isAdmin: isAdmin);
     } catch (e) {
-      // Propagate error to the FutureBuilder
       rethrow;
     }
   }
 
-  Future<void> _refreshData() {
+  Future<void> _refreshData() async {
     setState(() {
       _pageDataFuture = _loadPageData();
     });
-    return _pageDataFuture;
+    await _pageDataFuture;
   }
 
-  // This function now returns a boolean instead of setting state directly.
   Future<bool> _checkAdminRole() async {
     final appState = context.read<AppState>();
     final userId = appState.profile?.id;
     if (userId == null) return false;
 
-    // ✅ SIMPLIFIED: Call the new service method. No more GraphQL in the page!
     final isAdmin = await _service.isUserAdminInGroup(
       groupId: widget.groupId,
       userId: userId,
     );
   
-    // You can also check for a global owner role here if needed
     final isOwnerGlobally = appState.userRole.name == 'owner';
   
     return isAdmin || isOwnerGlobally;
   }
 
-  Future<void> _openFormModal({GroupEvent? existing}) async {
-    final result = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => GroupEventFormModal(
-        existing: existing,
-        groupId: widget.groupId,
-      ),
-    );
+  // --- UPDATED: Navigate to Full Page Form ---
+  Future<void> _navigateToEventForm({GroupEvent? existing}) async {
+    // We append /new or /edit to the current path logic, 
+    // ensuring we use the exact route structure defined in group_routes.dart
+    
+    if (existing != null) {
+      await context.push(
+        '/groups/${widget.groupId}/info/events/edit', 
+        extra: existing
+      );
+    } else {
+      await context.push('/groups/${widget.groupId}/info/events/new');
+    }
 
-    // Refresh data only if the form indicated a change was made
-    if (result == true) {
+    // Refresh data when user returns from the form page
+    if (mounted) {
       _refreshData();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // ✅ STEP 4: Build the UI from the state of the single Future.
     return FutureBuilder<_PageData>(
       future: _pageDataFuture,
       builder: (context, snapshot) {
@@ -138,7 +132,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
           appBar: AppBar(title: Text("key_070".tr())),
           floatingActionButton: isAdmin
               ? FloatingActionButton(
-                  onPressed: () => _openFormModal(),
+                  onPressed: () => _navigateToEventForm(),
                   tooltip: "key_070a".tr(),
                   child: const Icon(Icons.add),
                 )
@@ -196,8 +190,8 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
       child: ListTile(
         onTap: () => context.push('/group-event/${e.id}', extra: e),
         leading: (e.imageUrl != null && e.imageUrl!.isNotEmpty)
-            ? ClipRRect( // <-- WRAP in ClipRRect
-                borderRadius: BorderRadius.circular(8), // <-- Add rounded corners
+            ? ClipRRect( 
+                borderRadius: BorderRadius.circular(8), 
                 child: CachedNetworkImage(
                     imageUrl: e.imageUrl!,
                     width: 48,
@@ -206,12 +200,12 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
                     placeholder: (context, url) => const SizedBox(
                       width: 48,
                       height: 48,
-                      child: Center(child: CircularProgressIndicator())
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
                     ),
                     errorWidget: (context, url, error) => const SizedBox(
                       width: 48,
                       height: 48,
-                      child: Center(child: Icon(Icons.broken_image))
+                      child: Center(child: Icon(Icons.broken_image)),
                     ),
                 ),
               )
@@ -223,7 +217,7 @@ class _GroupEventListPageState extends State<GroupEventListPage> with RouteAware
               PopupMenuButton<String>(
                 onSelected: (action) async {
                   if (action == 'edit') {
-                    await _openFormModal(existing: e);
+                    await _navigateToEventForm(existing: e);
                   } else if (action == 'delete') {
                     final confirm = await showDialog<bool>(
                       context: context,

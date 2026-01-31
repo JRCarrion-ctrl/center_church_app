@@ -11,6 +11,20 @@ import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/media/image_picker_field.dart';
 import '../event_photo_storage_service.dart';
 
+// Helper class to track ID + UI state
+class _SlotEditor {
+  final String? id; // Null if new
+  final TextEditingController controller;
+  int maxSlots;
+
+  _SlotEditor({this.id, required String title, required this.maxSlots})
+      : controller = TextEditingController(text: title);
+
+  void dispose() {
+    controller.dispose();
+  }
+}
+
 class AppEventFormModal extends StatefulWidget {
   final AppEvent? existing;
 
@@ -33,6 +47,10 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
+  
+  // Changed to list of _SlotEditor
+  final List<_SlotEditor> _slots = [];
+
   DateTime? _selectedDate;
   TimeOfDay? _selectedTime;
   DateTime? _endDate;
@@ -47,6 +65,7 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     _descController = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
     _imageUrl = widget.existing?.imageUrl;
+    
     if (ev != null) {
       final local = ev.eventDate.toLocal();
       _selectedDate = DateTime(local.year, local.month, local.day);
@@ -68,6 +87,24 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
       _service = EventService(client, currentUserId: userId);
       _photoService = EventPhotoStorageService(client);
       _svcReady = true;
+
+      if (widget.existing != null) {
+        _loadSlots(widget.existing!.id);
+      }
+    }
+  }
+
+  Future<void> _loadSlots(String eventId) async {
+    try {
+      final slots = await _service.fetchAppEventSlots(eventId);
+      if (!mounted) return;
+      setState(() {
+        for (var s in slots) {
+          _slots.add(_SlotEditor(id: s.id, title: s.title, maxSlots: s.maxSlots));
+        }
+      });
+    } catch (e) {
+      debugPrint("Error loading existing slots: $e");
     }
   }
 
@@ -76,7 +113,23 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
+    for (var s in _slots) {
+      s.dispose();
+    }
     super.dispose();
+  }
+
+  void _addSlot() {
+    setState(() {
+      _slots.add(_SlotEditor(title: '', maxSlots: 1));
+    });
+  }
+
+  void _removeSlot(int index) {
+    setState(() {
+      _slots[index].dispose();
+      _slots.removeAt(index);
+    });
   }
 
   Future<void> _pickDate() async {
@@ -118,75 +171,56 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
   }
 
   Future<void> _save() async {
-    if (!_svcReady) return;
-
-    String? finalImageUrl = _imageUrl;
-    if (!_formKey.currentState!.validate()) return;
+    if (!_svcReady || !_formKey.currentState!.validate()) return;
     if (_selectedDate == null || _selectedTime == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("key_040".tr())));
-      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_040".tr())));
       return;
-    }
-
-
-    if (_imageRemoved && _localImageFile == null) {
-      finalImageUrl = null;
-    } else if (_localImageFile != null) {
-      final logicalId = widget.existing?.id ?? 'new';
-
-      finalImageUrl = await _photoService.uploadEventPhoto(
-        file: _localImageFile!,
-        keyPrefix: 'app_events',
-        logicalId: logicalId,
-      );
     }
 
     setState(() => _saving = true);
 
-    final dt = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedTime!.hour,
-      _selectedTime!.minute,
-    );
+    try {
+      String? finalImageUrl = _imageUrl;
+      if (_imageRemoved) finalImageUrl = null;
+      if (_localImageFile != null) {
+        finalImageUrl = await _photoService.uploadEventPhoto(
+          file: _localImageFile!,
+          keyPrefix: 'app_events',
+          logicalId: widget.existing?.id ?? 'new',
+        );
+      }
 
-    DateTime? finalEndDt;
-    if (_endDate != null && _endTime != null) {
-      finalEndDt = DateTime(
-        _endDate!.year, _endDate!.month, _endDate!.day,
-        _endTime!.hour, _endTime!.minute,
+      final dt = DateTime(_selectedDate!.year, _selectedDate!.month, _selectedDate!.day, _selectedTime!.hour, _selectedTime!.minute);
+      DateTime? finalEndDt = (_endDate != null && _endTime != null) 
+          ? DateTime(_endDate!.year, _endDate!.month, _endDate!.day, _endTime!.hour, _endTime!.minute)
+          : null;
+
+      // Map _SlotEditor back to AppEventSlot, preserving ID
+      final slots = _slots.map((s) {
+        return AppEventSlot(
+          id: s.id, // Pass ID to service!
+          title: s.controller.text.trim(),
+          maxSlots: s.maxSlots,
+        );
+      }).where((s) => s.title.isNotEmpty).toList();
+
+      final event = AppEvent(
+        id: widget.existing?.id ?? '',
+        title: _titleController.text.trim(),
+        description: _descController.text.trim(),
+        eventDate: dt.toUtc(),
+        eventEnd: finalEndDt?.toUtc(),
+        imageUrl: finalImageUrl,
+        location: _locationController.text.trim(),
       );
 
-      // VALIDATION: Ensure End is after Start
-      if (finalEndDt.isBefore(dt)) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("End time cannot be before start time")),
-        );
-        return;
-      }
-    }
-
-    final appEvent = AppEvent(
-      id: widget.existing?.id ?? '',
-      title: _titleController.text.trim(),
-      description: _descController.text.trim(),
-      eventDate: dt.toUtc(),
-      eventEnd: finalEndDt?.toUtc(),
-      imageUrl: finalImageUrl,
-      location: _locationController.text.trim(),
-    );
-
-    try {
-      await _service.saveAppEvent(appEvent);
-      if (!mounted) return;
-      Navigator.of(context).pop();
+      await _service.saveAppEventWithSlots(event, slots);
+    
+      if (mounted) Navigator.of(context).pop();
     } catch (e) {
+      debugPrint("Save Error: $e");
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("key_041".tr())));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_041".tr())));
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -195,118 +229,141 @@ class _AppEventFormModalState extends State<AppEventFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: MediaQuery.of(context).viewInsets,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.existing == null ? "key_041a".tr() : "key_041b".tr(),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _titleController,
-                  decoration: InputDecoration(labelText: "key_041c".tr()),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                ),
-                TextFormField(
-                  controller: _descController,
-                  decoration: InputDecoration(labelText: "key_041d".tr()),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-                ImagePickerField(
-                  label: "key_041d2".tr(),
-                  initialUrl: _imageUrl,
-                  onChanged: (file, removed) {
-                    setState(() {
-                      _localImageFile = file;
-                      _imageRemoved = removed;
-                    });
-                  },
-                ),
-                TextFormField(
-                  controller: _locationController,
-                  decoration: InputDecoration(labelText: "key_041e".tr()),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickDate,
-                        child: Text(
-                          _selectedDate == null
-                              ? "key_041f".tr()
-                              : DateFormat.yMMMd().format(_selectedDate!),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.existing == null ? "key_041a".tr() : "key_041b".tr()),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: InputDecoration(labelText: "key_041c".tr()),
+                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              ),
+              TextFormField(
+                controller: _descController,
+                decoration: InputDecoration(labelText: "key_041d".tr()),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+              ImagePickerField(
+                label: "key_041d2".tr(),
+                initialUrl: _imageUrl,
+                onChanged: (file, removed) {
+                  setState(() {
+                    _localImageFile = file;
+                    _imageRemoved = removed;
+                  });
+                },
+              ),
+              TextFormField(
+                controller: _locationController,
+                decoration: InputDecoration(labelText: "key_041e".tr()),
+              ),
+              const SizedBox(height: 24),
+              const Text("Start Time", style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickDate,
+                      child: Text(_selectedDate == null ? "key_041f".tr() : DateFormat.yMMMd().format(_selectedDate!)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickTime,
+                      child: Text(_selectedTime == null ? "key_041g".tr() : _selectedTime!.format(context)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Text("End Time (Optional)", style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickEndDate,
+                      child: Text(_endDate == null ? "Select Date" : DateFormat.yMMMd().format(_endDate!)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickEndTime,
+                      child: Text(_endTime == null ? "Select Time" : _endTime!.format(context)),
+                    ),
+                  ),
+                  if (_endDate != null)
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() { _endDate = null; _endTime = null; }),
+                    )
+                ],
+              ),
+              
+              const Divider(height: 48),
+              Text("Sign-up Slots (Optional)", style: Theme.of(context).textTheme.titleMedium),
+              const Text("Specify items or tasks needed for this event.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 16),
+
+              ...List.generate(_slots.length, (index) {
+                final slot = _slots[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: slot.controller,
+                          decoration: const InputDecoration(labelText: "Item needed", isDense: true),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickTime,
-                        child: Text(
-                          _selectedTime == null
-                              ? "key_041g".tr()
-                              : _selectedTime!.format(context),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 1,
+                        child: DropdownButtonFormField<int>(
+                          initialValue: slot.maxSlots,
+                          decoration: const InputDecoration(labelText: "Qty", isDense: true),
+                          items: List.generate(20, (i) => i + 1)
+                              .map((i) => DropdownMenuItem(value: i, child: Text("$i")))
+                              .toList(),
+                          onChanged: (val) => setState(() => slot.maxSlots = val!),
                         ),
                       ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Text("End Time (Optional)", style: Theme.of(context).textTheme.bodyMedium),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickEndDate,
-                        child: Text(
-                          _endDate == null
-                              ? "Select Date"
-                              : DateFormat.yMMMd().format(_endDate!),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickEndTime,
-                        child: Text(
-                          _endTime == null
-                              ? "Select Time"
-                              : _endTime!.format(context),
-                        ),
-                      ),
-                    ),
-                    // Optional: Clear button
-                    if (_endDate != null)
                       IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() {
-                          _endDate = null;
-                          _endTime = null;
-                        }),
-                      )
-                  ],
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                        onPressed: () => _removeSlot(index),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+              
+              OutlinedButton.icon(
+                onPressed: _addSlot,
+                icon: const Icon(Icons.add),
+                label: const Text("Add Item Slot"),
+              ),
+
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
                   onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const CircularProgressIndicator()
-                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
+                  child: _saving ? const CircularProgressIndicator() : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
-                const SizedBox(height: 8),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),

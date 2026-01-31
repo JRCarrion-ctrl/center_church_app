@@ -1,4 +1,4 @@
-// filename: app_event_details_page.dart
+// filename: lib/features/calendar/pages/app_event_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
@@ -6,6 +6,8 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
@@ -14,24 +16,29 @@ import '../models/app_event.dart';
 
 class AppEventDetailsPage extends StatefulWidget {
   final AppEvent event;
-
   const AppEventDetailsPage({super.key, required this.event});
 
   @override
   State<AppEventDetailsPage> createState() => _AppEventDetailsPageState();
 }
 
-class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
+class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTickerProviderStateMixin {
   late EventService _eventService;
+  late TabController _tabController;
   bool _svcReady = false;
 
   int _attendingCount = 1;
   bool _saving = false;
   List<Map<String, dynamic>> _rsvps = [];
+  
+  List<AppEventSlot> _slots = [];
+  bool _loadingSlots = true;
+  Map<String, int> _mySlots = {};
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
   }
 
   @override
@@ -43,7 +50,188 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       _eventService = EventService(client, currentUserId: userId);
       _svcReady = true;
 
-      _loadRSVPs();
+      _loadData();
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadData() async {
+    await Future.wait([
+      _loadRSVPs(),
+      _loadSlots(),
+    ]);
+  }
+
+  Future<void> _loadSlots() async {
+    try {
+      final slotsData = await _eventService.fetchAppEventSlots(widget.event.id);
+      final slotIds = slotsData.map((s) => s.id).whereType<String>().toList();
+      final myAssignments = await _eventService.fetchUserAssignments(slotIds);
+
+      if (mounted) {
+        setState(() {
+          _slots = slotsData;
+          _mySlots = myAssignments; 
+        });
+      }
+    } catch (e) {
+      debugPrint("Error loading slots: $e");
+    } finally {
+      if (mounted) setState(() => _loadingSlots = false);
+    }
+  }
+
+  Future<void> _onUnclaimSlot(String slotId) async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.unclaimSlot(slotId: slotId);
+      await _loadSlots(); 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Removed sign-up")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error removing sign-up")));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // --- REFACTORED: Sleek iOS Bottom Sheet ---
+  Future<void> _showSlotBottomSheet(dynamic slot, int myCurrentQty) async {
+    final int othersCount = slot.currentCount - myCurrentQty;
+    final int maxAvailableForMe = slot.maxSlots - othersCount;
+
+    if (maxAvailableForMe <= 0 && myCurrentQty == 0) return;
+
+    int selectedQty = myCurrentQty > 0 ? myCurrentQty : 1;
+
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // iOS Drag Handle
+                    Container(
+                      width: 40,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2.5),
+                      ),
+                    ),
+                    
+                    Text(
+                      slot.title,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "How many are you bringing?",
+                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Modern Quantity Selector
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildCircleBtn(Icons.remove, onPressed: selectedQty > 0 
+                            ? () => setSheetState(() => selectedQty--) 
+                            : null),
+                        Container(
+                          width: 100,
+                          alignment: Alignment.center,
+                          child: Text(
+                            "$selectedQty",
+                            style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        _buildCircleBtn(Icons.add, onPressed: selectedQty < maxAvailableForMe 
+                            ? () => setSheetState(() => selectedQty++) 
+                            : null),
+                      ],
+                    ),
+                    
+                    const SizedBox(height: 32),
+
+                    // Big Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, selectedQty),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: selectedQty == 0 ? Colors.red[50] : Theme.of(context).primaryColor,
+                          foregroundColor: selectedQty == 0 ? Colors.red : Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Text(
+                          selectedQty == 0 ? "Remove Sign-up" : "Confirm",
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || result == myCurrentQty) return;
+    if (result == 0) {
+      await _onUnclaimSlot(slot.id!);
+    } else {
+      await _onUpdateSlotQty(slot.id!, result);
+    }
+  }
+
+  Widget _buildCircleBtn(IconData icon, {VoidCallback? onPressed}) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: onPressed == null ? Colors.grey[100] : Colors.grey[200],
+      ),
+      child: IconButton(
+        icon: Icon(icon, color: onPressed == null ? Colors.grey : Colors.black87, size: 28),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
+  Future<void> _onUpdateSlotQty(String slotId, int qty) async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.claimSlot(slotId: slotId, quantity: qty);
+      await _loadSlots(); 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Updated!")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error updating")));
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 
@@ -53,20 +241,19 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       final data = await _eventService.fetchAppEventRSVPs(widget.event.id);
       if (mounted) {
         final currentUserId = context.read<AppState>().profile?.id;
-
-        // Safely find the current user's RSVP entry
         final existingRsvp = data.firstWhere(
           (r) => r['user_id'] == currentUserId,
+          orElse: () => <String, dynamic>{},
         );
 
         setState(() {
           _rsvps = data;
-          _attendingCount = existingRsvp['attending_count'] as int? ?? 1;
+          if (existingRsvp.isNotEmpty) {
+            _attendingCount = existingRsvp['attending_count'] as int? ?? 1;
+          }
         });
       }
-    } catch (_) {
-      // no-op
-    }
+    } catch (_) {}
   }
 
   Future<void> _submitRSVP() async {
@@ -78,15 +265,11 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
         count: _attendingCount,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_027".tr())),
-      );
-      _loadRSVPs();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_027".tr())));
+      _loadData();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_please_log_in".tr())),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_please_log_in".tr())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -98,33 +281,45 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     try {
       await _eventService.removeAppEventRSVP(widget.event.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_029".tr())),
-      );
-      _loadRSVPs();
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_029".tr())));
+      _loadData();
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_030".tr())),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_030".tr())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
+  Future<void> _onClaimSlot(String slotId) async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.claimSlot(slotId: slotId);
+      await _loadSlots(); 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Signed up!")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error signing up")));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _onEditEvent() async {
+    await context.push('/manage-app-event/edit', extra: widget.event);
+    if (mounted) _loadData(); 
+  }
+
   void addEventToCalendar(AppEvent event) {
     final Event calendarEvent = Event(
       title: event.title,
-      description: event.description,
+      description: event.description ?? '',
       startDate: event.eventDate,
-      // Use event end if available, else default to +1 hour
       endDate: event.eventEnd ?? event.eventDate.add(const Duration(hours: 1)),
       location: event.location ?? '5115 Pegasus Ct. Frederick, MD 21704 United States',
     );
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
-  // --- NEW: Helper to format "Start - End" time nicely ---
   String _formatEventTime(DateTime startUtc, DateTime? endUtc) {
     final start = startUtc.toLocal();
     final dateStr = DateFormat('EEEE, MMM d, yyyy').format(start);
@@ -132,34 +327,153 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     
     if (endUtc != null) {
       final end = endUtc.toLocal();
-      // If same day, just show time range: "Friday... 5:00 PM - 7:00 PM"
       if (DateUtils.isSameDay(start, end)) {
         final endStr = DateFormat('h:mm a').format(end);
         return '$dateStr • $startStr - $endStr';
       } else {
-        // If different day, show full end date
          final endDateStr = DateFormat('MMM d, h:mm a').format(end);
          return '$dateStr • $startStr - $endDateStr';
       }
     }
-    
     return '$dateStr • $startStr';
   }
 
   @override
   Widget build(BuildContext context) {
     final e = widget.event;
+    final canPop = GoRouter.of(context).canPop();
+    final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final currentUserId = context.select<AppState, String?>((s) => s.profile?.id);
-    
-    final myRsvpEntry = currentUserId != null && _rsvps.isNotEmpty
-        ? _rsvps.firstWhere(
-            (r) => r['user_id'] == currentUserId, 
-            orElse: () => {},
-          )
-        : <String, dynamic>{};
-        
-    final hasRSVP = myRsvpEntry.isNotEmpty;
+    final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
+    final bool canEdit = userRole == UserRole.supervisor || userRole == UserRole.owner;
 
+    return Scaffold(
+      body: NestedScrollView(
+        // ✅ FIX: Bouncing Physics prevents "Build scheduled during frame" crash
+        physics: const BouncingScrollPhysics(),
+        headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
+          return <Widget>[
+            SliverAppBar(
+              title: Text(e.title),
+              floating: true,
+              pinned: true,
+              leading: canPop
+                  ? null
+                  : IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/')),
+              actions: [
+                if (canEdit)
+                  IconButton(
+                    icon: const Icon(Icons.edit),
+                    tooltip: "key_038".tr(),
+                    onPressed: _onEditEvent,
+                  ),
+              ],
+            ),
+
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (e.imageUrl != null)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: CachedNetworkImage(
+                          imageUrl: e.imageUrl!,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => const SizedBox(
+                            child: Center(child: CircularProgressIndicator())
+                          ),
+                          errorWidget: (context, url, error) => const SizedBox(
+                            child: Center(child: Icon(Icons.broken_image, size: 100))
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Text(e.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    const SizedBox(height: 6),
+                    Text(
+                      _formatEventTime(e.eventDate, e.eventEnd),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.grey[800]),
+                    ),
+                    const SizedBox(height: 6),
+                    if ((e.description ?? '').isNotEmpty) ...[
+                      SelectableLinkify(
+                        text: e.description!,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        onOpen: (link) async {
+                          final Uri url = Uri.parse(link.url);
+                          await launchUrl(url, mode: LaunchMode.externalApplication);
+                        },
+                      ),
+                      const SizedBox(height: 6),
+                    ],
+                    if ((e.location ?? '').isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.location_on, size: 16, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: SelectableLinkify(
+                                text: e.location!,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                onOpen: (link) => launchUrl(Uri.parse(link.url)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    ElevatedButton.icon(
+                      onPressed: () => addEventToCalendar(e),
+                      icon: const Icon(Icons.calendar_today, size: 18),
+                      label: Text("key_031".tr()),
+                      style: ElevatedButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                        foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                        shape: const StadiumBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _SliverAppBarDelegate(
+                TabBar(
+                  controller: _tabController,
+                  labelColor: Theme.of(context).colorScheme.primary,
+                  unselectedLabelColor: Colors.grey,
+                  indicatorColor: Theme.of(context).colorScheme.primary,
+                  indicatorWeight: 3,
+                  labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                  tabs: [
+                    Tab(text: "key_031a".tr()), 
+                    const Tab(text: "Sign-ups"),
+                  ],
+                ),
+              ),
+            ),
+          ];
+        },
+        body: TabBarView(
+          controller: _tabController,
+          children: [
+            _buildRsvpSection(hasRSVP, currentUserId),
+            _buildSignUpSection(hasRSVP),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRsvpSection(bool hasRSVP, String? currentUserId) {
     final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final bool isSupervisor = userRole == UserRole.supervisor || userRole == UserRole.owner || userRole == UserRole.leader;
 
@@ -170,122 +484,201 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
       }
     }
 
-    final canPop = GoRouter.of(context).canPop();
+    final myRsvpEntry = currentUserId != null && _rsvps.isNotEmpty
+        ? _rsvps.firstWhere((r) => r['user_id'] == currentUserId, orElse: () => <String, dynamic>{})
+        : <String, dynamic>{};
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(e.title),
-        leading: canPop
-            ? null
-            : IconButton(
-                icon: const Icon(Icons.close),
-                onPressed: () => context.go('/'),
-              ),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          if (e.imageUrl != null)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: CachedNetworkImage(
-                imageUrl: e.imageUrl!,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => const SizedBox(
-                  child: Center(child: CircularProgressIndicator())
-                ),
-                errorWidget: (context, url, error) => const SizedBox(
-                  child: Center(child: Icon(Icons.broken_image, size: 100))
-                ),
-              ),
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.grey.shade200),
             ),
-          const SizedBox(height: 16),
-          Text(e.title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 6),
-          
-          // --- UPDATED: Use the new format helper ---
-          Text(
-            _formatEventTime(e.eventDate, e.eventEnd),
-            style: Theme.of(context).textTheme.bodyMedium, // Use explicit style for consistency
-          ),
-          // ------------------------------------------
-
-          const SizedBox(height: 6),
-          if ((e.description ?? '').isNotEmpty)
-            Text(e.description!, style: Theme.of(context).textTheme.bodyLarge),
-          const SizedBox(height: 6),
-          if ((e.location ?? '').isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text('Location: ${e.location}', style: Theme.of(context).textTheme.bodyMedium),
-            ),
-          const SizedBox(height: 6),
-          ElevatedButton.icon(
-            onPressed: () => addEventToCalendar(e),
-            icon: const Icon(Icons.event),
-            label: Text("key_031".tr()),
-          ),
-          
-          const Divider(height: 32),
-          
-          Text("key_031a".tr(), style: Theme.of(context).textTheme.titleMedium),
-          Row(
-            children: [
-              Text("key_032".tr()),
-              const SizedBox(width: 8),
-              DropdownButton<int>(
-                value: _attendingCount,
-                onChanged: (val) => setState(() => _attendingCount = val!),
-                items: List.generate(10, (i) => i + 1)
-                    .map((i) => DropdownMenuItem(value: i, child: Text(i.toString())))
-                    .toList(),
-              ),
-              const Spacer(),
-              ElevatedButton(
-                onPressed: _saving ? null : _submitRSVP,
-                child: _saving ? const SizedBox(
-                  width: 20, 
-                  height: 20, 
-                  child: CircularProgressIndicator(strokeWidth: 2)
-                ) : Text(hasRSVP ? "key_033".tr() : "key_033".tr()),
-              ),
-              if (hasRSVP)
-                TextButton(
-                  onPressed: _saving ? null : _removeRSVP,
-                  child: Text("key_033a".tr(), style: const TextStyle(color: Colors.red)),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    Text("key_032".tr(), style: const TextStyle(fontWeight: FontWeight.w600)),
+                    const SizedBox(width: 12),
+                    DropdownButton<int>(
+                      value: _attendingCount,
+                      underline: Container(),
+                      style: TextStyle(fontSize: 16, color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+                      onChanged: (val) => setState(() => _attendingCount = val!),
+                      items: List.generate(10, (i) => i + 1).map((i) => DropdownMenuItem(value: i, child: Text("$i"))).toList(),
+                    ),
+                    const Spacer(),
+                    ElevatedButton(
+                      onPressed: _saving ? null : _submitRSVP,
+                      style: ElevatedButton.styleFrom(
+                        shape: const StadiumBorder(),
+                        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                      ),
+                      child: _saving 
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                        : Text(hasRSVP ? "key_033".tr() : "key_033".tr()),
+                    ),
+                  ],
                 ),
-            ],
-          ),
-          
-          const Divider(height: 32),
-
-          if (_rsvps.isNotEmpty) ...[
-            Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium),
-            const SizedBox(height: 8),
-
-            if (isSupervisor)
-              ..._rsvps.map((rsvp) => _buildRsvpTile(rsvp))
-
-            else ...[
-              if (hasRSVP) 
-                _buildRsvpTile(myRsvpEntry),
-
-              if (othersCount > 0)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  child: Text(
-                    "+ $othersCount others are attending", 
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey[600],
-                      fontStyle: FontStyle.italic,
+                if (hasRSVP)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _saving ? null : _removeRSVP,
+                      child: Text("key_033a".tr(), style: const TextStyle(color: Colors.red)),
                     ),
                   ),
-                ),
-            ]
+              ],
+            ),
+          ),
+        ),
+        
+        if (_rsvps.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            child: Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          ),
+          if (isSupervisor)
+            ..._rsvps.map((rsvp) => _buildRsvpTile(rsvp))
+          else ...[
+            if (hasRSVP) _buildRsvpTile(myRsvpEntry),
+            if (othersCount > 0)
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text("+ $othersCount others are attending", style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic)),
+              ),
           ]
         ],
-      ),
+        const SizedBox(height: 80),
+      ],
     );
+  }
+
+  // --- REFACTORED: Sleek Cards & Progress Bars ---
+  Widget _buildSignUpSection(bool hasRSVP) {
+    if (_loadingSlots) return const Center(child: CircularProgressIndicator());
+    if (_slots.isEmpty) return Center(child: Text("No items needed.", style: TextStyle(color: Colors.grey[600])));
+
+    return ListView.builder(
+      itemCount: _slots.length,
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (context, index) {
+        final slot = _slots[index];
+        final filled = slot.currentCount;
+        final isFull = (slot.maxSlots - filled) <= 0;
+    
+        final myQty = _mySlots[slot.id] ?? 0;
+        final bool iSignedUp = myQty > 0;
+        final bool canMulti = slot.maxSlots > 1;
+
+        return Card(
+          elevation: 0,
+          color: Colors.white,
+          margin: const EdgeInsets.only(bottom: 12),
+          shape: RoundedRectangleBorder(
+            side: BorderSide(color: Colors.grey.shade200, width: 1),
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16), 
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(slot.title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          minHeight: 6,
+                          value: slot.maxSlots > 0 ? filled / slot.maxSlots : 0,
+                          backgroundColor: Colors.grey[100],
+                          color: isFull ? Colors.orangeAccent : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          Text("$filled / ${slot.maxSlots}", style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                          if (iSignedUp) ...[
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(color: Colors.green[50], borderRadius: BorderRadius.circular(4)),
+                              child: Text("You: $myQty", style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 11)),
+                            )
+                          ]
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                _buildSlotAction(slot, isFull, iSignedUp, myQty, canMulti),
+              ],
+            ),
+          )
+        );
+      }
+    );
+  }
+
+  Widget _buildSlotAction(AppEventSlot slot, bool isFull, bool iSignedUp, int myQty, bool canMulti) {
+    if (canMulti) {
+       return SizedBox(
+         height: 36,
+         child: OutlinedButton(
+           onPressed: (_saving || (isFull && !iSignedUp)) 
+               ? null 
+               : () => _showSlotBottomSheet(slot, myQty),
+            style: OutlinedButton.styleFrom(
+              shape: const StadiumBorder(),
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+            ),
+           child: Text(iSignedUp ? "Edit" : "Sign Up"),
+         ),
+       );
+    }
+
+    if (iSignedUp) {
+      return SizedBox(
+        height: 36,
+        child: OutlinedButton(
+          onPressed: !_saving ? () => _onUnclaimSlot(slot.id!) : null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: Colors.red,
+            side: BorderSide(color: Colors.red.shade200),
+            shape: const StadiumBorder(),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: const Text("Leave"),
+        ),
+      );
+    } else {
+      return SizedBox(
+        height: 36,
+        child: ElevatedButton(
+          onPressed: (!isFull && !_saving) ? () => _onClaimSlot(slot.id!) : null,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: !isFull ? Theme.of(context).colorScheme.primary : Colors.grey[300],
+            foregroundColor: Colors.white,
+            shape: const StadiumBorder(),
+            elevation: 0,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+          ),
+          child: Text(isFull ? "Full" : "Sign Up"),
+        ),
+      );
+    }
   }
 
   Widget _buildRsvpTile(Map<String, dynamic> rsvp) {
@@ -296,43 +689,48 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> {
     final count = rsvp['attending_count'];
 
     return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: CircleAvatar(
-        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
-            ? CachedNetworkImageProvider(photoUrl)
-            : null,
-        child: (photoUrl == null || photoUrl.isEmpty)
-            ? const Icon(Icons.person)
-            : null,
+        radius: 20,
+        backgroundImage: (photoUrl != null && photoUrl.isNotEmpty) ? CachedNetworkImageProvider(photoUrl) : null,
+        child: (photoUrl == null || photoUrl.isEmpty) ? const Icon(Icons.person, size: 20) : null,
       ),
-      title: Text(displayName),
-      subtitle: Text(email),
+      title: Text(displayName, style: const TextStyle(fontWeight: FontWeight.w600)),
+      subtitle: Text(email, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
       trailing: Container(
-        padding: const EdgeInsets.all(8),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.primaryContainer,
-          shape: BoxShape.circle,
+          color: Theme.of(context).colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(12),
         ),
-        child: Text(
-          '$count',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onPrimaryContainer
-          ),
-        ),
+        child: Text('+$count', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
     );
   }
 }
 
+class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
+  final TabBar _tabBar;
+  _SliverAppBarDelegate(this._tabBar);
+  @override
+  double get minExtent => _tabBar.preferredSize.height;
+  @override
+  double get maxExtent => _tabBar.preferredSize.height;
+  @override
+  Widget build(BuildContext context, double shrinkOffset, bool overlapsContent) {
+    return Container(
+      color: Theme.of(context).scaffoldBackgroundColor,
+      child: _tabBar,
+    );
+  }
+  @override
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
+}
+
 class AppEventDeepLinkWrapper extends StatefulWidget {
   final String eventId;
   final AppEvent? preloadedEvent;
-
-  const AppEventDeepLinkWrapper({
-    super.key,
-    required this.eventId,
-    this.preloadedEvent,
-  });
+  const AppEventDeepLinkWrapper({super.key, required this.eventId, this.preloadedEvent});
 
   @override
   State<AppEventDeepLinkWrapper> createState() => _AppEventDeepLinkWrapperState();
@@ -352,51 +750,26 @@ class _AppEventDeepLinkWrapperState extends State<AppEventDeepLinkWrapper> {
   Future<AppEvent?> _fetchEvent(String id) async {
     try {
       final client = GraphQLProvider.of(context).value;
-
-      // --- UPDATED: Fetch event_end ---
       const String query = r'''
         query GetAppEvent($id: uuid!) {
           app_events_by_pk(id: $id) {
-            id
-            title
-            description
-            event_date
-            event_end
-            location
-            image_url
+            id, title, description, event_date, event_end, location, image_url
           }
         }
       ''';
-
       final result = await client.query(QueryOptions(
-        document: gql(query),
-        variables: {'id': id},
-        fetchPolicy: FetchPolicy.networkOnly,
+        document: gql(query), variables: {'id': id}, fetchPolicy: FetchPolicy.networkOnly,
       ));
-
-      if (result.hasException) {
-        debugPrint('Deep Link Error: ${result.exception.toString()}');
-        return null;
-      }
-
+      if (result.hasException) return null;
       final data = result.data?['app_events_by_pk'];
-      
       if (data == null) return null;
-
       return AppEvent(
-        id: data['id'],
-        title: data['title'],
-        description: data['description'],
+        id: data['id'], title: data['title'], description: data['description'],
         eventDate: DateTime.parse(data['event_date']), 
-        // --- UPDATED: Parse event_end ---
         eventEnd: data['event_end'] != null ? DateTime.parse(data['event_end']) : null,
-        location: data['location'],
-        imageUrl: data['image_url'],
+        location: data['location'], imageUrl: data['image_url'],
       );
-    } catch (e) {
-      debugPrint('Error fetching deep link event: $e');
-      return null;
-    }
+    } catch (e) { return null; }
   }
 
   @override
@@ -404,26 +777,15 @@ class _AppEventDeepLinkWrapperState extends State<AppEventDeepLinkWrapper> {
     if (widget.preloadedEvent != null) {
       return AppEventDetailsPage(event: widget.preloadedEvent!);
     }
-
     return FutureBuilder<AppEvent?>(
       future: _eventFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-           return Scaffold(
-             appBar: AppBar(), 
-             body: const Center(child: CircularProgressIndicator()),
-           );
+           return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
         }
-
         if (snapshot.hasError || snapshot.data == null) {
-           return Scaffold(
-             appBar: AppBar(title: Text("key_error".tr())),
-             body: Center(
-               child: Text("key_event_not_found".tr()),
-             ),
-           );
+           return Scaffold(appBar: AppBar(title: Text("key_error".tr())), body: Center(child: Text("key_event_not_found".tr())));
         }
-
         return AppEventDetailsPage(event: snapshot.data!);
       },
     );

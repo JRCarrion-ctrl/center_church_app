@@ -1,4 +1,5 @@
 // File: lib/features/calendar/models/app_event.dart
+
 class AppEvent {
   final String id;
   final String title;
@@ -7,6 +8,7 @@ class AppEvent {
   final DateTime? eventEnd;
   final String? imageUrl;
   final String? location;
+  final List<AppEventSlot> slots;
 
   AppEvent({
     required this.id,
@@ -16,17 +18,8 @@ class AppEvent {
     this.eventEnd,
     this.imageUrl,
     this.location,
+    this.slots = const [],
   });
-
-  // If you ever decode JSON responses, include location here too.
-  factory AppEvent.fromJson(Map<String, dynamic> json) => AppEvent(
-        id: json['id'] as String,
-        title: json['title'] as String,
-        description: json['description'] as String?,
-        eventDate: DateTime.parse(json['event_date'] as String).toUtc(),
-        imageUrl: json['image_url'] as String?,
-        location: json['location'] as String?,
-      );
 
   factory AppEvent.fromMap(Map<String, dynamic> map) => AppEvent(
         id: map['id'] as String,
@@ -37,34 +30,47 @@ class AppEvent {
             ? DateTime.parse(map['event_end'] as String).toUtc() 
             : null,
         imageUrl: map['image_url'] as String?,
-        location: map['location'] as String?,          // ensure typed as String?
+        location: map['location'] as String?,
+        // Parse nested slots if they exist in the query
+        slots: (map['event_slots'] as List?)
+                ?.map((s) => AppEventSlot.fromMap(s))
+                .toList() ?? [],
       );
+}
 
-  /// Use this for inserts/updates so `image_url` is never forgotten.
-  Map<String, dynamic> toUpsertMap() => {
-        'title': title,
-        'description': description,
-        'event_date': eventDate.toUtc().toIso8601String(),
-        'event_end': eventEnd?.toUtc().toIso8601String(),
-        'image_url': imageUrl,
-        'location': location,
-      };
+class AppEventSlot {
+  final String? id;
+  final String title;
+  final int maxSlots;
+  final int currentCount; // <--- NEW: Tracks how many are taken
 
-  AppEvent copyWith({
-    String? id,
-    String? title,
-    String? description,
-    DateTime? eventDate,
-    String? imageUrl,
-    String? location,
-  }) {
-    return AppEvent(
-      id: id ?? this.id,
-      title: title ?? this.title,
-      description: description ?? this.description,
-      eventDate: eventDate ?? this.eventDate,
-      imageUrl: imageUrl ?? this.imageUrl,
-      location: location ?? this.location,
+  AppEventSlot({
+    this.id, 
+    required this.title, 
+    required this.maxSlots,
+    this.currentCount = 0, // Default to 0
+  });
+
+  factory AppEventSlot.fromMap(Map<String, dynamic> map) {
+    // Logic to parse Hasura Aggregate
+    int count = 0;
+    if (map['slot_assignments_aggregate'] != null) {
+      final sum = map['slot_assignments_aggregate']?['aggregate']?['sum'];
+      if (sum != null && sum['quantity'] != null) {
+        count = (sum['quantity'] as num).toInt();
+      }
+    }
+
+    return AppEventSlot(
+      id: map['id'],
+      title: map['title'],
+      maxSlots: map['max_slots'] as int,
+      currentCount: count,
     );
   }
+
+  Map<String, dynamic> toUpsertMap() => {
+        'title': title,
+        'max_slots': maxSlots,
+      };
 }

@@ -6,6 +6,8 @@ import 'package:ccf_app/core/time_service.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_linkify/flutter_linkify.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
@@ -318,7 +320,28 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 if (hasBody && !isExpanded)
-                  Text(a.body!, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SelectableLinkify(
+                      text: a.body!,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                      // This styling makes links look like traditional blue clickable links
+                      linkStyle: const TextStyle(
+                        color: Colors.blue,
+                        decoration: TextDecoration.underline,
+                      ),
+                      onOpen: (link) async {
+                        final Uri url = Uri.parse(link.url);
+                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Error")),
+                            );
+                          }
+                        }
+                      },
+                    ),
+                  ),
                 if (_canManage) ...[
                   if (adminStatus != null) adminStatus,
                   if (createdBy != null) createdBy,
@@ -386,7 +409,28 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
                       ),
                     ),
                   if (hasBody)
-                    Text(a.body!),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: SelectableLinkify(
+                        text: a.body!,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                        // This styling makes links look like traditional blue clickable links
+                        linkStyle: const TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                        onOpen: (link) async {
+                          final Uri url = Uri.parse(link.url);
+                          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Error")),
+                              );
+                            }
+                          }
+                        },
+                      ),
+                    ),
                 ],
               ),
             ),

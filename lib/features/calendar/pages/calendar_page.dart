@@ -16,7 +16,6 @@ import '../../../app_state.dart';
 import '../event_service.dart';
 import '../models/group_event.dart';
 import '../models/app_event.dart';
-import '../widgets/app_event_form_modal.dart';
 import '../../more/models/calendar_settings_modal.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -105,12 +104,21 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   }
 
   Future<void> _openAppForm([AppEvent? existing]) async {
-    await showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => AppEventFormModal(existing: existing),
-    );
-    setState(() => _calendarFuture = _loadAllEvents());
+    if (existing != null) {
+      // Navigates to the NEW renamed edit path defined in miscRoutes
+      await context.push('/manage-app-event/edit', extra: existing);
+    } else {
+      // Navigates to the NEW renamed creation path defined in miscRoutes
+      await context.push('/manage-app-event/new');
+    }
+  
+    // Refresh the calendar data once the user returns from the page
+    if (mounted) {
+      setState(() {
+        _calendarFuture = _loadAllEvents();
+        _refreshKey = UniqueKey().toString();
+      });
+    }
   }
 
   void _openCalendarSettings() {
@@ -376,6 +384,7 @@ class _CalendarData {
 
 class _EventDataSource extends CalendarDataSource {
   _EventDataSource(List<AppEvent> appEvents, List<GroupEvent> groupEvents, ColorScheme colors) {
+    // ignore: no_leading_underscores_for_local_identifiers
     final List<Appointment> _appointments = [];
 
     _appointments.addAll(appEvents.map<Appointment>((e) {

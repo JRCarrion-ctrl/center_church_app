@@ -25,6 +25,7 @@ import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
 import '../features/more/pages/child_staff_profile.dart';
 import 'package:ccf_app/features/more/pages/role_management_page.dart';
+import '../features/calendar/widgets/app_event_form_modal.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -179,5 +180,18 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/group-announcements',
     builder: (context, state) => const GroupAnnouncementsPage(),
-  )
+  ),
+  GoRoute(
+    path: '/manage-app-event/new',
+    builder: (context, state) => const AppEventFormModal(),
+  ),
+  
+  GoRoute(
+    path: '/manage-app-event/edit',
+    builder: (context, state) {
+      // Pass the existing event object via the 'extra' parameter
+      final event = state.extra as AppEvent?;
+      return AppEventFormModal(existing: event);
+    },
+  ),
 ];

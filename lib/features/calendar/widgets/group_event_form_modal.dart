@@ -11,6 +11,20 @@ import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/media/image_picker_field.dart';
 import '../event_photo_storage_service.dart';
 
+// Helper class to track ID + UI state
+class _SlotEditor {
+  final String? id; 
+  final TextEditingController controller;
+  int maxSlots;
+
+  _SlotEditor({this.id, required String title, required this.maxSlots})
+      : controller = TextEditingController(text: title);
+
+  void dispose() {
+    controller.dispose();
+  }
+}
+
 class GroupEventFormModal extends StatefulWidget {
   final GroupEvent? existing;
   final String? groupId;
@@ -35,11 +49,10 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   late TextEditingController _descController;
   late TextEditingController _locationController;
 
+  final List<_SlotEditor> _slots = [];
+
   DateTime? _selectedDateTime;
-  
-  // --- ADDED: End Time State ---
   DateTime? _endDateTime; 
-  // -----------------------------
 
   String? _dateTimeError;
   bool _saving = false;
@@ -55,7 +68,6 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
 
     if (ev != null) {
       _selectedDateTime = ev.eventDate.toLocal();
-      // --- ADDED: Initialize End Time ---
       if (ev.eventEnd != null) {
         _endDateTime = ev.eventEnd!.toLocal();
       }
@@ -71,6 +83,24 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
       _service = EventService(client, currentUserId: userId);
       _photoService = EventPhotoStorageService(client);
       _svcReady = true;
+
+      if (widget.existing != null) {
+        _loadSlots(widget.existing!.id);
+      }
+    }
+  }
+
+  Future<void> _loadSlots(String eventId) async {
+    try {
+      final slots = await _service.fetchGroupEventSlots(eventId);
+      if (!mounted) return;
+      setState(() {
+        for (var s in slots) {
+          _slots.add(_SlotEditor(id: s.id, title: s.title, maxSlots: s.maxSlots));
+        }
+      });
+    } catch (e) {
+      debugPrint("Error loading group slots: $e");
     }
   }
 
@@ -79,9 +109,26 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     _titleController.dispose();
     _descController.dispose();
     _locationController.dispose();
+    for (var s in _slots) {
+      s.dispose();
+    }
     super.dispose();
   }
 
+  void _addSlot() {
+    setState(() {
+      _slots.add(_SlotEditor(title: '', maxSlots: 1));
+    });
+  }
+
+  void _removeSlot(int index) {
+    setState(() {
+      _slots[index].dispose();
+      _slots.removeAt(index);
+    });
+  }
+
+  // ... [Keep Date/Time helpers] ...
   Future<void> _pickDate() async {
     final now = DateTime.now();
     final date = await showDatePicker(
@@ -92,13 +139,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     );
     if (date != null && mounted) {
       setState(() {
-        _selectedDateTime = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          _selectedDateTime?.hour ?? TimeOfDay.now().hour,
-          _selectedDateTime?.minute ?? TimeOfDay.now().minute,
-        );
+        _selectedDateTime = DateTime(date.year, date.month, date.day, _selectedDateTime?.hour ?? TimeOfDay.now().hour, _selectedDateTime?.minute ?? TimeOfDay.now().minute);
         _dateTimeError = null;
       });
     }
@@ -107,32 +148,20 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   Future<void> _pickTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: _selectedDateTime != null
-          ? TimeOfDay.fromDateTime(_selectedDateTime!)
-          : TimeOfDay.now(),
+      initialTime: _selectedDateTime != null ? TimeOfDay.fromDateTime(_selectedDateTime!) : TimeOfDay.now(),
     );
     if (time != null && mounted) {
       setState(() {
-        final now = DateTime.now();
-        final date = _selectedDateTime ?? now;
-        _selectedDateTime = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        );
+        final base = _selectedDateTime ?? DateTime.now();
+        _selectedDateTime = DateTime(base.year, base.month, base.day, time.hour, time.minute);
         _dateTimeError = null;
       });
     }
   }
 
-  // --- ADDED: End Date Picker ---
   Future<void> _pickEndDate() async {
     final now = DateTime.now();
-    // Default to start date if end date is null
     final initial = _endDateTime ?? _selectedDateTime ?? now;
-    
     final date = await showDatePicker(
       context: context,
       initialDate: initial,
@@ -147,17 +176,9 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     }
   }
 
-  // --- ADDED: End Time Picker ---
   Future<void> _pickEndTime() async {
-    final initial = _endDateTime != null 
-        ? TimeOfDay.fromDateTime(_endDateTime!) 
-        : const TimeOfDay(hour: 12, minute: 0);
-        
-    final time = await showTimePicker(
-      context: context,
-      initialTime: initial,
-    );
-    
+    final initial = _endDateTime != null ? TimeOfDay.fromDateTime(_endDateTime!) : const TimeOfDay(hour: 12, minute: 0);
+    final time = await showTimePicker(context: context, initialTime: initial);
     if (time != null && mounted) {
       setState(() {
         final baseDate = _endDateTime ?? _selectedDateTime ?? DateTime.now();
@@ -166,67 +187,56 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     }
   }
 
-  Future<String?> _handleImageUpload() async {
-    if (_imageRemoved && _localImageFile == null) {
-      return null;
-    } else if (_localImageFile != null) {
-      final logicalId = widget.existing?.id ?? 'new';
-      
-      return await _photoService.uploadEventPhoto(
-        file: _localImageFile!,
-        keyPrefix: 'group_events',
-        logicalId: logicalId,
-      );
-    }
-    return _imageUrl;
-  }
-
   Future<void> _validateAndSave() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
+    if (!_formKey.currentState!.validate()) return;
     if (_selectedDateTime == null) {
       setState(() => _dateTimeError = "key_042".tr());
-      return;
-    }
-
-    // --- ADDED: Validation ---
-    if (_endDateTime != null && _endDateTime!.isBefore(_selectedDateTime!)) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("End time cannot be before start time")),
-        );
-      }
       return;
     }
 
     setState(() => _saving = true);
 
     try {
-      final finalImageUrl = await _handleImageUpload();
-      final groupId = widget.existing?.groupId ?? widget.groupId ?? '';
-      
+      final eventId = widget.existing?.id ?? "event_${DateTime.now().millisecondsSinceEpoch}";
+      final groupId = widget.existing?.groupId ?? widget.groupId ?? 'unknown_group';
+
+      String? finalImageUrl = _imageUrl;
+      if (_imageRemoved) {
+        finalImageUrl = null;
+      } else if (_localImageFile != null) {
+        finalImageUrl = await _photoService.uploadEventPhoto(
+          file: _localImageFile!,
+          keyPrefix: 'group_events',
+          logicalId: '$groupId/$eventId',
+        );
+      }
+
+      // Map Editor back to Model, passing ID
+      final slots = _slots.map((s) {
+        return GroupEventSlot(
+          id: s.id, 
+          title: s.controller.text.trim(),
+          maxSlots: s.maxSlots,
+        );
+      }).where((s) => s.title.isNotEmpty).toList();
+
       final groupEvent = GroupEvent(
         id: widget.existing?.id ?? '',
         groupId: groupId,
         title: _titleController.text.trim(),
         description: _descController.text.trim(),
         eventDate: _selectedDateTime!.toUtc(),
-        // --- ADDED: Save End Time ---
         eventEnd: _endDateTime?.toUtc(),
         location: _locationController.text.trim(),
         imageUrl: finalImageUrl,
       );
-      
-      await _service.saveEvent(groupEvent);
+
+      await _service.saveGroupEventWithSlots(groupEvent, slots);
+    
       if (!mounted) return;
-      Navigator.of(context).pop();
+      Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_043".tr())),
-        );
-      }
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_043".tr())));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -234,131 +244,143 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: MediaQuery.of(context).viewInsets,
-      child: SingleChildScrollView(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  widget.existing == null ? "key_041a".tr() : "key_041b".tr(),
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: _titleController,
-                  decoration: InputDecoration(labelText: "key_041c".tr()),
-                  validator: (v) => v == null || v.isEmpty ? 'Required' : null,
-                ),
-                TextFormField(
-                  controller: _descController,
-                  decoration: InputDecoration(labelText: "key_041d".tr()),
-                  maxLines: 2,
-                ),
-                const SizedBox(height: 12),
-                ImagePickerField(
-                  label: "key_041d2".tr(),
-                  initialUrl: _imageUrl,
-                  onChanged: (file, removed) {
-                    setState(() {
-                      _localImageFile = file;
-                      _imageRemoved = removed;
-                    });
-                  },
-                ),
-                TextFormField(
-                  controller: _locationController,
-                  decoration: InputDecoration(labelText: "key_041e".tr()),
-                ),
-                const SizedBox(height: 12),
-                
-                // START TIME ROW
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickDate,
-                        child: Text(
-                          _selectedDateTime == null
-                              ? "key_041f".tr()
-                              : DateFormat.yMMMd().format(_selectedDateTime!),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickTime,
-                        child: Text(
-                          _selectedDateTime == null
-                              ? "key_041g".tr()
-                              : TimeOfDay.fromDateTime(_selectedDateTime!).format(context),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                if (_dateTimeError != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: Text(
-                      _dateTimeError!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.existing == null ? "key_041a".tr() : "key_041b".tr()),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              TextFormField(
+                controller: _titleController,
+                decoration: InputDecoration(labelText: "key_041c".tr()),
+                validator: (v) => v == null || v.isEmpty ? 'Required' : null,
+              ),
+              TextFormField(
+                controller: _descController,
+                decoration: InputDecoration(labelText: "key_041d".tr()),
+                maxLines: 3,
+              ),
+              const SizedBox(height: 12),
+              ImagePickerField(
+                label: "key_041d2".tr(),
+                initialUrl: _imageUrl,
+                onChanged: (file, removed) {
+                  setState(() {
+                    _localImageFile = file;
+                    _imageRemoved = removed;
+                  });
+                },
+              ),
+              TextFormField(
+                controller: _locationController,
+                decoration: InputDecoration(labelText: "key_041e".tr()),
+              ),
+              const SizedBox(height: 24),
+              const Text("Start Time", style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickDate,
+                      child: Text(_selectedDateTime == null ? "key_041f".tr() : DateFormat.yMMMd().format(_selectedDateTime!)),
                     ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickTime,
+                      child: Text(_selectedDateTime == null ? "key_041g".tr() : TimeOfDay.fromDateTime(_selectedDateTime!).format(context)),
+                    ),
+                  ),
+                ],
+              ),
+              if (_dateTimeError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: Text(_dateTimeError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ),
+              const SizedBox(height: 16),
+              const Text("End Time (Optional)", style: TextStyle(fontWeight: FontWeight.bold)),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickEndDate,
+                      child: Text(_endDateTime == null ? "Select Date" : DateFormat.yMMMd().format(_endDateTime!)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _pickEndTime,
+                      child: Text(_endDateTime == null ? "Select Time" : TimeOfDay.fromDateTime(_endDateTime!).format(context)),
+                    ),
+                  ),
+                  if (_endDateTime != null)
+                    IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _endDateTime = null))
+                ],
+              ),
 
-                // --- ADDED: END TIME ROW ---
-                const SizedBox(height: 16),
-                Align(
-                  alignment: Alignment.centerLeft, 
-                  child: Text("End Time (Optional)", style: Theme.of(context).textTheme.bodyMedium)
-                ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickEndDate,
-                        child: Text(
-                          _endDateTime == null
-                              ? "Select Date"
-                              : DateFormat.yMMMd().format(_endDateTime!),
+              const Divider(height: 48),
+              Text("Sign-up Slots (Optional)", style: Theme.of(context).textTheme.titleMedium),
+              const Text("Specify items or tasks needed for this group event.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              const SizedBox(height: 16),
+
+              ...List.generate(_slots.length, (index) {
+                final slot = _slots[index];
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: TextFormField(
+                          controller: slot.controller,
+                          decoration: const InputDecoration(labelText: "Item needed", isDense: true),
                         ),
                       ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _pickEndTime,
-                        child: Text(
-                          _endDateTime == null
-                              ? "Select Time"
-                              : TimeOfDay.fromDateTime(_endDateTime!).format(context),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        flex: 1,
+                        child: DropdownButtonFormField<int>(
+                          initialValue: slot.maxSlots,
+                          decoration: const InputDecoration(labelText: "Qty", isDense: true),
+                          items: List.generate(20, (i) => i + 1)
+                              .map((i) => DropdownMenuItem(value: i, child: Text("$i")))
+                              .toList(),
+                          onChanged: (val) => setState(() => slot.maxSlots = val!),
                         ),
                       ),
-                    ),
-                     if (_endDateTime != null)
                       IconButton(
-                        icon: const Icon(Icons.clear),
-                        onPressed: () => setState(() => _endDateTime = null),
-                      )
-                  ],
-                ),
-                // ---------------------------
-                
-                const SizedBox(height: 16),
-                ElevatedButton(
+                        icon: const Icon(Icons.remove_circle_outline, color: Colors.red),
+                        onPressed: () => _removeSlot(index),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+
+              OutlinedButton.icon(
+                onPressed: _addSlot,
+                icon: const Icon(Icons.add),
+                label: const Text("Add Item Slot"),
+              ),
+
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
                   onPressed: _saving ? null : _validateAndSave,
-                  child: _saving
-                      ? const CircularProgressIndicator()
-                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
+                  child: _saving ? const CircularProgressIndicator() : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
-                const SizedBox(height: 8),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
