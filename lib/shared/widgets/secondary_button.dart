@@ -1,4 +1,5 @@
 // lib/widgets/secondary_button.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 
 class SecondaryButton extends StatelessWidget {
@@ -17,17 +18,40 @@ class SecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton(
-      style: OutlinedButton.styleFrom(
-        backgroundColor: Color(0xFFFAF4EF),
-        side: const BorderSide(color: Color(0xFF5C4033), width: 1.5),
-        foregroundColor: Color(0xFF3B2C25),
-        padding: EdgeInsets.symmetric(horizontal: padding, vertical: padding / 2),
-        textStyle: TextStyle(fontSize: fontSize, fontWeight: FontWeight.w500),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(30), // Pill shape
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), // The glass effect
+        child: Container(
+          width: double.infinity, // Consistent width for sleekness
+          constraints: const BoxConstraints(maxWidth: 280),
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.1), // Translucent fill
+            borderRadius: BorderRadius.circular(30),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2), // Subtle edge highlight
+              width: 1.5,
+            ),
+          ),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(30),
+            child: Padding(
+              padding: EdgeInsets.symmetric(vertical: padding * 0.8),
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: fontSize,
+                  fontWeight: FontWeight.w400,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
-      onPressed: onTap,
-      child: Text(title),
     );
   }
 }

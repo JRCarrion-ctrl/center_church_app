@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import 'your_groups_section.dart';
 import 'joinable_groups_section.dart';
 import 'invitations_section.dart';
+import 'models/group_model.dart';
+import 'group_service.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/graph_provider.dart';
@@ -23,6 +25,28 @@ class _GroupsPageState extends State<GroupsPage> {
   final _yourGroupsKey = GlobalKey<YourGroupsSectionState>();
   final _joinableGroupsKey = GlobalKey<JoinableGroupsSectionState>();
   final _invitationsKey = GlobalKey<InvitationsSectionState>();
+  late Future<List<GroupModel>> _invitesFuture;
+  late Future<List<GroupModel>> _joinableFuture;
+  bool _futuresInitialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_futuresInitialized) {
+      final app = context.read<AppState>();
+      final service = context.read<GroupService>();
+      final userId = app.profile?.id;
+
+      // Initialize futures once here to avoid Provider errors during build
+      if (userId != null) {
+        _invitesFuture = service.getGroupInvitations(userId);
+      } else {
+        _invitesFuture = Future.value([]);
+      }
+      _joinableFuture = service.getJoinableGroups();
+      _futuresInitialized = true;
+    }
+  }
 
   Future<void> _refreshAllSections() async {
     _yourGroupsKey.currentState?.refresh();
@@ -200,6 +224,7 @@ class _GroupsPageState extends State<GroupsPage> {
     final app = context.watch<AppState>();
     final isAuthed = app.isAuthenticated;
     final isOwner = app.userRole == UserRole.owner;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -244,37 +269,146 @@ class _GroupsPageState extends State<GroupsPage> {
     // --- END: Updated check for logged out user with better UI ---
 
     return Scaffold(
-      floatingActionButton: isOwner
-          ? FloatingActionButton.extended(
-              onPressed: _openCreateGroupDialog,
-              icon: const Icon(Icons.add),
-              label: Text("key_059".tr()), // Create Group
-            )
-          : null,
-      body: SafeArea(
-        child: RefreshIndicator(
-          onRefresh: _refreshAllSections,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
-            child: Center(
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 600),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    InvitationsSection(key: _invitationsKey),
-                    const SizedBox(height: 24),
-                    YourGroupsSection(key: _yourGroupsKey),
-                    const SizedBox(height: 24),
-                    JoinableGroupsSection(key: _joinableGroupsKey),
-                  ],
+      floatingActionButton: isOwner ? _buildSleekFAB() : null,
+      body: Stack(
+        children: [
+          _buildAtmosphericBackground(isDark), // Helper for background
+          SafeArea(
+            child: RefreshIndicator(
+              onRefresh: _refreshAllSections,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 600),
+                    child: Column(
+                      children: [
+                        // 1. CONDITIONAL INVITATIONS
+                        FutureBuilder<List<GroupModel>>(
+                          future: _invitesFuture,
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 24.0),
+                                child: _SleekSectionWrapper(
+                                  padding: 16.0,
+                                  child: InvitationsSection(key: _invitationsKey, onInviteHandled: _refreshAllSections),
+                                ),
+                              );
+                            }
+                            return const SizedBox.shrink(); // No data = no ghost box
+                          },
+                        ),
+
+                        // 2. YOUR GROUPS (Always visible as the core section)
+                        _SleekSectionWrapper(
+                          padding: 16.0,
+                          child: YourGroupsSection(key: _yourGroupsKey),
+                        ),
+
+                        // 3. CONDITIONAL JOINABLE
+                        FutureBuilder<List<GroupModel>>(
+                          future: _joinableFuture,
+                          builder: (context, snapshot) {
+                            // Only show if the future is done, has data, and that data is NOT empty
+                            if (snapshot.connectionState == ConnectionState.done && 
+                                snapshot.hasData && 
+                                snapshot.data!.isNotEmpty) {
+                              return Column(
+                                children: [
+                                  const SizedBox(height: 24),
+                                  _SleekSectionWrapper(
+                                    padding: 16.0,
+                                    child: JoinableGroupsSection(
+                                      key: _joinableGroupsKey, 
+                                      onGroupJoined: _refreshAllSections
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }
+                            // Return an empty widget that takes zero space if no data exists
+                            return const SizedBox.shrink();
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildAtmosphericBackground(bool isDark) {
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
+        ),
+        Positioned.fill(
+          child: Container(
+            color: isDark 
+                ? Colors.black.withValues(alpha: 0.65) 
+                : Colors.white.withValues(alpha: 0.75),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSleekFAB() {
+    return FloatingActionButton.extended(
+      onPressed: _openCreateGroupDialog,
+      backgroundColor: Theme.of(context).colorScheme.primary,
+      foregroundColor: Theme.of(context).colorScheme.onPrimary,
+      elevation: 4,
+      // Using the StadiumBorder ensures the "pill" shape matches your landing page buttons
+      shape: const StadiumBorder(),
+      icon: const Icon(Icons.add),
+      label: Text("key_059".tr()), // Create Group
+    );
+  }
+}
+
+class _SleekSectionWrapper extends StatelessWidget {
+  final Widget child;
+  final double padding;
+
+  const _SleekSectionWrapper({required this.child, required this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(padding),
+      decoration: BoxDecoration(
+        // 1. Semi-translucent "Glass" fill
+        color: isDark 
+            ? Colors.black.withValues(alpha: 0.2) 
+            : Colors.white.withValues(alpha: 0.85),
+        // 2. Consistent Pill-inspired geometry
+        borderRadius: BorderRadius.circular(28),
+        // 3. Subtle edge highlight for a premium feel
+        border: Border.all(
+          color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
+          width: 1.5,
+        ),
+        // 4. Soft depth shadow
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
   table_calendar: ^3.2.0
-  go_router: ^15.1.3
+  go_router: ^17.1.0
   provider: ^6.1.5+1
   app_links: ^6.4.0
   logger: ^2.6.2
@@ -27,25 +27,25 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.5
   youtube_player_flutter: ^9.1.3
-  omni_video_player: ^3.3.5
+  omni_video_player: ^4.0.0-beta
   emoji_picker_flutter: ^4.3.0
   flutter_image_compress: ^2.4.0
   cached_network_image: ^3.4.1
   sqflite: ^2.4.2
-  share_plus: ^11.1.0
+  share_plus: ^12.0.1
   image_gallery_saver_plus: ^4.0.1
   mime: ^2.0.0
   add_2_calendar: ^3.0.1
-  flutter_appauth: ^9.0.1
+  flutter_appauth: ^11.0.0
   flutter_linkify: ^6.0.0
-  flutter_link_previewer: ^3.2.2
+  flutter_link_previewer: ^4.2.0
   flutter_launcher_icons: ^0.14.4
   flutter_native_timezone_latest: ^1.0.0
   mobile_scanner: ^7.1.3
   dio: ^5.9.0
   open_filex: ^4.7.0
-  syncfusion_flutter_pdfviewer: ^30.1.39
-  webview_flutter: ^4.13.0
+  syncfusion_flutter_pdfviewer: ^32.2.8
+  webview_flutter: ^4.13.1
   package_info_plus: ^9.0.0
   onesignal_flutter: ^5.3.4
   permission_handler: ^12.0.1
@@ -55,12 +55,14 @@ dependencies:
   connectivity_plus: ^6.1.5
   graphql_flutter: ^5.2.1
   gql: ^1.0.1
-  flutter_secure_storage: ^9.2.4
+  flutter_secure_storage: ^10.0.0
   jwt_decoder: ^2.0.1
   font_awesome_flutter: ^10.12.0
   flutter_native_splash: ^2.4.7
   app_tracking_transparency: ^2.0.6+1
-  syncfusion_flutter_calendar: ^30.2.7
+  syncfusion_flutter_calendar: ^32.1.23
+  flutter_riverpod: ^3.2.1
+  media_kit: ^1.2.6
   
 dev_dependencies:
   flutter_test:
@@ -91,3 +93,7 @@ flutter:
     - assets/logo_image.png
     - assets/landing_background.png
     - assets/image_placeholder.png
+    - assets/DSC06378.jpg
+    - assets/landing_v2.png
+    - assets/landing_v2_blurred.png
+    - assets/landing_v2_blurred_2.png

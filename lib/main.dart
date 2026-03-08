@@ -18,11 +18,14 @@ import 'package:app_links/app_links.dart';
 import 'policy_screen.dart';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'dart:io';
+import 'package:media_kit/media_kit.dart';
+import 'features/groups/group_service.dart';
 
 import 'app_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   await EasyLocalization.ensureInitialized();
 
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
@@ -212,19 +215,29 @@ class _CCFAppBootState extends State<CCFAppBoot> {
             // Use the official GraphQLProvider from graphql_flutter
             child: GraphQLProvider(
               client: _clientNotifier,
-              child: MaterialApp.router(
-                debugShowCheckedModeBanner: false,
-                theme: ccfLightTheme.copyWith(
-                  pageTransitionsTheme: pageTransitionsTheme,
+              // ✨ ADD THIS MULTIPROVIDER BLOCK ✨
+              child: MultiProvider(
+                providers: [
+                  // Provide GroupService and keep it updated with the current GraphQLClient
+                  ProxyProvider<AppState, GroupService>(
+                    update: (context, state, previous) => GroupService(_clientNotifier.value),
+                  ),
+                  // You can add other services here in the future
+                ],
+                child: MaterialApp.router(
+                  debugShowCheckedModeBanner: false,
+                  theme: ccfLightTheme.copyWith(
+                    pageTransitionsTheme: pageTransitionsTheme,
+                  ),
+                  darkTheme: ccfDarkTheme.copyWith(
+                    pageTransitionsTheme: pageTransitionsTheme,
+                  ),
+                  themeMode: state.themeMode,
+                  routerConfig: _router,
+                  locale: context.locale,
+                  supportedLocales: context.supportedLocales,
+                  localizationsDelegates: context.localizationDelegates,
                 ),
-                darkTheme: ccfDarkTheme.copyWith(
-                  pageTransitionsTheme: pageTransitionsTheme,
-                ),
-                themeMode: state.themeMode,
-                routerConfig: _router,
-                locale: context.locale,
-                supportedLocales: context.supportedLocales,
-                localizationsDelegates: context.localizationDelegates,
               ),
             ),
           );

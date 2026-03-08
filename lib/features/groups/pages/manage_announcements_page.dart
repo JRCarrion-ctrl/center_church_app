@@ -343,15 +343,15 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
                     ),
                   ),
                 if (_canManage) ...[
-                  if (adminStatus != null) adminStatus,
-                  if (createdBy != null) createdBy,
+                  ?adminStatus,
+                  ?createdBy,
                 ] else ...[
                   if (a.publishedAt != null)
                     Text(
                       '${"key_131".tr()}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
                       style: const TextStyle(fontSize: 12),
                     ),
-                  if (createdBy != null) createdBy,
+                  ?createdBy,
                 ],
               ],
             ),

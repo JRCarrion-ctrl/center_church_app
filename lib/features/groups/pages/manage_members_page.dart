@@ -105,23 +105,28 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 FutureBuilder<List<Map<String, dynamic>>>(
                   future: _futurePending,
                   builder: (context, snapshot) {
-                    if (snapshot.connectionState != ConnectionState.done) {
-                      // Don't show progress if members are still loading, wait until they're done
-                      return const SizedBox(); 
+                    if (snapshot.connectionState != ConnectionState.done) return const SizedBox();
+                    
+                    // ADD THIS ERROR CHECK
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text('Error loading requests: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                      );
                     }
 
                     final pending = snapshot.data ?? [];
                     if (pending.isEmpty) return const SizedBox();
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text("key_146a".tr(),
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                        const SizedBox(height: 8),
-                        ...pending.map((m) => _buildPendingTile(m)),
-                      ],
-                    );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text("key_146a".tr(),
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 8),
+                          ...pending.map((m) => _buildPendingTile(m)),
+                        ],
+                      );
                   },
                 ),
             ],

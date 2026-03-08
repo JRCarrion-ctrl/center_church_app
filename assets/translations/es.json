@@ -116,7 +116,7 @@
   "key_059b": "Aceptar",
   "key_059c": "Rechazar",
   "key_059d": "Grupos a los que puedes unirte",
-  "key_060": "Te uniste a {}",
+  "key_060": "Solicitado unirse a {}",
   "key_061": "Invitación rechazada a {}",
   "key_062": "Aceptar",
   "key_063": "Buscar grupos...",
@@ -181,7 +181,7 @@
   "key_112e": "Miembros",
   "key_113": "No se pudo unir al grupo: $e",
   "key_114": "Grupo no encontrado",
-  "key_114a": "Unirse al grupo",
+  "key_114a": "Solicitar Unirse al Grupo",
   "key_114b": "Solicitar unirse",
   "key_115": "Este grupo es solo por invitación.",
   "key_116": "Cancelar",
@@ -612,5 +612,6 @@
   "key_no_change_role": "You cannot change your own role.",
   "key_role_updated": "Role updated to {} for {}",
   "key_please_log_in": "Por favor inica una sesión para RSVP",
-  "Be the first to say something!": "Se el primero en decir algo!"
+  "Be the first to say something!": "Se el primero en decir algo!",
+  "key_show_less": "Mostrar menos"
 }

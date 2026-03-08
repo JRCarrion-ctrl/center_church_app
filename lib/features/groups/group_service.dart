@@ -346,6 +346,7 @@ class GroupService {
           where: {
             user_id: { _eq: $uid }
             status: { _eq: "pending" }
+            group: { archived: { _eq: false } }
           }
         ) {
           # You must fetch the relationship object, not just group_id
@@ -544,7 +545,6 @@ class GroupService {
   }
 
   Future<void> joinGroup({required String groupId, required String userId}) async {
-// ... (joinGroup implementation remains unchanged)
     await _assertGroupActive(groupId);
 
     // Fetch group visibility
@@ -560,22 +560,8 @@ class GroupService {
 
     final vis = (group['visibility'] as String?) ?? 'invite';
 
-    if (vis == 'public') {
-      const m = r'''
-        mutation Join($gid: uuid!, $uid: String!) {
-          insert_group_memberships_one(object: {
-            group_id: $gid,
-            user_id: $uid,
-            role: "member",
-            status: "approved"
-          }) { group_id }
-        }
-      ''';
-      final res = await client.mutate(
-        MutationOptions(document: gql(m), variables: {'gid': groupId, 'uid': userId}),
-      );
-      if (res.hasException) throw res.exception!;
-    } else if (vis == 'request') {
+    // Treat BOTH 'public' and 'request' visibilities as requiring a join request
+    if (vis == 'public' || vis == 'request') {
       // Ensure no duplicate request
       const qReq = r'''
         query Existing($gid: uuid!, $uid: String!) {
@@ -591,7 +577,7 @@ class GroupService {
 
       const mReq = r'''
         mutation Request($gid: uuid!, $uid: String!) {
-          insert_group_requests_one(object: { group_id: $gid, user_id: $uid }) { group_id }
+          insert_group_requests_one(object: { group_id: $gid, user_id: $uid, status: "pending"}) { group_id }
         }
       ''';
       final ins = await client.mutate(
@@ -601,6 +587,23 @@ class GroupService {
     } else {
       throw Exception('This group is invite only.');
     }
+  }
+
+  Future<List<String>> getMyPendingGroupRequests(String userId) async {
+    const q = r'''
+      query MyRequests($uid: String!) {
+        group_requests(where: { user_id: { _eq: $uid } }) {
+          group_id
+        }
+      }
+    ''';
+    final res = await client.query(
+      QueryOptions(document: gql(q), variables: {'uid': userId}),
+    );
+    if (res.hasException) throw res.exception!;
+    
+    final rows = (res.data?['group_requests'] as List<dynamic>? ?? []);
+    return rows.map((e) => e['group_id'] as String).toList();
   }
 
   Future<void> leaveGroup({required String groupId, required String? userId}) async {

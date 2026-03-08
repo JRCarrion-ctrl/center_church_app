@@ -18,8 +18,6 @@ class LivestreamPreview extends StatefulWidget {
 class _LivestreamPreviewState extends State<LivestreamPreview> {
   // Now stores the full video URL
   Future<String?>? _videoUrlFuture; 
-  // Changed to the playback controller type from the omni_video_player example
-  OmniPlaybackController? _omniPlaybackController;
   // This state variable is no longer needed as the player updates via configuration changes
   // String? _currentVideoId; 
 
@@ -97,124 +95,168 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
         return Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 600),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      "key_179a".tr(),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                    ),
-                  ],
-                ),
-                AspectRatio(
-                  aspectRatio: 16 / 9,
-                  child: OmniVideoPlayer(
-                    callbacks: VideoPlayerCallbacks(
-                      onControllerCreated: (controller) {
-                        _omniPlaybackController = controller;
-                      },
-                      onFullScreenToggled: (isFullScreen) {},
-                      onOverlayControlsVisibilityChanged: (areVisible) {},
-                      onCenterControlsVisibilityChanged: (areVisible) {},
-                      onMuteToggled: (isMute) {},
-                      onSeekStart: (pos) {},
-                      onSeekEnd: (pos) {},
-                      onSeekRequest: (target) => true,
-                      onFinished: () {},
-                      onReplay: () {},
-                    ),
-                    configuration: VideoPlayerConfiguration(
-                      videoSourceConfiguration: VideoSourceConfiguration.youtube(
-                        videoUrl: Uri.parse(videoUrl),
-                        preferredQualities: [
-                          OmniVideoQuality.high720,
-                          OmniVideoQuality.low144,
-                        ],
-                        availableQualities: [
-                          OmniVideoQuality.high1080,
-                          OmniVideoQuality.high720,
-                          OmniVideoQuality.medium480,
-                          OmniVideoQuality.medium360,
-                          OmniVideoQuality.low144,
-                        ],
-                        enableYoutubeWebViewFallback: true,
-                        forceYoutubeWebViewOnly: false,
-                      ).copyWith(
-                        autoPlay: false,
-                        initialPosition: Duration.zero,
-                        initialVolume: 1.0,
-                        initialPlaybackSpeed: 1.0,
-                        availablePlaybackSpeed: [0.5, 1.0, 1.25, 1.5, 2.0],
-                        autoMuteOnStart: false,
-                        allowSeeking: true,
-                        synchronizeMuteAcrossPlayers: true,
-                        timeoutDuration: const Duration(seconds: 30),
+            child: Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        "key_179a".tr(),
+                        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                       ),
-                      playerTheme: OmniVideoPlayerThemeData().copyWith(
-                        icons: VideoPlayerIconTheme().copyWith(
-                          error: Icons.warning,
-                          playbackSpeedButton: Icons.speed,
-                        ),
-                        overlays: VideoPlayerOverlayTheme().copyWith(
-                          backgroundColor: Colors.white,
-                          alpha: 25,
-                        ),
+                    ],
+                  ),
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: OmniVideoPlayer(
+                      callbacks: VideoPlayerCallbacks(
+                        onControllerCreated: (controller) {
+                          controller;
+                        },
+                        onFullScreenToggled: (isFullScreen) {},
+                        onOverlayControlsVisibilityChanged: (areVisible) {},
+                        onCenterControlsVisibilityChanged: (areVisible) {},
+                        onMuteToggled: (isMute) {},
+                        onSeekStart: (pos) {},
+                        onSeekEnd: (pos) {},
+                        onSeekRequest: (target) => true,
+                        onFinished: () {},
+                        onReplay: () {},
                       ),
-                      playerUIVisibilityOptions: PlayerUIVisibilityOptions().copyWith(
-                        showSeekBar: true,
-                        showCurrentTime: true,
-                        showDurationTime: true,
-                        showRemainingTime: true,
-                        showLiveIndicator: true,
-                        showLoadingWidget: true,
-                        showErrorPlaceholder: true,
-                        showReplayButton: true,
-                        showThumbnailAtStart: true,
-                        showVideoBottomControlsBar: true,
-                        showBottomControlsBarOnEndedFullscreen: true,
-                        showFullScreenButton: false,
-                        showSwitchVideoQuality: true,
-                        showSwitchWhenOnlyAuto: true,
-                        showPlaybackSpeedButton: true,
-                        showMuteUnMuteButton: true,
-                        showPlayPauseReplayButton: true,
-                        useSafeAreaForBottomControls: true,
-                        showGradientBottomControl: true,
-                        enableForwardGesture: true,
-                        enableBackwardGesture: true,
-                        enableExitFullscreenOnVerticalSwipe: true,
-                        enableOrientationLock: true,
-                        controlsPersistenceDuration: const Duration(seconds: 3),
-                        customAspectRatioNormal: null,
-                        customAspectRatioFullScreen: null,
-                        fullscreenOrientation: null,
-                        showBottomControlsBarOnPause: false,
-                        alwaysShowBottomControlsBar: false,
+                      configuration: VideoPlayerConfiguration(
+                        videoSourceConfiguration: VideoSourceConfiguration.youtube(
+                          videoUrl: Uri.parse(videoUrl),
+                          preferredQualities: [
+                            OmniVideoQuality.high720,
+                            OmniVideoQuality.low144,
+                          ],
+                          availableQualities: [
+                            OmniVideoQuality.high1080,
+                            OmniVideoQuality.high720,
+                            OmniVideoQuality.medium480,
+                            OmniVideoQuality.medium360,
+                            OmniVideoQuality.low144,
+                          ],
+                          enableYoutubeWebViewFallback: true,
+                          forceYoutubeWebViewOnly: false,
+                        ).copyWith(
+                          autoPlay: false,
+                          initialPosition: Duration.zero,
+                          initialVolume: 1.0,
+                          initialPlaybackSpeed: 1.0,
+                          availablePlaybackSpeed: [0.5, 1.0, 1.25, 1.5, 2.0],
+                          autoMuteOnStart: false,
+                          allowSeeking: true,
+                          synchronizeMuteAcrossPlayers: true,
+                          timeoutDuration: const Duration(seconds: 30),
+                        ),
+                        playerTheme: OmniVideoPlayerThemeData().copyWith(
+                          icons: VideoPlayerIconTheme().copyWith(
+                            error: Icons.warning,
+                            playbackSpeedButton: Icons.speed,
+                          ),
+                          overlays: VideoPlayerOverlayTheme().copyWith(
+                            backgroundColor: Colors.white,
+                            alpha: 25,
+                          ),
+                        ),
+                        playerUIVisibilityOptions: PlayerUIVisibilityOptions().copyWith(
+                          showSeekBar: true,
+                          showCurrentTime: true,
+                          showDurationTime: true,
+                          showRemainingTime: true,
+                          showLiveIndicator: true,
+                          showLoadingWidget: true,
+                          showErrorPlaceholder: true,
+                          showReplayButton: true,
+                          showThumbnailAtStart: true,
+                          showVideoBottomControlsBar: true,
+                          showBottomControlsBarOnEndedFullscreen: true,
+                          showFullScreenButton: false,
+                          showSwitchVideoQuality: true,
+                          showSwitchWhenOnlyAuto: true,
+                          showPlaybackSpeedButton: true,
+                          showMuteUnMuteButton: true,
+                          showPlayPauseReplayButton: true,
+                          useSafeAreaForBottomControls: true,
+                          showGradientBottomControl: true,
+                          enableForwardGesture: true,
+                          enableBackwardGesture: true,
+                          enableExitFullscreenOnVerticalSwipe: true,
+                          enableOrientationLock: true,
+                          controlsPersistenceDuration: const Duration(seconds: 3),
+                          customAspectRatioNormal: null,
+                          customAspectRatioFullScreen: null,
+                          fullscreenOrientation: null,
+                          showBottomControlsBarOnPause: false,
+                          alwaysShowBottomControlsBar: false,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: TextButton.icon(
-                    onPressed: () async {
+                  const SizedBox(height: 16),
+                  _LivestreamGlassButton(
+                    label: "key_180".tr(), // Watch on Youtube
+                    icon: Icons.play_circle_outline,
+                    onTap: () async {
                       final url = Uri.parse('https://www.youtube.com/@centerchurch8898/streams');
                       if (await canLaunchUrl(url)) {
                         await launchUrl(url, mode: LaunchMode.externalApplication);
                       }
                     },
-                    icon: const Icon(Icons.open_in_new),
-                    label: Text("key_180".tr()), // "Watch on Youtube"
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+class _LivestreamGlassButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _LivestreamGlassButton({required this.label, required this.icon, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Theme.of(context).primaryColor.withValues(alpha: 0.2)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 20, color: Theme.of(context).primaryColor),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: Theme.of(context).primaryColor,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

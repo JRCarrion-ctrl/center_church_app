@@ -8,8 +8,8 @@ import '../../../app_state.dart';               // <-- AppState for current user
 import '../group_service.dart';
 import '../models/group.dart';
 
-Future<void> showGroupJoinModal(BuildContext context, String groupId) async {
-  showModalBottomSheet(
+Future<bool?> showGroupJoinModal(BuildContext context, String groupId) async {
+  return await showModalBottomSheet<bool>( // <-- Add <bool> here
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -71,7 +71,10 @@ class _GroupJoinModalContentState extends State<_GroupJoinModalContent> {
       );
 
       if (!mounted) return;
-      Navigator.pop(context);
+      
+      // Pass 'true' back so the calling page knows it succeeded
+      Navigator.pop(context, true); 
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(

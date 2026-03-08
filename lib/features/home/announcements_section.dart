@@ -294,13 +294,16 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
         constraints: const BoxConstraints(maxWidth: 600),
         child: Container(
           decoration: BoxDecoration(
-            color: colorScheme.surface, // White background
-            border: Border.all(
-              color: colorScheme.outlineVariant, // Subtle outline color
-              width: 1.0,
-            ),
-            // Apply rounded corners to match the ChurchInfoCard style
-            borderRadius: BorderRadius.circular(16), 
+            color: colorScheme.surface.withValues(alpha: 0.85),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: 0.05),
+                blurRadius: 20,
+                offset: const Offset(0, 10),
+              ),
+            ],
           ),
           child: Padding(
             padding: const EdgeInsets.only(top: 16.0, bottom: 8.0),

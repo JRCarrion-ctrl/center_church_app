@@ -1,4 +1,6 @@
 // File: lib/features/landing/landing_page.dart
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -9,7 +11,6 @@ import '../../shared/widgets/widgets.dart';
 import '../../features/auth/profile.dart';
 
 // --- Constants ---
-const double _kLogoSizeFactor = 0.12;
 const double _kButtonSpacingFactor = 1.4;
 const double _kHomeButtonSpacingFactor = 3.3;
 
@@ -27,7 +28,7 @@ class _LandingBackground extends StatelessWidget {
       children: [
         SizedBox.expand(
           child: Image.asset(
-            'assets/landing_background.png',
+            'assets/landing_v2.png',
             fit: BoxFit.cover,
           ),
         ),
@@ -60,19 +61,20 @@ class _LandingTitleSection extends StatelessWidget {
       children: [
         Image.asset(
           'assets/logo_light.png',
-          width: screenHeight * _kLogoSizeFactor,
-          height: screenHeight * _kLogoSizeFactor,
+          width: screenHeight * 0.1, 
+          height: screenHeight * 0.1,
           fit: BoxFit.contain,
-          color: Colors.white,
+          color: Colors.white.withValues(alpha: 0.9),
           semanticLabel: 'Church Logo',
         ),
         SizedBox(height: screenHeight * 0.015),
         Text(
-          churchName,
+          churchName.toUpperCase(),
           style: TextStyle(
             color: Colors.white,
-            fontSize: fontSize,
+            fontSize: fontSize * 0.9,
             fontWeight: FontWeight.w400,
+            letterSpacing: 4.0,
             shadows: const [
               Shadow(
                 blurRadius: 3,
@@ -200,58 +202,92 @@ class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
     super.initState();
     _selectedLanguage = widget.initialLanguageCode;
   }
-  
-  // Handler for when a new language is selected via the RadioGroup
+
   void _handleLanguageChange(String? value) {
     if (value != null) {
-      // 1. Update the AppState
-      widget.appState.setLanguageCode(context, value); 
-      // 2. Update the local modal state
-      setState(() => _selectedLanguage = value); 
-      // 3. Close the modal after selection
+      widget.appState.setLanguageCode(context, value);
+      setState(() => _selectedLanguage = value);
       Navigator.pop(context);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            "landing_07".tr(),
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // Stronger blur for content readability
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.15), // Translucent white tint
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
           ),
-          
-          // Wrap the entire group in the RadioGroup widget
-          RadioGroup<String>(
-            // The RadioGroup manages the current selection state
-            groupValue: _selectedLanguage,
-            // The RadioGroup manages the callback for all children
-            onChanged: _handleLanguageChange,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                // English Option
-                ListTile(
-                  // We only need to provide the value to the Radio widget. 
-                  // groupValue and onChanged are inherited from RadioGroup.
-                  leading: const Radio<String>(value: 'en'),
-                  title: Text("landing_08".tr()), // English label
-                  // Tapping the ListTile is now enabled implicitly by RadioGroup 
-                  // when it surrounds the Radio and the title.
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Small handle indicator at the top
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                // Spanish Option
-                ListTile(
-                  leading: const Radio<String>(value: 'es'),
-                  title: Text("landing_09".tr()), // Spanish label
+              ),
+              Text(
+                "landing_07".tr(),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 10),
+              RadioGroup<String>(
+                groupValue: _selectedLanguage,
+                onChanged: _handleLanguageChange,
+                child: Column(
+                  children: [
+                    _buildLanguageTile('en', "landing_08".tr()),
+                    _buildLanguageTile('es', "landing_09".tr()),
+                  ],
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageTile(String value, String label) {
+    final isSelected = _selectedLanguage == value;
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: ListTile(
+        leading: Radio<String>(
+          value: value,
+          groupValue: _selectedLanguage,
+          onChanged: _handleLanguageChange,
+          activeColor: Colors.white,
+          fillColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.8)),
+        ),
+        title: Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: isSelected ? 1.0 : 0.7),
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        onTap: () => _handleLanguageChange(value),
       ),
     );
   }
@@ -328,6 +364,8 @@ class _LandingPageState extends State<LandingPage> {
 
     showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent, // Required for the glass effect to show
+      barrierColor: Colors.black.withValues(alpha: 0.2), // Subtle dimming of the background
       builder: (_) => _LanguageSelectorModal(
         initialLanguageCode: appState.languageCode,
         appState: appState,

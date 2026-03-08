@@ -104,7 +104,42 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
       return;
     }
 
-    await context.push('/groups/${group.id}');
+    // 1. Get the current user ID
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+    
+    // Default to false
+    bool isAdmin = false;
+    bool isOwner = false;
+
+    // 2. Determine their role before navigating
+    if (userId != null) {
+      try {
+        final role = await appState.groupService.getMyGroupRole(
+          groupId: group.id, 
+          userId: userId
+        );
+        
+        isAdmin = const {'admin', 'leader', 'supervisor', 'owner'}.contains(role);
+        // They are an owner if their group role is owner, OR if they are a global app owner
+        isOwner = role == 'owner' || appState.userRole.name == 'owner';
+        
+      } catch (e) {
+        // If it fails, default to lowest permissions (false/false)
+        debugPrint('Failed to fetch role before opening group: $e');
+      }
+    }
+
+    // 3. Navigate and pass the extra data
+    if (mounted) {
+      await context.push(
+        '/groups/${group.id}',
+        extra: {
+          'isAdmin': isAdmin,
+          'isOwner': isOwner,
+        },
+      );
+    }
 
     if (mounted) {
       await refresh();

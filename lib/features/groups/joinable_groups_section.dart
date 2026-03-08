@@ -10,7 +10,8 @@ import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/pages/group_join_page.dart';
 
 class JoinableGroupsSection extends StatefulWidget {
-  const JoinableGroupsSection({super.key});
+  final VoidCallback? onGroupJoined;
+  const JoinableGroupsSection({super.key, this.onGroupJoined});
 
   @override
   State<JoinableGroupsSection> createState() => JoinableGroupsSectionState();
@@ -52,12 +53,18 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
     final svc = await _service();
 
-    // Hasura-only: get joinable + my groups, then exclude ones I'm already in
+    // Fetch joinable groups, my approved groups, AND my pending requests
     final joinable = await svc.getJoinableGroups();
     final myGroups = await svc.getUserGroups(userId);
-    final joinedIds = myGroups.map((g) => g.id).toSet();
+    final myRequests = await svc.getMyPendingGroupRequests(userId);
 
-    allGroups = joinable.where((g) => !joinedIds.contains(g.id)).toList();
+    final joinedIds = myGroups.map((g) => g.id).toSet();
+    final requestedIds = myRequests.toSet();
+
+    // Filter out groups I am already in OR have already requested to join
+    allGroups = joinable.where((g) => 
+      !joinedIds.contains(g.id) && !requestedIds.contains(g.id)
+    ).toList();
 
     // Optional stable sort by name
     allGroups.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
@@ -126,7 +133,13 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
               final group = filteredGroups[index];
               final textColor = Theme.of(context).colorScheme.onSurface;
               return GestureDetector(
-                onTap: () => showGroupJoinModal(context, group.id),
+                onTap: () async {
+                  // Await the modal returning true (meaning they joined/requested)
+                  final joined = await showGroupJoinModal(context, group.id);
+                  if (joined == true) {
+                    widget.onGroupJoined?.call(); // <-- TRIGGER REFRESH
+                  }
+                },
                 child: Hero(
                   tag: 'group-${group.id}',
                   child: Card(

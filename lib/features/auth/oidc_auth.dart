@@ -1,3 +1,4 @@
+
 // file: lib/features/auth/oidc_auth.dart
 
 import 'package:flutter/foundation.dart';
@@ -11,7 +12,6 @@ class OidcAuth {
   static const _auth = FlutterAppAuth();
   static const _storage = FlutterSecureStorage();
 
-  // CHANGE ME
   static const issuer      = 'https://auth.ccfapp.com';
   static const clientId    = '335963766606790668';
   static const redirectUri = 'ccfapp://login-callback';
@@ -22,12 +22,14 @@ class OidcAuth {
   static const _kIdToken = 'zitadel_id_token';
   static const _kExpiry  = 'zitadel_expiry'; // epoch seconds
 
+  // --- ADDED: The lock to track an active refresh request ---
+  static Future<void>? _activeRefreshFuture;
+
   static Future<void> signIn() async {
     final result = await _auth.authorizeAndExchangeCode(
       AuthorizationTokenRequest(
         clientId,
         redirectUri,
-        // You may use discoveryUrl instead of serviceConfiguration
         serviceConfiguration: const AuthorizationServiceConfiguration(
           authorizationEndpoint: '$issuer/oauth/v2/authorize',
           tokenEndpoint:        '$issuer/oauth/v2/token',
@@ -53,10 +55,31 @@ class OidcAuth {
     }
   }
 
+  // --- UPDATED: The public method now acts as a concurrency manager ---
   static Future<void> refreshIfNeeded() async {
+    // 1. If a refresh is already in progress, await it and return.
+    if (_activeRefreshFuture != null) {
+      return await _activeRefreshFuture;
+    }
+
+    // 2. Start the refresh and assign it to our tracker.
+    _activeRefreshFuture = _performTokenRefresh();
+
+    try {
+      // 3. Wait for the actual network/storage work to finish.
+      await _activeRefreshFuture;
+    } finally {
+      // 4. Always clear the tracker so future calls can execute properly.
+      _activeRefreshFuture = null;
+    }
+  }
+
+  // --- ADDED: The private method that actually does the work ---
+  static Future<void> _performTokenRefresh() async {
     final expStr = await _storage.read(key: _kExpiry);
     final refresh = await _storage.read(key: _kRefresh);
     if (expStr == null || refresh == null) return;
+    
     final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
     final exp = int.tryParse(expStr) ?? 0;
     if (now < exp - 60) return; // refresh ~1min early
@@ -71,7 +94,10 @@ class OidcAuth {
       refreshToken: refresh,
       scopes: scopes,
     ));
+    
+    // Safety check added here in case 't' is null
     if (t.accessToken == null) return;
+    
     await _storage.write(key: _kAccess, value: t.accessToken);
     if (t.refreshToken != null) {
       await _storage.write(key: _kRefresh, value: t.refreshToken);
@@ -88,11 +114,7 @@ class OidcAuth {
     final idToken = await _storage.read(key: _kIdToken);
     if (idToken == null) return null;
     
-    // The ID Token contains the sub (subject/user ID) and email/username.
     final payload = JwtDecoder.decode(idToken);
-    
-    // Depending on your Zitadel setup, the login ID might be the 'email' 
-    // or a 'preferred_username'. Use 'email' as the standard fallback.
     return payload['email'] as String? ?? payload['preferred_username'] as String?;
   }
 
@@ -121,7 +143,6 @@ class OidcAuth {
     
     final result = jsonDecode(response.body);
     
-    // Store the new tokens
     await _storage.write(key: _kAccess,  value: result['access_token']);
     await _storage.write(key: _kIdToken, value: result['id_token']);
 
@@ -129,8 +150,7 @@ class OidcAuth {
       await _storage.write(key: _kRefresh, value: result['refresh_token']);
     }
     
-    // Calculate and store the new expiry time
-    final expiresIn = result['expires_in'] as int; // typically in seconds
+    final expiresIn = result['expires_in'] as int;
     final expiryTime = (DateTime.now().millisecondsSinceEpoch ~/ 1000) + expiresIn;
     await _storage.write(key: _kExpiry, value: expiryTime.toString());
   }
@@ -145,15 +165,12 @@ class OidcAuth {
           tokenEndpoint:        '$issuer/oauth/v2/token',
         ),
         scopes: scopes,
-        // CRITICAL: The 'login' prompt forces the user to enter their credentials.
-        // This updates the 'auth_time' claim on the token, satisfying Zitadel's security requirements.
         additionalParameters: {'prompt': 'login'},
       ),
     );
     
     if (result.accessToken == null) throw Exception('Re-authentication failed');
 
-    // Overwrite the existing tokens with the new, fresh ones
     await _storage.write(key: _kAccess,  value: result.accessToken);
     await _storage.write(key: _kIdToken, value: result.idToken);
     if (result.refreshToken != null) {
@@ -177,7 +194,6 @@ class OidcAuth {
   static Future<String?> readAccessToken() => _storage.read(key: _kAccess);
   static Future<String?> readIdToken()     => _storage.read(key: _kIdToken);
 
-  /// Changes the user's password by making a direct API call to Zitadel's Auth API.
   static Future<void> changePassword(String currentPassword, String newPassword) async {
     final accessToken = await _storage.read(key: _kAccess);
     if (accessToken == null) {

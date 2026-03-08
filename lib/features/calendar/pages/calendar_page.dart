@@ -1,4 +1,4 @@
-// filename: calendar_page.dart
+// filename: lib/features/calendar/calendar_page.dart
 import 'package:ccf_app/shared/user_roles.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -7,7 +7,7 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:syncfusion_flutter_calendar/calendar.dart';
 import 'package:cached_network_image/cached_network_image.dart'; 
-import 'package:shared_preferences/shared_preferences.dart'; // <--- 1. ADD IMPORT
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:ccf_app/core/time_service.dart';
 import 'package:ccf_app/routes/router_observer.dart';
@@ -31,7 +31,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   late EventService _eventService;
   bool _svcReady = false;
 
-  // Default to true, but will be overwritten by SharedPreferences
   bool _isCalendarView = true;
 
   final CalendarController _calendarController = CalendarController();
@@ -39,7 +38,6 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   @override
   void initState() {
     super.initState();
-    // <--- 2. LOAD PREFERENCE ON STARTUP
     _loadViewPreference();
   }
 
@@ -66,18 +64,15 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
     super.dispose();
   }
 
-  // <--- 3. ADD HELPER TO LOAD STATE
   Future<void> _loadViewPreference() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) {
       setState(() {
-        // Default to true (Calendar) if no preference is found
         _isCalendarView = prefs.getBool('calendar_is_calendar_view') ?? true;
       });
     }
   }
 
-  // <--- 4. ADD HELPER TO TOGGLE & SAVE STATE
   Future<void> _toggleView() async {
     final newValue = !_isCalendarView;
     setState(() {
@@ -105,14 +100,11 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
 
   Future<void> _openAppForm([AppEvent? existing]) async {
     if (existing != null) {
-      // Navigates to the NEW renamed edit path defined in miscRoutes
       await context.push('/manage-app-event/edit', extra: existing);
     } else {
-      // Navigates to the NEW renamed creation path defined in miscRoutes
       await context.push('/manage-app-event/new');
     }
   
-    // Refresh the calendar data once the user returns from the page
     if (mounted) {
       setState(() {
         _calendarFuture = _loadAllEvents();
@@ -142,16 +134,31 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
   Widget build(BuildContext context) {
     final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final bool canManageApp = userRole == UserRole.supervisor || userRole == UserRole.owner;
-    final colorScheme = Theme.of(context).colorScheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final isDark = theme.brightness == Brightness.dark;
 
     return Scaffold(
+      // ✨ Extend body behind AppBar for seamless background
+      extendBodyBehindAppBar: true, 
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
-        title: Text(_isCalendarView ? "key_034".tr() : "key_list_view".tr()), 
+        // ✨ Transparent AppBar to let the blur shine through
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        title: Text(
+          _isCalendarView ? "key_034".tr() : "key_list_view".tr(),
+          style: TextStyle(
+            color: isDark ? Colors.white : Colors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ), 
+        iconTheme: IconThemeData(color: isDark ? Colors.white : Colors.black),
         actions: [
           IconButton(
             icon: Icon(_isCalendarView ? Icons.list : Icons.calendar_month),
             tooltip: _isCalendarView ? "Switch to List" : "Switch to Calendar",
-            // <--- 5. USE THE NEW TOGGLE METHOD
             onPressed: _toggleView,
           ),
           if (_isCalendarView) ...[
@@ -173,94 +180,141 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
           ]
         ],
       ),
-      body: FutureBuilder<_CalendarData>(
-        future: _calendarFuture,
-        key: Key(_refreshKey),
-        builder: (context, snap) {
-          if (snap.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snap.hasError) {
-            return Center(child: Text("key_035".tr()));
-          }
-
-          final data = snap.data!;
-          
-          if (_isCalendarView) {
-            final dataSource = _EventDataSource(data.appEvents, data.groupEvents, colorScheme);
-            return SfCalendar(
-              controller: _calendarController,
-              view: CalendarView.month,
-              dataSource: dataSource,
-              initialSelectedDate: DateTime.now(),
-              monthViewSettings: const MonthViewSettings(
-                appointmentDisplayMode: MonthAppointmentDisplayMode.appointment,
-                showAgenda: true,
-              ),
-              onTap: (CalendarTapDetails details) {
-                if (details.targetElement == CalendarElement.appointment) {
-                  if (details.appointments == null || details.appointments!.isEmpty) return;
-
-                  final appointment = details.appointments!.first as Appointment;
-                  final originalObj = appointment.id;
-                  
-                  if (originalObj is AppEvent) {
-                    context.push('/calendar/app-event/${originalObj.id}', extra: originalObj);
-                  } else if (originalObj is GroupEvent) {
-                    context.push('/group-event/${originalObj.id}', extra: originalObj);
-                  }
-                }
-              },
-            );
-          }
-
-          final appEvents = data.appEvents;
-          final groupEvents = data.groupEvents;
-
-          if (appEvents.isEmpty && groupEvents.isEmpty) {
-            return RefreshIndicator(
-              onRefresh: () async {
-                setState(() {
-                  _calendarFuture = _loadAllEvents();
-                  _refreshKey = UniqueKey().toString();
-                });
-                await _calendarFuture;
-              },
-              child: ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                children: [
-                  const SizedBox(height: 200),
-                  Center(child: Text("key_036".tr())),
-                ],
-              ),
-            );
-          }
-
-          final List<Widget> items = [];
-          if (appEvents.isNotEmpty) {
-            items.add(_sectionHeader("key_036a".tr()));
-            items.addAll(appEvents.map(_buildAppEventCard(canManageApp)));
-          }
-          if (groupEvents.isNotEmpty) {
-            items.add(_sectionHeader("key_036b".tr()));
-            items.addAll(groupEvents.map(_buildGroupEventCard));
-          }
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(() {
-                _calendarFuture = _loadAllEvents();
-                _refreshKey = UniqueKey().toString();
-              });
-              await _calendarFuture;
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: items,
+      body: Stack(
+        children: [
+          // 1. Atmospheric Background
+          Positioned.fill(
+            child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
+          ),
+          // 2. Translucent Overlay
+          Positioned.fill(
+            child: Container(
+              color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75),
             ),
-          );
-        },
+          ),
+          // 3. Main Content Wrapper
+          SafeArea(
+            child: FutureBuilder<_CalendarData>(
+              future: _calendarFuture,
+              key: Key(_refreshKey),
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+                }
+                if (snap.hasError) {
+                  return Center(child: Text("key_035".tr()));
+                }
+
+                final data = snap.data!;
+                
+                // --- CALENDAR VIEW ---
+                if (_isCalendarView) {
+                  final dataSource = _EventDataSource(data.appEvents, data.groupEvents, colorScheme);
+                  return Padding(
+                    padding: const EdgeInsets.all(16.0),
+                    child: _SleekCard(
+                      padding: const EdgeInsets.all(12),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: SfCalendar(
+                          controller: _calendarController,
+                          view: CalendarView.month,
+                          dataSource: dataSource,
+                          initialSelectedDate: DateTime.now(),
+                          backgroundColor: Colors.transparent, // Make inner calendar transparent
+                          headerStyle: CalendarHeaderStyle(
+                            textStyle: TextStyle(
+                              color: colorScheme.onSurface,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            )
+                          ),
+                          monthViewSettings: const MonthViewSettings(
+                            appointmentDisplayMode: MonthAppointmentDisplayMode.appointment,
+                            showAgenda: true,
+                            agendaStyle: AgendaStyle(backgroundColor: Colors.transparent),
+                          ),
+                          onTap: (CalendarTapDetails details) {
+                            if (details.targetElement == CalendarElement.appointment) {
+                              if (details.appointments == null || details.appointments!.isEmpty) return;
+
+                              final appointment = details.appointments!.first as Appointment;
+                              final originalObj = appointment.id;
+                              
+                              if (originalObj is AppEvent) {
+                                context.push('/calendar/app-event/${originalObj.id}', extra: originalObj);
+                              } else if (originalObj is GroupEvent) {
+                                context.push('/group-event/${originalObj.id}', extra: originalObj);
+                              }
+                            }
+                          },
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                // --- LIST VIEW ---
+                final appEvents = data.appEvents;
+                final groupEvents = data.groupEvents;
+
+                if (appEvents.isEmpty && groupEvents.isEmpty) {
+                  return RefreshIndicator(
+                    onRefresh: () async {
+                      setState(() {
+                        _calendarFuture = _loadAllEvents();
+                        _refreshKey = UniqueKey().toString();
+                      });
+                      await _calendarFuture;
+                    },
+                    child: ListView(
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      children: [
+                        const SizedBox(height: 200),
+                        Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.event_busy, size: 48, color: colorScheme.outline),
+                              const SizedBox(height: 16),
+                              Text("key_036".tr(), style: theme.textTheme.titleMedium),
+                            ],
+                          )
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                final List<Widget> items = [];
+                if (appEvents.isNotEmpty) {
+                  items.add(_sectionHeader("key_036a".tr(), colorScheme));
+                  items.addAll(appEvents.map(_buildAppEventCard(canManageApp)));
+                }
+                if (groupEvents.isNotEmpty) {
+                  items.add(_sectionHeader("key_036b".tr(), colorScheme));
+                  items.addAll(groupEvents.map(_buildGroupEventCard));
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    setState(() {
+                      _calendarFuture = _loadAllEvents();
+                      _refreshKey = UniqueKey().toString();
+                    });
+                    await _calendarFuture;
+                  },
+                  color: colorScheme.primary,
+                  child: ListView(
+                    padding: const EdgeInsets.all(16),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: items,
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
       floatingActionButton: Column(
         mainAxisSize: MainAxisSize.min,
@@ -268,6 +322,10 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
           FloatingActionButton.small(
             heroTag: 'calendar-settings',
             onPressed: _openCalendarSettings,
+            backgroundColor: colorScheme.surface,
+            foregroundColor: colorScheme.onSurface,
+            shape: const StadiumBorder(),
+            elevation: 4,
             child: const Icon(Icons.tune),
           ),
           const SizedBox(height: 16),
@@ -275,6 +333,10 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
             FloatingActionButton(
               heroTag: 'add-event',
               onPressed: () => _openAppForm(),
+              backgroundColor: colorScheme.primary,
+              foregroundColor: colorScheme.onPrimary,
+              shape: const StadiumBorder(),
+              elevation: 4,
               child: const Icon(Icons.add),
             ),
         ],
@@ -282,18 +344,23 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
     );
   }
 
-  Widget _sectionHeader(String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
+  Widget _sectionHeader(String text, ColorScheme colorScheme) => Padding(
+        padding: const EdgeInsets.only(top: 16, bottom: 12, left: 8),
         child: Text(
-          text,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          text.toUpperCase(),
+          style: TextStyle(
+            fontSize: 13, 
+            fontWeight: FontWeight.w800, 
+            letterSpacing: 1.2,
+            color: colorScheme.primary,
+          ),
         ),
       );
 
   Widget Function(AppEvent) _buildAppEventCard(bool canManageApp) =>
-      (AppEvent e) => Card(
-            margin: const EdgeInsets.only(bottom: 12),
+      (AppEvent e) => _SleekCard(
             child: ListTile(
+              contentPadding: const EdgeInsets.all(12),
               onTap: () => context.push('/calendar/app-event/${e.id}', extra: e),
               trailing: canManageApp
                   ? PopupMenuButton<String>(
@@ -310,51 +377,33 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                         PopupMenuItem(value: 'delete', child: Text("key_039".tr())),
                       ],
                     )
-                  : null,
-              leading: e.imageUrl != null
-                  ? SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: CachedNetworkImage(
-                          imageUrl: e.imageUrl!,
-                          fit: BoxFit.cover,
-                          placeholder: (context, url) => const Center(
-                              child: CircularProgressIndicator(strokeWidth: 2.0)
-                          ),
-                          errorWidget: (context, url, error) => const Center(
-                              child: Icon(Icons.broken_image, size: 24)
-                          ),
-                      ),
-                    )
-                  : const Icon(Icons.announcement, size: 40),
-              title: Text(e.title),
+                  : const Icon(Icons.chevron_right, color: Colors.grey),
+              leading: _buildEventThumbnail(e.imageUrl, Theme.of(context).colorScheme),
+              title: Padding(
+                padding: const EdgeInsets.only(bottom: 4.0),
+                child: Text(
+                  e.title,
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
               subtitle: Text(
                 TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
               ),
             ),
           );
 
-  Widget _buildGroupEventCard(GroupEvent e) => Card(
-        margin: const EdgeInsets.only(bottom: 12),
+  Widget _buildGroupEventCard(GroupEvent e) => _SleekCard(
         child: ListTile(
+          contentPadding: const EdgeInsets.all(12),
           onTap: () => context.push('/group-event/${e.id}', extra: e),
-          leading: e.imageUrl != null
-              ? SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CachedNetworkImage(
-                      imageUrl: e.imageUrl!,
-                      fit: BoxFit.cover,
-                      placeholder: (context, url) => const Center(
-                          child: CircularProgressIndicator(strokeWidth: 2.0)
-                      ),
-                      errorWidget: (context, url, error) => const Center(
-                          child: Icon(Icons.broken_image, size: 24)
-                      ),
-                  ),
-              )
-              : const Icon(Icons.event, size: 40),
-          title: Text(e.title),
+          leading: _buildEventThumbnail(e.imageUrl, Theme.of(context).colorScheme),
+          title: Padding(
+            padding: const EdgeInsets.only(bottom: 4.0),
+            child: Text(
+              e.title,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -362,18 +411,84 @@ class _CalendarPageState extends State<CalendarPage> with RouteAware {
                 Text(
                   e.groupName!,
                   style: TextStyle(
-                    fontWeight: FontWeight.bold,
+                    fontWeight: FontWeight.w600,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                 ),
+              const SizedBox(height: 2),
               Text(
                 TimeService.formatUtcToLocal(e.eventDate, pattern: 'MMM d, yyyy • h:mm a'),
               ),
             ],
           ),
+          trailing: const Icon(Icons.chevron_right, color: Colors.grey),
           isThreeLine: e.groupName != null,
         ),
       );
+
+  Widget _buildEventThumbnail(String? imageUrl, ColorScheme colorScheme) {
+    if (imageUrl != null) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: SizedBox(
+          width: 50,
+          height: 50,
+          child: CachedNetworkImage(
+            imageUrl: imageUrl,
+            fit: BoxFit.cover,
+            placeholder: (context, url) => Container(
+              color: colorScheme.surfaceContainerHighest,
+              child: const Center(child: CircularProgressIndicator(strokeWidth: 2.0)),
+            ),
+            errorWidget: (context, url, error) => Container(
+              color: colorScheme.surfaceContainerHighest,
+              child: const Icon(Icons.broken_image, size: 24),
+            ),
+          ),
+        ),
+      );
+    }
+    return Container(
+      width: 50,
+      height: 50,
+      decoration: BoxDecoration(
+        color: colorScheme.primaryContainer,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(Icons.event, color: colorScheme.primary),
+    );
+  }
+}
+
+// ✨ Universal Sleek Card for the Calendar Items
+class _SleekCard extends StatelessWidget {
+  final Widget child;
+  final EdgeInsetsGeometry? padding;
+
+  const _SleekCard({required this.child, this.padding});
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: padding,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 15,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
 }
 
 class _CalendarData {
@@ -389,17 +504,14 @@ class _EventDataSource extends CalendarDataSource {
 
     _appointments.addAll(appEvents.map<Appointment>((e) {
       final start = e.eventDate.toLocal();
-      // Use End Time if available, otherwise default to 1 hour
-      final end = e.eventEnd != null 
-          ? e.eventEnd!.toLocal() 
-          : start.add(const Duration(hours: 1));
+      final end = e.eventEnd != null ? e.eventEnd!.toLocal() : start.add(const Duration(hours: 1));
 
       return Appointment(
         id: e,
         startTime: start, 
         endTime: end,
         subject: e.title,
-        color: colors.primary,
+        color: Color.fromARGB(255, 34, 28, 217).withValues(alpha: 0.8),
         isAllDay: false,
         location: e.location,
       );
@@ -407,17 +519,14 @@ class _EventDataSource extends CalendarDataSource {
 
     _appointments.addAll(groupEvents.map<Appointment>((e) {
       final start = e.eventDate.toLocal();
-      // Use End Time if available, otherwise default to 1 hour
-      final end = e.eventEnd != null 
-          ? e.eventEnd!.toLocal() 
-          : start.add(const Duration(hours: 1));
+      final end = e.eventEnd != null ? e.eventEnd!.toLocal() : start.add(const Duration(hours: 1));
 
       return Appointment(
         id: e,
         startTime: start,
         endTime: end,
         subject: e.title,
-        color: colors.secondary,
+        color: colors.secondary.withValues(alpha: 0.8),
         isAllDay: false,
         location: e.location,
         notes: e.groupName, 

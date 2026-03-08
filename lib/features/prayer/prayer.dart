@@ -170,19 +170,17 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     
       if (res.hasException) throw res.exception!;
     
-      // Refresh the list to show the checkmark has disappeared
       await _loadPrayerRequests();
     
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          // You might want to create a specific translation key for this later
           SnackBar(content: Text("Marked as checked".tr())), 
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")), // Replace with localized error if available
+          SnackBar(content: Text("Error: $e")), 
         );
       }
     }
@@ -303,178 +301,255 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   Widget build(BuildContext context) {
     final currentUserId = _userId(context);
     final isSupervisorOrOwner = _userRole == 'supervisor' || _userRole == 'owner';
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
 
-    // --- START: Added check for logged out user ---
+    // --- LOGGED OUT STATE ---
     if (currentUserId == null) {
       return Scaffold(
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.lock_outline, size: 48, color: colorScheme.outline),
-                const SizedBox(height: 16),
-                Text(
-                  "key_338".tr(), // Use a localization key for this message
-                  textAlign: TextAlign.center,
-                  style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  "key_338a".tr(), // Hardcoded fallback or another key
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () {
-                    context.push('/auth');
-                  }, 
-                  icon: const Icon(Icons.login), 
-                  label: Text("key_017".tr()),
-                ),
-              ],
+        body: Stack(
+          children: [
+            Positioned.fill(child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover)),
+            Positioned.fill(
+              child: Container(color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75)),
             ),
-          ),
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.lock_outline, size: 48, color: colorScheme.outline),
+                    const SizedBox(height: 16),
+                    Text(
+                      "key_338".tr(), 
+                      textAlign: TextAlign.center,
+                      style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      "key_338a".tr(), 
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.grey),
+                    ),
+                    const SizedBox(height: 24),
+                    FilledButton.icon(
+                      style: FilledButton.styleFrom(shape: const StadiumBorder()),
+                      onPressed: () => context.push('/auth'), 
+                      icon: const Icon(Icons.login), 
+                      label: Text("key_017".tr()),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
 
+    // --- AUTHENTICATED STATE ---
     return Scaffold(
-      body: _loading
-          ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
-          : _prayerRequests.isEmpty
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24.0),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.thumb_up_alt_outlined, size: 48, color: colorScheme.outline),
-                        const SizedBox(height: 16),
-                        Text(
-                          "key_341".tr(),
-                          textAlign: TextAlign.center,
-                          style: textTheme.titleMedium?.copyWith(color: Colors.black),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "key_429".tr(),
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: Colors.grey),
-                        )
-                      ],
-                    ),
-                  ),
-                )
-              : RefreshIndicator(
-                  onRefresh: _loadPrayerRequests,
-                  color: colorScheme.primary,
-                  child: ListView.builder(
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    itemCount: _prayerRequests.length,
-                    itemBuilder: (context, index) {
-                      final item = _prayerRequests[index];
-                      
-                      final prayerUserId = item['user_id'] as String?;
-                      final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
-                      final canClose = isSupervisorOrOwner || isPrayerOwner;
-                      final isChecked = item['checked'] == true;
-                      final showCheckAction = isSupervisorOrOwner && !isChecked;
-                      final createdAtDateTime = item['created_at'] != null 
-                          ? DateTime.parse(item['created_at']).toLocal()
-                          : null;
-                      final createdAt = createdAtDateTime != null 
-                          ? DateFormat('dd/MM/yy h:mm a').format(createdAtDateTime)
-                          : '';
-
-                      final includeName = item['include_name'] == true;
-                      
-                      final shouldShowName = includeName || canClose;
-
-                      final displayName = item['profiles']?['display_name'] as String? ?? 'A user';
-
-                      String subtitleText;
-                      if (!shouldShowName) {
-                        subtitleText = "key_posted_on".tr(args: [createdAt]); 
-                      } else if (!includeName && canClose) {
-                        subtitleText = "key_posted_on".tr(args: [createdAt]);
-                      } else {
-                        subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
-                      }
-
-                      Widget? trailingWidget;
-
-                      if (showCheckAction || canClose) {
-                        trailingWidget = Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            if (showCheckAction)
-                              IconButton(
-                                icon: const Icon(Icons.check_circle_outline),
-                                color: Colors.green, // Visual distinction
-                                tooltip: "Mark as checked",
-                                onPressed: () => _markPrayerAsChecked(item['id'] as String),
-                              ),
-                            if (canClose)
-                              IconButton(
-                                icon: Icon(Icons.close, color: colorScheme.error),
-                                tooltip: "key_332".tr(),
-                                onPressed: () => _confirmAndClosePrayer(item['id'] as String),
-                              ),
-                          ],
-                        );
-                      }
-
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        child: Card.filled( 
-                          elevation: 0,
-                          color: colorScheme.surfaceContainerHigh,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          child: ListTile(
-                            contentPadding: const EdgeInsets.all(16),
-                            leading: Icon(
-                              Icons.menu_book_outlined,
-                              color: colorScheme.primary,
-                              size: 32,
-                            ),
-                            title: Padding(
-                              padding: const EdgeInsets.only(bottom: 8.0),
-                              child: Text(
-                                (item['request'] ?? '') as String,
-                                style: textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                  color: colorScheme.onSurface,
-                                ),
-                              ),
-                            ),
-                            subtitle: Text(
-                              subtitleText,
-                              style: textTheme.bodySmall?.copyWith(color: colorScheme.outline),
-                            ),
-                            trailing: trailingWidget,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
       floatingActionButton: FloatingActionButton.extended(
         backgroundColor: colorScheme.primary,
         foregroundColor: colorScheme.onPrimary,
+        shape: const StadiumBorder(),
+        elevation: 4,
         onPressed: _showPrayerRequestForm,
         tooltip: "key_342a".tr(),
         icon: const Icon(Icons.add_comment_outlined),
         label: Text("key_424".tr()),
       ),
+      body: Stack(
+        children: [
+          // 1. Atmospheric Background
+          Positioned.fill(
+            child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
+          ),
+          // 2. Translucent Overlay
+          Positioned.fill(
+            child: Container(color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75)),
+          ),
+          // 3. Main Content
+          SafeArea(
+            child: _loading
+                ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
+                : _prayerRequests.isEmpty
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(24.0),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.thumb_up_alt_outlined, size: 48, color: colorScheme.outline),
+                              const SizedBox(height: 16),
+                              Text(
+                                "key_341".tr(),
+                                textAlign: TextAlign.center,
+                                style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.white : Colors.black),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                "key_429".tr(),
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.grey),
+                              )
+                            ],
+                          ),
+                        ),
+                      )
+                    : RefreshIndicator(
+                        onRefresh: _loadPrayerRequests,
+                        color: colorScheme.primary,
+                        child: ListView.builder(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                          itemCount: _prayerRequests.length,
+                          itemBuilder: (context, index) {
+                            return _buildSleekPrayerCard(_prayerRequests[index], currentUserId, isSupervisorOrOwner);
+                          },
+                        ),
+                      ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // --- SLEEK CARD WIDGET ---
+  Widget _buildSleekPrayerCard(Map<String, dynamic> item, String currentUserId, bool isSupervisorOrOwner) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+    final isDark = theme.brightness == Brightness.dark;
+
+    final prayerUserId = item['user_id'] as String?;
+    final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
+    final canClose = isSupervisorOrOwner || isPrayerOwner;
+    final isChecked = item['checked'] == true;
+    final showCheckAction = isSupervisorOrOwner && !isChecked;
+    final createdAtDateTime = item['created_at'] != null 
+        ? DateTime.parse(item['created_at']).toLocal()
+        : null;
+    final createdAt = createdAtDateTime != null 
+        ? DateFormat('dd/MM/yy h:mm a').format(createdAtDateTime)
+        : '';
+
+    final includeName = item['include_name'] == true;
+    final shouldShowName = includeName || canClose;
+    final displayName = item['profiles']?['display_name'] as String? ?? 'A user';
+
+    String subtitleText;
+    if (!shouldShowName) {
+      subtitleText = "key_posted_on".tr(args: [createdAt]); 
+    } else if (!includeName && canClose) {
+      subtitleText = "key_posted_on".tr(args: [createdAt]);
+    } else {
+      subtitleText = "key_posted_by_on".tr(args: [displayName, createdAt]);
+    }
+
+    Widget? trailingWidget;
+    if (showCheckAction || canClose) {
+      trailingWidget = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (showCheckAction)
+            IconButton(
+              icon: const Icon(Icons.check_circle_outline),
+              color: Colors.green, 
+              tooltip: "Mark as checked",
+              onPressed: () => _markPrayerAsChecked(item['id'] as String),
+            ),
+          if (canClose)
+            IconButton(
+              icon: Icon(Icons.close, color: colorScheme.error),
+              tooltip: "key_332".tr(),
+              onPressed: () => _confirmAndClosePrayer(item['id'] as String),
+            ),
+        ],
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16.0),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Container(
+            decoration: BoxDecoration(
+              color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                )
+              ],
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: Icon(
+                Icons.menu_book_outlined,
+                color: colorScheme.primary,
+                size: 32,
+              ),
+              title: StatefulBuilder(
+                builder: (context, setLocalState) {
+                  bool isExpanded = false; 
+                  final String requestText = (item['request'] ?? '') as String;
+                  
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8.0),
+                        child: Text(
+                          requestText,
+                          style: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurface,
+                          ),
+                          // ✨ Expandable Logic
+                          maxLines: 3, 
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (requestText.length > 100) 
+                        InkWell(
+                          onTap: () => setLocalState(() => isExpanded = !isExpanded),
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8.0),
+                            child: Text(
+                              "key_read_more".tr(),
+                              style: textTheme.labelLarge?.copyWith(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+              subtitle: Text(
+                subtitleText,
+                style: textTheme.bodySmall?.copyWith(color: colorScheme.outline),
+              ),
+              trailing: trailingWidget,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
 
+// --- FORM WIDGET REMAINS UNCHANGED ---
 class PrayerRequestForm extends StatefulWidget {
   final Future<void> Function(String request, bool includeName) onSubmit;
 
@@ -537,7 +612,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
             children: [
               Text(
                 "key_428".tr(),
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 20, 
                   fontWeight: FontWeight.bold,
                   color: Colors.black, 
@@ -552,7 +627,7 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                     labelText: "key_427".tr(),
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                     filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest.withAlpha(77),
+                    fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                     alignLabelWithHint: true,
                     floatingLabelBehavior: FloatingLabelBehavior.never,
                 ),
@@ -577,13 +652,13 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                   color: Theme.of(context).colorScheme.primary,
                   shape: const StadiumBorder(),
                   elevation: 8,
-                  shadowColor: primaryColor.withAlpha(200),
+                  shadowColor: primaryColor.withValues(alpha: 0.8),
                   child: ElevatedButton.icon(
                     icon: const Icon(Icons.local_library_outlined),
                     label: Text("key_242".tr()), 
                     style: buttonStyle.copyWith(
                       backgroundColor: WidgetStateProperty.all(Colors.transparent),
-                      overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withAlpha(30)),
+                      overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withValues(alpha: 0.1)),
                       elevation: WidgetStateProperty.all(0),
                     ),
                     onPressed: () {

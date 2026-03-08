@@ -116,7 +116,7 @@
   "key_059b": "Accept",
   "key_059c": "Decline",
   "key_059d": "Groups You Can Join",
-  "key_060": "Joined {}",
+  "key_060": "Requested to Join {}",
   "key_061": "Declined invitation to {}",
   "key_062": "Accept",
   "key_063": "Search groups...",
@@ -181,7 +181,7 @@
   "key_112e": "Members",
   "key_113": "Failed to join group: $e",
   "key_114": "Group not found",
-  "key_114a": "Join Group",
+  "key_114a": "Request to Join Group",
   "key_114b": "Request to Join",
   "key_115": "This group is invite only.",
   "key_116": "Cancel",
@@ -611,5 +611,6 @@
   "key_no_change_role": "You cannot change your own role.",
   "key_role_updated": "Role updated to {} for {}",
   "key_please_log_in": "Please log in to RSVP",
-  "Be the first to say something!": "Be the first to say something!"
+  "Be the first to say something!": "Be the first to say something!",
+  "key_show_less": "Show Less"
 }

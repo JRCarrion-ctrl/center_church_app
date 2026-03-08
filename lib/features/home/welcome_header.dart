@@ -116,9 +116,16 @@ class NextServiceCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: colorScheme.outline, width: 1.5),
+        color: colorScheme.surface.withValues(alpha: 0.85), // Soft translucency
+        borderRadius: BorderRadius.circular(28), // Sleeker, larger radius
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         children: [

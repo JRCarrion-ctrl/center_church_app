@@ -1,6 +1,5 @@
 // File: lib/routes/group_routes.dart
 import 'package:go_router/go_router.dart';
-import '../features/groups/group_page.dart';
 import '../features/calendar/models/group_event.dart';
 import '../features/groups/pages/group_info_page.dart';
 import '../features/groups/pages/manage_members_page.dart';
@@ -8,7 +7,9 @@ import '../features/groups/pages/manage_announcements_page.dart';
 import '../features/groups/pages/group_media_page.dart';
 import 'package:ccf_app/features/groups/pages/group_event_list_page.dart';
 import '../features/calendar/widgets/group_event_form_modal.dart';
-import '../features/groups/pages/manage_events_page.dart'; // Ensure this import exists
+import '../features/groups/pages/manage_events_page.dart';
+import '../features/groups/pages/group_portal_page.dart';
+import '../features/groups/pages/group_settings_page.dart';
 
 final List<GoRoute> groupRoutes = [
   // 1. Main Group Landing Page
@@ -17,7 +18,17 @@ final List<GoRoute> groupRoutes = [
     name: 'group',
     builder: (context, state) {
       final groupId = state.pathParameters['id']!;
-      return GroupPage(groupId: groupId);
+      
+      // Extract the admin/owner flags just like you did for the Info page
+      final extra = state.extra as Map<String, dynamic>?; 
+      final isAdmin = extra?['isAdmin'] as bool? ?? false;
+      final isOwner = extra?['isOwner'] as bool? ?? false;
+      
+      return GroupPortalPage(
+        groupId: groupId, 
+        isAdmin: isAdmin, 
+        isOwner: isOwner
+      );
     },
   ),
 
@@ -53,7 +64,12 @@ final List<GoRoute> groupRoutes = [
           return ManageAnnouncementsPage(groupId: groupId);
         },
       ),
-
+      GoRoute(
+        path: 'settings', 
+        builder: (context, state) => GroupSettingsPage(
+          group: (state.extra as Map<String, dynamic>?)?['group'],
+        ),
+      ),
       // 2c. Manage Events List (Nested)
       GoRoute(
         path: 'events',
