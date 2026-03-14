@@ -8,15 +8,16 @@ import 'package:provider/provider.dart';
 import '../../../core/graph_provider.dart';
 import '../../../app_state.dart';
 import '../group_service.dart';
+import '../widgets/invite_user_modal.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
-  final bool isAdmin; // <-- ADDED: Flag from GroupInfoPage/Router
+  final bool isAdmin; 
 
   const ManageMembersPage({
     super.key,
     required this.groupId,
-    this.isAdmin = false, // Default to false for safety
+    this.isAdmin = false, 
   });
 
   @override
@@ -26,8 +27,8 @@ class ManageMembersPage extends StatefulWidget {
 class _ManageMembersPageState extends State<ManageMembersPage> {
   late Future<List<Map<String, dynamic>>> _futureMembers;
   late Future<List<Map<String, dynamic>>> _futurePending;
+  late Future<List<Map<String, dynamic>>> _futureInvitations;
   late GroupService _groups;
-  // late GraphQLClient _gql; // GQL client is only used internally by GroupService
   bool _inited = false;
 
   @override
@@ -38,11 +39,18 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     final client = GraphProvider.of(context);
     _groups = GroupService(client);
     
-    // Initialize both futures
+    // Initialize all futures
     _futureMembers = _groups.getGroupMembers(widget.groupId);
+    
+    // Incoming requests (users asking to join)
     _futurePending = widget.isAdmin
         ? _groups.getGroupJoinRequests(widget.groupId)
-        : Future.value([]); // Don't fetch if not admin
+        : Future.value([]); 
+        
+    // Outgoing invitations (users invited by an admin)
+    _futureInvitations = widget.isAdmin
+        ? _groups.getPendingMembers(widget.groupId)
+        : Future.value([]);
   }
 
   // --- Centralized Refresh Logic ---
@@ -51,11 +59,15 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     final updatedPending = widget.isAdmin
         ? _groups.getGroupJoinRequests(widget.groupId)
         : Future.value(<Map<String, dynamic>>[]); 
+    final updatedInvitations = widget.isAdmin
+        ? _groups.getPendingMembers(widget.groupId)
+        : Future.value(<Map<String, dynamic>>[]);
 
     if (!mounted) return;
     setState(() {
       _futureMembers = updatedMembers;
       _futurePending = updatedPending;
+      _futureInvitations = updatedInvitations;
     });
   }
   
@@ -65,9 +77,24 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
 
     return Scaffold(
       appBar: AppBar(title: Text("key_144".tr())),
+      floatingActionButton: widget.isAdmin 
+          ? FloatingActionButton(
+              onPressed: () {
+                showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (ctx) => InviteUserModal(groupId: widget.groupId),
+                ).then((_) {
+                  if (mounted) _refreshAllLists();
+                });
+              },
+              child: const Icon(Icons.person_add),
+            )
+          : null,
       body: RefreshIndicator(
         onRefresh: _refreshAllLists,
         child: SingleChildScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -77,10 +104,13 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 future: _futureMembers,
                 builder: (context, snapshot) {
                   if (snapshot.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
+                    return const Center(child: Padding(
+                      padding: EdgeInsets.all(24.0),
+                      child: CircularProgressIndicator(),
+                    ));
                   }
                   if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}'));
+                    return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
                   }
 
                   final members = snapshot.data ?? [];
@@ -89,46 +119,69 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("key_145".tr(),
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 8),
+                      _buildSectionTitle("key_145".tr()), // Approved Members
                       ...members.map((m) => _buildMemberTile(m, myUserId)),
                     ],
                   );
                 },
               ),
               
-              const SizedBox(height: 32),
+              if (widget.isAdmin) ...[
+                const SizedBox(height: 32),
 
-              // --- Pending Requests (Only visible if isAdmin is true) ---
-              if (widget.isAdmin) 
+                // --- Incoming Join Requests ---
                 FutureBuilder<List<Map<String, dynamic>>>(
                   future: _futurePending,
                   builder: (context, snapshot) {
                     if (snapshot.connectionState != ConnectionState.done) return const SizedBox();
                     
-                    // ADD THIS ERROR CHECK
                     if (snapshot.hasError) {
                       return Padding(
                         padding: const EdgeInsets.all(8.0),
-                        child: Text('Error loading requests: ${snapshot.error}', style: TextStyle(color: Colors.red)),
+                        child: Text('Error loading requests: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
                       );
                     }
 
                     final pending = snapshot.data ?? [];
                     if (pending.isEmpty) return const SizedBox();
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text("key_146a".tr(),
-                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          const SizedBox(height: 8),
-                          ...pending.map((m) => _buildPendingTile(m)),
-                        ],
-                      );
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionTitle("key_146a".tr()), // Pending Requests
+                        ...pending.map((m) => _buildPendingTile(m)),
+                        const SizedBox(height: 24),
+                      ],
+                    );
                   },
                 ),
+
+                // --- Outgoing Invitations ---
+                FutureBuilder<List<Map<String, dynamic>>>(
+                  future: _futureInvitations,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState != ConnectionState.done) return const SizedBox();
+                    
+                    if (snapshot.hasError) {
+                      return Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text('Error loading invitations: ${snapshot.error}', style: const TextStyle(color: Colors.red)),
+                      );
+                    }
+
+                    final invites = snapshot.data ?? [];
+                    if (invites.isEmpty) return const SizedBox();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildSectionTitle("Pending Invitations".tr()), // Use an existing translation key if you have one
+                        ...invites.map((i) => _buildInviteTile(i)),
+                      ],
+                    );
+                  },
+                ),
+              ],
             ],
           ),
         ),
@@ -136,11 +189,20 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     );
   }
 
+  // --- UI Helpers ---
+
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Text(
+        title,
+        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+      ),
+    );
+  }
+
   Widget _buildMemberTile(Map<String, dynamic> member, String? myUserId) {
     final isCurrentUser = (myUserId != null && myUserId == member['user_id']);
-    // Note: If photoUrl is set with a query param of the current time, 
-    // you don't need to append it here if the GroupMembers query already returned fresh URLs.
-    // If photos are cached aggressively, keeping the timestamp is fine.
     final photoUrl = member['photo_url'] as String?;
 
     return ListTile(
@@ -156,7 +218,6 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       subtitle: Text(member['role']),
       onTap: () => context.push('/profile/${member['user_id']}'),
       onLongPress: () async {
-        // SECURITY FIX 1: Only allow long press if the current user is an admin
         if (!widget.isAdmin || isCurrentUser) return;
 
         final myRole = await _groups.getMyGroupRole(
@@ -167,8 +228,6 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         final targetRole = member['role'] as String;
         final targetId = member['user_id'] as String;
 
-        // Role hierarchy check ensures an admin can't promote/demote a higher-level user
-        // and provides a general restriction (level < 2 is member).
         final roleHierarchy = {
           'member': 1,
           'admin': 2,
@@ -180,8 +239,6 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         final myLevel = roleHierarchy[myRole] ?? 0;
         final targetLevel = roleHierarchy[targetRole] ?? 0;
 
-        // Block if user is trying to target someone of equal or higher level,
-        // or if the user isn't an admin/leader/owner (level >= 2)
         if (myLevel <= targetLevel || myLevel < 2) return;
 
         final actions = <PopupMenuEntry<String>>[];
@@ -190,14 +247,12 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         if (myRole == 'leader' || myRole == 'supervisor' || myRole == 'owner' || myRole == 'admin') {
           if (targetRole == 'member') {
             actions.add(PopupMenuItem(value: 'promote', child: Text("key_148".tr())));
-          } else if (targetRole == 'admin' && myRole != 'admin') { // Admin can only demote other admins if they are higher rank (leader/owner)
+          } else if (targetRole == 'admin' && myRole != 'admin') { 
              actions.add(PopupMenuItem(value: 'demote', child: Text("key_149".tr())));
           }
         }
         
-        // Final check to see if any actions were added before showing the menu
         if (actions.isEmpty) return;
-
 
         if (!mounted) return;
         final selected = await showMenu<String>(
@@ -226,30 +281,22 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
               await _groups.removeMember(widget.groupId, targetId);
               if (!mounted) return;
               await _refreshAllLists();
-              messenger.showSnackBar(
-                SnackBar(content: Text('${member['display_name']} removed')),
-              );
+              messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} removed')));
             }
           } else if (selected == 'promote') {
             await _groups.setMemberRole(widget.groupId, targetId, 'admin');
             if (!mounted) return;
             await _refreshAllLists();
-            messenger.showSnackBar(
-              SnackBar(content: Text('${member['display_name']} promoted to admin')),
-            );
+            messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} promoted to admin')));
           } else if (selected == 'demote') {
             await _groups.setMemberRole(widget.groupId, targetId, 'member');
             if (!mounted) return;
             await _refreshAllLists();
-            messenger.showSnackBar(
-              SnackBar(content: Text('${member['display_name']} demoted to member')),
-            );
+            messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} demoted to member')));
           }
         } catch (e) {
           if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Action failed: $e')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
         }
       },
     );
@@ -273,57 +320,80 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Approve
             IconButton(
               icon: const Icon(Icons.check, color: Colors.green),
               tooltip: 'Approve',
               onPressed: () async {
                 try {
                   final messenger = ScaffoldMessenger.of(context);
-                  // FIX 2: Use GroupService method instead of inline GraphQL
                   await _groups.approveMemberRequest(
                     widget.groupId,
                     member['user_id'] as String,
                   );
                   if (!mounted) return;
                   await _refreshAllLists();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('${member['display_name']} approved.')),
-                  );
+                  messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} approved.')));
                 } catch (e) {
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Approve failed: $e')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Approve failed: $e')));
                 }
               },
             ),
-            // Deny
             IconButton(
               icon: const Icon(Icons.close, color: Colors.red),
               tooltip: 'Deny',
               onPressed: () async {
                 try {
                   final messenger = ScaffoldMessenger.of(context);
-                  // FIX 2: Use GroupService method instead of inline GraphQL
                   await _groups.denyMemberRequest(
                     widget.groupId,
                     member['user_id'] as String,
                   );
                   if (!mounted) return;
                   await _refreshAllLists();
-                  messenger.showSnackBar(
-                    SnackBar(content: Text('${member['display_name']} denied.')),
-                  );
+                  messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} denied.')));
                 } catch (e) {
                   if (!mounted) return;
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Deny failed: $e')),
-                  );
+                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Deny failed: $e')));
                 }
               },
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInviteTile(Map<String, dynamic> invite) {
+    final photoUrl = invite['photo_url'] as String?;
+    
+    return Card(
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundImage: (photoUrl != null && photoUrl.isNotEmpty)
+              ? CachedNetworkImageProvider(photoUrl)
+              : null,
+          child: (photoUrl == null || photoUrl.isEmpty)
+              ? const Icon(Icons.mail_outline)
+              : null,
+        ),
+        title: Text(invite['display_name'] ?? invite['email'] ?? 'Pending User'),
+        subtitle: Text('Invited as ${invite['role']}'),
+        trailing: IconButton(
+          icon: const Icon(Icons.person_remove_outlined, color: Colors.orange),
+          tooltip: 'Revoke Invitation',
+          onPressed: () async {
+            try {
+              final messenger = ScaffoldMessenger.of(context);
+              await _groups.removeMember(widget.groupId, invite['user_id'] as String);
+              if (!mounted) return;
+              await _refreshAllLists();
+              messenger.showSnackBar(SnackBar(content: Text('Invitation revoked.')));
+            } catch (e) {
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to revoke: $e')));
+            }
+          },
         ),
       ),
     );
