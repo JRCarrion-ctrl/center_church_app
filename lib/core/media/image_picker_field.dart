@@ -1,11 +1,14 @@
-import 'dart:io';
+// lib/core/media/image_picker_field.dart
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 class ImagePickerField extends StatefulWidget {
   final String? initialUrl;
   final String label;
-  final void Function(File? localFile, bool removed) onChanged;
+  // Callback now gives raw bytes + file extension instead of a dart:io File.
+  // Works identically on web and mobile.
+  final void Function(Uint8List? bytes, String? extension, bool removed) onChanged;
 
   const ImagePickerField({
     super.key,
@@ -19,36 +22,48 @@ class ImagePickerField extends StatefulWidget {
 }
 
 class _ImagePickerFieldState extends State<ImagePickerField> {
-  File? _localFile;
-  bool _removed = false;
+  Uint8List? _bytes;
+  String?    _extension;
+  bool       _removed = false;
 
   Future<void> _pick() async {
-    final picker = ImagePicker();
-    final picked = await picker.pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final picked = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
     if (picked == null) return;
+
+    final bytes     = await picked.readAsBytes();
+    final extension = picked.name.contains('.')
+        ? picked.name.split('.').last.toLowerCase()
+        : 'jpg';
+
     setState(() {
-      _localFile = File(picked.path);
-      _removed = false;
+      _bytes     = bytes;
+      _extension = extension;
+      _removed   = false;
     });
-    widget.onChanged(_localFile, false);
+    widget.onChanged(_bytes, _extension, false);
   }
 
   void _remove() {
     setState(() {
-      _localFile = null;
-      _removed = true;
+      _bytes     = null;
+      _extension = null;
+      _removed   = true;
     });
-    widget.onChanged(null, true);
+    widget.onChanged(null, null, true);
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final theme     = Theme.of(context);
     final hasRemote = (widget.initialUrl?.isNotEmpty ?? false) && !_removed;
 
     Widget preview;
-    if (_localFile != null) {
-      preview = Image.file(_localFile!, height: 140, fit: BoxFit.cover);
+    if (_bytes != null) {
+      // Image.memory works on every platform — no dart:io needed.
+      preview = Image.memory(_bytes!, height: 140, fit: BoxFit.cover);
     } else if (hasRemote) {
       preview = Image.network(widget.initialUrl!, height: 140, fit: BoxFit.cover);
     } else {
@@ -74,7 +89,7 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
               label: const Text('Choose Image'),
             ),
             const SizedBox(width: 8),
-            if (_localFile != null || hasRemote)
+            if (_bytes != null || hasRemote)
               TextButton.icon(
                 onPressed: _remove,
                 icon: const Icon(Icons.delete),

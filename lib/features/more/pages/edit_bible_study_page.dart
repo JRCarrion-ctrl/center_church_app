@@ -1,7 +1,5 @@
 // File: lib/features/more/pages/edit_bible_study_page.dart
-import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart' as graphql;
 import 'package:easy_localization/easy_localization.dart';
@@ -27,13 +25,24 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
   DateTime _selectedDate = DateTime.now();
   bool isSaving = false;
 
+  String _contentTypeFromExt(String ext) {
+    switch (ext.toLowerCase()) {
+      case '.png':  return 'image/png';
+      case '.gif':  return 'image/gif';
+      case '.webp': return 'image/webp';
+      case '.heic': return 'image/heic';
+      case '.jpeg': return 'image/jpeg';
+      default:      return 'image/jpeg';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     final s = widget.study;
-    _title = TextEditingController(text: s?['title'] ?? '');
+    _title      = TextEditingController(text: s?['title']       ?? '');
     _youtubeUrl = TextEditingController(text: s?['youtube_url'] ?? '');
-    _notesUrl = TextEditingController(text: s?['notes_url'] ?? '');
+    _notesUrl   = TextEditingController(text: s?['notes_url']   ?? '');
     if (s?['date'] != null) {
       final raw = s!['date'] as String;
       _selectedDate = DateTime.tryParse(raw) ?? DateTime.parse('${raw}T00:00:00Z');
@@ -71,46 +80,52 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     final picked = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['docx', 'pdf'],
+      // withData: true is required on web to get bytes; harmless on mobile.
+      withData: true,
     );
-    if (picked == null || picked.files.single.path == null) return;
 
-    final file = File(picked.files.single.path!);
-    final ext = p.extension(file.path).toLowerCase();
+    final platformFile = picked?.files.single;
+    if (platformFile == null) return;
+
+    // Use bytes directly — works on all platforms including web.
+    final bytes = platformFile.bytes;
+    if (bytes == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read file bytes.')),
+      );
+      return;
+    }
+
+    final ext   = '.${platformFile.extension?.toLowerCase() ?? 'pdf'}';
     final title = _title.text.trim();
 
     if (title.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_260".tr())), // “Please enter a title first…”
+        SnackBar(content: Text("key_260".tr())),
       );
       return;
     }
 
-    try {
-      // The logical ID should use the existing study ID or a slug for new studies.
-      final logicalId = widget.study?['id'] as String? ?? _slug(title);
-      final logicalIdWithExt = '$logicalId$ext'; // Final key: UUID/slug + .ext
+    final contentType =
+        _contentTypeFromExt(platformFile.name);
 
-      // FIX: Use the new service for upload
+    try {
+      final logicalId        = widget.study?['id'] as String? ?? _slug(title);
+      final logicalIdWithExt = '$logicalId$ext';
+
       final uploadedUrl = await _uploadService.uploadStudyNotes(
-        file,
+        bytes,
         logicalIdWithExt,
+        contentType,
       );
 
       if (!mounted) return;
-
-      if (uploadedUrl.isNotEmpty) {
-        setState(() => _notesUrl.text = uploadedUrl);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_261".tr())), // “Notes uploaded!”
-        );
-      } else {
-        // This case might be unreachable if the service throws an exception,
-        // but kept for safety.
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Upload failed')),
-        );
-      }
+      setState(() => _notesUrl.text = uploadedUrl);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("key_261".tr())),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -123,16 +138,15 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => isSaving = true);
 
-    final client = graphql.GraphQLProvider.of(context).value;
-
+    final client  = graphql.GraphQLProvider.of(context).value;
     final dateStr = _selectedDate.toIso8601String().split('T').first;
 
     final vars = {
-      'id': widget.study?['id'],
-      'title': _title.text.trim(),
-      'date': dateStr,
+      'id':          widget.study?['id'],
+      'title':       _title.text.trim(),
+      'date':        dateStr,
       'youtube_url': _youtubeUrl.text.trim(),
-      'notes_url': _notesUrl.text.trim().isEmpty ? null : _notesUrl.text.trim(),
+      'notes_url':   _notesUrl.text.trim().isEmpty ? null : _notesUrl.text.trim(),
     };
 
     const mInsert = r'''
@@ -152,8 +166,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       }
     ''';
 
-    final isNew = widget.study == null;
-    final doc = graphql.gql(isNew ? mInsert : mUpdate);
+    final isNew        = widget.study == null;
+    final doc          = graphql.gql(isNew ? mInsert : mUpdate);
     final effectiveVars = isNew ? (Map.of(vars)..remove('id')) : vars;
 
     try {
@@ -168,7 +182,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       );
     } catch (_) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_263".tr())));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text("key_263".tr())));
     } finally {
       if (mounted) setState(() => isSaving = false);
     }
@@ -182,28 +197,27 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
 
   Future<void> _delete() async {
     final studyId = widget.study?['id'];
-    if (studyId == null) return; // Cannot delete a non-existent study
+    if (studyId == null) return;
 
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text("key_073".tr()), // "Confirm Deletion"
+        title: Text("key_073".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text("key_055".tr()), // "Cancel"
+            child: Text("key_055".tr()),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
             style: TextButton.styleFrom(foregroundColor: Colors.red),
-            child: Text("key_039".tr()), // "Delete"
+            child: Text("key_039".tr()),
           ),
         ],
       ),
     );
 
     if (confirm != true) return;
-
     setState(() => isSaving = true);
 
     if (!mounted) return;
@@ -216,19 +230,16 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
           variables: {'id': studyId},
         ),
       );
-
       if (res.hasException) throw res.exception!;
       if (!mounted) return;
-
-      // Deletion successful, navigate back
       Navigator.pop(context, true);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_024i".tr())), // "Bible Study deleted."
+        SnackBar(content: Text("key_024i".tr())),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_182".tr())), // "Failed to delete Bible Study."
+        SnackBar(content: Text("key_182".tr())),
       );
     } finally {
       if (mounted) setState(() => isSaving = false);
@@ -260,11 +271,13 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
               TextFormField(
                 controller: _title,
                 decoration: InputDecoration(labelText: "key_156".tr()),
-                validator: (v) => v == null || v.trim().isEmpty ? "key_156a".tr() : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 16),
               ListTile(
-                title: Text('Date: ${_selectedDate.toLocal().toString().split(' ')[0]}'),
+                title: Text(
+                    'Date: ${_selectedDate.toLocal().toString().split(' ')[0]}'),
                 trailing: const Icon(Icons.calendar_today),
                 onTap: () async {
                   final picked = await showDatePicker(
@@ -280,7 +293,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
               TextFormField(
                 controller: _youtubeUrl,
                 decoration: InputDecoration(labelText: "key_264b".tr()),
-                validator: (v) => v == null || v.trim().isEmpty ? "key_264c".tr() : null,
+                validator: (v) =>
+                    v == null || v.trim().isEmpty ? "key_264c".tr() : null,
               ),
               const SizedBox(height: 16),
               TextButton.icon(

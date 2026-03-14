@@ -1,25 +1,20 @@
 // File: lib/features/groups/widgets/announcement_form_modal.dart
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import '../../../core/graph_provider.dart';
 import '../../../core/time_service.dart';
-// REMOVED: import '../../../core/media/presigned_uploader.dart'; // Old upload logic
-import '../../../core/media/image_picker_field.dart'; // Import the new widget
+import '../../../core/media/image_picker_field.dart';
 import '../models/group_announcement.dart';
-import '../../calendar/event_photo_storage_service.dart'; // <-- NEW/SHARED SERVICE IMPORT (Assume location)
+import '../../calendar/event_photo_storage_service.dart';
 
 class AnnouncementFormModal extends StatefulWidget {
-  final String groupId;
+  final String             groupId;
   final GroupAnnouncement? existing;
 
-  const AnnouncementFormModal({
-    super.key,
-    required this.groupId,
-    this.existing,
-  });
+  const AnnouncementFormModal({super.key, required this.groupId, this.existing});
 
   @override
   State<AnnouncementFormModal> createState() => _AnnouncementFormModalState();
@@ -27,25 +22,27 @@ class AnnouncementFormModal extends StatefulWidget {
 
 class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   final _formKey = GlobalKey<FormState>();
-  final _title = TextEditingController();
-  final _body = TextEditingController();
+  final _title   = TextEditingController();
+  final _body    = TextEditingController();
   DateTime? _scheduledUtc;
-  File? _selectedImage;
-  bool _removedImage = false;
 
-  late GraphQLClient _client;
-  late EventPhotoStorageService _mediaService; // <-- INITIALIZE NEW SERVICE
+  Uint8List? _imageBytes;
+  String?    _imageExtension;
+  bool       _removedImage = false;
+
+  late GraphQLClient         _client;
+  late EventPhotoStorageService _mediaService;
   bool _clientReady = false;
-  bool saving = false;
+  bool saving       = false;
 
   @override
   void initState() {
     super.initState();
     final ex = widget.existing;
     if (ex != null) {
-      _title.text = ex.title;
-      _body.text = ex.body ?? '';
-      _scheduledUtc = ex.publishedAt; 
+      _title.text  = ex.title;
+      _body.text   = ex.body ?? '';
+      _scheduledUtc = ex.publishedAt;
     }
   }
 
@@ -53,9 +50,9 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_clientReady) return;
-    _client = GraphProvider.of(context);
+    _client       = GraphProvider.of(context);
     _mediaService = EventPhotoStorageService(_client);
-    _clientReady = true;
+    _clientReady  = true;
   }
 
   @override
@@ -70,22 +67,22 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     setState(() => saving = true);
 
     String? imageUrl = widget.existing?.imageUrl;
-    final logicalId = widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final logicalId  = widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString();
 
     if (_removedImage) {
       imageUrl = null;
-    } else if (_selectedImage != null) {
+    } else if (_imageBytes != null) {
       try {
         imageUrl = await _mediaService.uploadEventPhoto(
-          file: _selectedImage!,
-          keyPrefix: 'group_announcements', 
-          logicalId: '${widget.groupId}/$logicalId', 
+          bytes: _imageBytes!,
+          extension: _imageExtension,
+          keyPrefix: 'group_announcements',
+          logicalId: '${widget.groupId}/$logicalId',
         );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Failed to upload image: $e")),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to upload image: $e')));
         setState(() => saving = false);
         return;
       }
@@ -97,11 +94,7 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
       if (widget.existing != null) {
         const m = r'''
           mutation UpdateAnnouncements(
-            $id: uuid!,
-            $title: String!,
-            $body: String,
-            $image_url: String,
-            $when: timestamptz!
+            $id: uuid!, $title: String!, $body: String, $image_url: String, $when: timestamptz!
           ) {
             update_group_announcements_by_pk(
               pk_columns: { id: $id },
@@ -109,70 +102,52 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
             ) { id }
           }
         ''';
-
         final res = await _client.mutate(MutationOptions(
           document: gql(m),
           variables: {
-            'id': widget.existing!.id,
-            'title': _title.text.trim(),
-            'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
+            'id':        widget.existing!.id,
+            'title':     _title.text.trim(),
+            'body':      _body.text.trim().isEmpty ? null : _body.text.trim(),
             'image_url': imageUrl,
-            'when': whenUtc,
+            'when':      whenUtc,
           },
         ));
-        if (res.hasException) {
-          throw res.exception!;
-        }
+        if (res.hasException) throw res.exception!;
       } else {
         const m = r'''
           mutation InsertAnnouncements(
-            $groupId: uuid!,
-            $title: String!,
-            $body: String,
-            $image_url: String,
-            $when: timestamptz!
+            $groupId: uuid!, $title: String!, $body: String, $image_url: String, $when: timestamptz!
           ) {
-            insert_group_announcements_one(
-              object: {
-                group_id: $groupId,
-                title: $title,
-                body: $body,
-                image_url: $image_url,
-                published_at: $when
-              }
-            ) { id }
+            insert_group_announcements_one(object: {
+              group_id: $groupId, title: $title, body: $body, image_url: $image_url, published_at: $when
+            }) { id }
           }
         ''';
-
         final res = await _client.mutate(MutationOptions(
           document: gql(m),
           variables: {
-            'groupId': widget.groupId,
-            'title': _title.text.trim(),
-            'body': _body.text.trim().isEmpty ? null : _body.text.trim(),
+            'groupId':   widget.groupId,
+            'title':     _title.text.trim(),
+            'body':      _body.text.trim().isEmpty ? null : _body.text.trim(),
             'image_url': imageUrl,
-            'when': whenUtc,
+            'when':      whenUtc,
           },
         ));
-        if (res.hasException) {
-          throw res.exception!;
-        }
+        if (res.hasException) throw res.exception!;
       }
-
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to save: $e')),
-      );
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Failed to save: $e')));
     } finally {
       if (mounted) setState(() => saving = false);
     }
   }
 
   Future<void> _pickDateTime() async {
-    final now = DateTime.now();
+    final now  = DateTime.now();
     final date = await showDatePicker(
       context: context,
       initialDate: _scheduledUtc?.toLocal() ?? now,
@@ -180,15 +155,12 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
       lastDate: now.add(const Duration(days: 365)),
     );
     if (date == null || !mounted) return;
-
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_scheduledUtc?.toLocal() ?? now),
     );
     if (time == null) return;
-
-    final utc = TimeService.combineLocalDateAndTimeToUtc(date, time);
-    setState(() => _scheduledUtc = utc);
+    setState(() => _scheduledUtc = TimeService.combineLocalDateAndTimeToUtc(date, time));
   }
 
   @override
@@ -201,8 +173,8 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     }
 
     final isEditing = widget.existing != null;
-    final bottom = MediaQuery.of(context).viewInsets.bottom;
-    
+    final bottom    = MediaQuery.of(context).viewInsets.bottom;
+
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
       child: SingleChildScrollView(
@@ -217,22 +189,18 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 16),
-
               TextFormField(
                 controller: _title,
                 decoration: InputDecoration(labelText: "key_156".tr()),
-                validator: (v) =>
-                    v == null || v.isEmpty ? "key_156a".tr() : null,
+                validator: (v) => v == null || v.isEmpty ? "key_156a".tr() : null,
               ),
               const SizedBox(height: 12),
-
               TextFormField(
                 controller: _body,
                 decoration: InputDecoration(labelText: "key_157".tr()),
                 maxLines: 2,
               ),
               const SizedBox(height: 12),
-
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.schedule),
@@ -247,20 +215,18 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
                 ),
               ),
               const SizedBox(height: 12),
-              
               ImagePickerField(
                 label: 'Announcement Image',
                 initialUrl: widget.existing?.imageUrl,
-                onChanged: (localFile, removed) {
+                onChanged: (bytes, ext, removed) {
                   setState(() {
-                    _selectedImage = localFile;
-                    _removedImage = removed;
+                    _imageBytes     = bytes;
+                    _imageExtension = ext;
+                    _removedImage   = removed;
                   });
                 },
               ),
-
               const SizedBox(height: 20),
-
               if (saving)
                 const CircularProgressIndicator()
               else

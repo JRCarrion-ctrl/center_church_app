@@ -22,7 +22,9 @@ void debugPrintJwt(String jwt) {
 
 String _newRid() {
   final t = DateTime.now().microsecondsSinceEpoch.toRadixString(16);
-  final r = (math.Random().nextInt(1 << 32)).toRadixString(16);
+  // ✅ FIX: `1 << 32` compiles to 0 in JS because bitwise ops are 32-bit,
+  // making nextInt(0) throw a RangeError on web. Use an explicit hex literal.
+  final r = math.Random().nextInt(0xFFFFFFFF).toRadixString(16);
   return '$t-$r';
 }
 

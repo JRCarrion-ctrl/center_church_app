@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<title>Authenticating…</title>
+<script>
+  (function () {
+    var url = window.location.href;
+
+    if (window.opener && window.opener !== window) {
+      // Opened as a popup — post directly back and close.
+      window.opener.postMessage(url, window.location.origin);
+      window.close();
+    } else if (window.parent && window.parent !== window) {
+      // Opened in an iframe.
+      window.parent.postMessage(url, window.location.origin);
+    } else {
+      // Opened as a new tab — broadcast the URL to the main window
+      // via BroadcastChannel, then close.
+      var channel = new BroadcastChannel('flutter_web_auth_2');
+      channel.postMessage(url);
+      channel.close();
+      window.close();
+    }
+  })();
+</script>

@@ -1,17 +1,13 @@
 // File: lib/features/more/pages/bible_studies_page.dart
-import 'dart:io';
-
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:open_filex/open_filex.dart';
-import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/app_state.dart';
+
 
 class BibleStudiesPage extends StatefulWidget {
   const BibleStudiesPage({super.key});
@@ -184,43 +180,6 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
       debugPrint('RequestAccess exception: $e');
     }
   }
-
-  // (downloadAndCacheFile and openNotes are unchanged and context-independent)
-  Future<File?> downloadAndCacheFile(String url) async {
-    try {
-      final dir = await getApplicationDocumentsDirectory();
-      final filename = url.split('/').last;
-      final filePath = '${dir.path}/$filename';
-      final file = File(filePath);
-
-      if (await file.exists()) {
-        return file; // Use cached
-      }
-
-      final response = await Dio().get<List<int>>(
-        url,
-        options: Options(responseType: ResponseType.bytes),
-      );
-
-      final savedFile = await file.writeAsBytes(response.data!);
-      return savedFile;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  void openNotes(String url) async {
-    final file = await downloadAndCacheFile(url);
-    if (file != null) {
-      await OpenFilex.open(file.path);
-    } else {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_244".tr())),
-      );
-    }
-  }
-
 
   @override
   Widget build(BuildContext context) {

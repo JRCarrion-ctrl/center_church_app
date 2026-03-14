@@ -2,14 +2,14 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_native_timezone_latest/flutter_native_timezone_latest.dart';
+import 'package:flutter/foundation.dart'; // ✨ ADDED: Needed for kIsWeb
 import 'package:logger/logger.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
-import 'package:flutter/services.dart'; // Import for PlatformException
+import 'package:flutter/services.dart'; 
 
 import 'features/auth/oidc_auth.dart';
 import 'core/hasura_client.dart';
@@ -59,6 +59,7 @@ class AppState extends ChangeNotifier {
   List<String> _visibleCalendarGroupIds = [];
 
   // --- Getters ---
+  // (Getters omitted for brevity, keep your existing ones)
   bool get isInitialized => _initialized && !_isLoading;
   bool get isLoading => _isLoading;
   int get selectedIndex => _selectedIndex;
@@ -109,7 +110,7 @@ class AppState extends ChangeNotifier {
   // --- Helpers ---
   Future<void> loadTimezone() async {
     try {
-      _timezone = await FlutterNativeTimezoneLatest.getLocalTimezone();
+      _timezone = DateFormat('zzz').format(DateTime.now());
     } catch (e, st) {
       _logger.e('Failed to get timezone', error: e, stackTrace: st);
       _timezone = 'UTC';
@@ -142,10 +143,9 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // --- Session lifecycle ---
   Future<void> _setClient(GraphQLClient? newClient) async {
     _client = newClient;
-    _groups = null; // Reset group service to use new client
+    _groups = null; 
     notifyListeners();
   }
 
@@ -279,22 +279,17 @@ class AppState extends ChangeNotifier {
     } on PlatformException catch (e, st) {
       _logger.e('Platform Auth Error: $e', error: e, stackTrace: st);
       
-      // Throw a specific message for the known Android AppAuth conflict error
       if (e.code == 'null_intent' || (e.message?.contains('Null intent received') ?? false)) {
          throw Exception('Login Failed: Intent data was lost during redirect. Check Android deep-linking and MainActivity.kt.');
       }
-      
-      rethrow; // Rethrow other PlatformExceptions
+      rethrow; 
       
     } catch (e, st) {
       _logger.e('Zitadel sign-in process failed or was cancelled', error: e, stackTrace: st);
       
-      // If the error message indicates cancellation, throw a simple error 
-      // instead of the verbose platform exception.
       if (e.toString().contains('User cancelled flow')) {
           throw Exception('Sign-in was canceled by the user.');
       }
-      
       rethrow;
     } finally {
       _setLoading(false);
@@ -308,7 +303,6 @@ class AppState extends ChangeNotifier {
     _setLoading(false);
   }
 
-  // --- Profile ---
   void _setProfile(Profile? profile) {
     if (_profile != profile) {
       _profile = profile;
@@ -327,7 +321,6 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  // --- Groups ---
   Future<void> loadUserGroups() async {
     final userId = _profile?.id;
     if (userId == null || userId.isEmpty) {
@@ -359,16 +352,22 @@ class AppState extends ChangeNotifier {
     try {
       final loginId = _profile?.id;
       if (loginId == null || loginId.isEmpty) {
-        // If logged out, clear OneSignal user identity
-        await OneSignal.logout();
+        // ✨ WRAPPED: Skip OneSignal logout on web
+        if (!kIsWeb) {
+          await OneSignal.logout();
+        }
         _logger.i('OneSignal logged out');
         return;
       }
 
-      await OneSignal.login(loginId);
-      final String? pushToken = OneSignal.User.pushSubscription.id;
+      // ✨ WRAPPED: Skip OneSignal login and token gathering on web
+      String? pushToken;
+      if (!kIsWeb) {
+        await OneSignal.login(loginId);
+        pushToken = OneSignal.User.pushSubscription.id;
+      }
       
-      // 1. Hasura Upsert: Always sync the device token
+      // 1. Hasura Upsert: Always sync the device token (pushToken will be null on web, which is fine)
       const mUpsertEndpoint = r'''
         mutation UpsertEndpoint($userId: String!, $token: String, $seen: timestamptz!) {
           insert_notification_endpoints_one(
@@ -391,15 +390,18 @@ class AppState extends ChangeNotifier {
         document: gql(mUpsertEndpoint),
         variables: {
           'userId': loginId,
-          'token': pushToken,
+          'token': pushToken, // This safely passes null on web
           'seen': DateTime.now().toUtc().toIso8601String(),
         },
       ));
       _logger.i('OneSignal endpoint updated in Hasura');
 
-      final role = _profile?.role;
-      if (role != null && role.isNotEmpty) {
-        await OneSignal.User.addTags({'role': role});
+      // ✨ WRAPPED: Skip OneSignal tags on web
+      if (!kIsWeb) {
+        final role = _profile?.role;
+        if (role != null && role.isNotEmpty) {
+          await OneSignal.User.addTags({'role': role});
+        }
       }
     } catch (e, st) {
       _logger.e('Failed to update OneSignal user', error: e, stackTrace: st);

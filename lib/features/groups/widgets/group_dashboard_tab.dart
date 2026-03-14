@@ -75,7 +75,7 @@ class GroupDashboardTab extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
           TextButton(
             onPressed: onSeeAll,
-            child: Text("See All".tr()),
+            child: Text("key_102".tr()),
           ),
         ],
       ),

@@ -1,15 +1,11 @@
-// File: lib/services/profile_service.dart
-
-import 'dart:io'; // Required for File in the upload method
+// File: lib/features/more/profile_service.dart
+import 'dart:typed_data';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:logger/logger.dart';
-// Assuming the path to your PhotoUploadService
 import 'photo_upload_service.dart';
 
 final _logger = Logger();
 
-// --- GraphQL Query Definitions (Unchanged) ---
-// Fetches the entire profile bundle in one go (like the original _loadAllData)
 const String qProfileBundle = r'''
   query ProfileBundle($uid: String!) {
     profiles_by_pk(id: $uid) {
@@ -63,7 +59,6 @@ const String qProfileBundle = r'''
   }
 ''';
 
-// Fetches detailed family members based on family ID
 const String qFamilyMembers = r'''
   query Family($fid: uuid!) {
     family_members(
@@ -80,7 +75,6 @@ const String qFamilyMembers = r'''
   }
 ''';
 
-// Mutation to update a single profile field (replaces _updateProfileField, _toggleVisibility)
 const String mUpdateProfileField = r'''
   mutation UpdateField($id: String!, $_set: profiles_set_input!) {
     update_profiles_by_pk(
@@ -90,21 +84,18 @@ const String mUpdateProfileField = r'''
   }
 ''';
 
-// Mutation to update the user's photo URL (replaces SetPhoto mutation)
 const String mSetPhoto = r'''
   mutation SetPhoto($id: String!, $url: String!) {
     update_profiles_by_pk(pk_columns: { id: $id }, _set: { photo_url: $url }) { id }
   }
 ''';
 
-// Mutation to delete a prayer request (replaces DeletePrayer mutation)
 const String mDeletePrayer = r'''
   mutation DeletePrayer($id: uuid!) {
     delete_prayer_requests_by_pk(id: $id) { id }
   }
 ''';
 
-// Mutation to delete a user account (replaces DeleteAccount mutation)
 const String mDeleteAccount = r'''
   mutation DeleteAccount($id: String!) {
     delete_profiles_by_pk(id: $id) {
@@ -113,7 +104,16 @@ const String mDeleteAccount = r'''
   }
 ''';
 
-// --- Service Class ---
+String _contentTypeFromExt(String ext) {
+  switch (ext.toLowerCase()) {
+    case '.png':  return 'image/png';
+    case '.gif':  return 'image/gif';
+    case '.webp': return 'image/webp';
+    case '.heic': return 'image/heic';
+    case '.jpeg': return 'image/jpeg';
+    default:      return 'image/jpeg';
+  }
+}
 
 class ProfileBundle {
   final Map<String, dynamic>? profile;
@@ -133,15 +133,13 @@ class ProfileBundle {
 
 class ProfileService {
   final GraphQLClient client;
-  // DEPENDENCY INJECTION: Inject the PhotoUploadService
-  final PhotoUploadService photoUploadService; 
+  final PhotoUploadService photoUploadService;
 
   ProfileService(this.client, this.photoUploadService);
 
-  /// Executes the main profile bundle query and maps the results.
   Future<ProfileBundle> fetchProfileBundle(String userId) async {
     _logger.i('[ProfileBundleService] Fetching data for user: $userId');
-    
+
     final res = await client.query(
       QueryOptions(
         document: gql(qProfileBundle),
@@ -152,26 +150,26 @@ class ProfileService {
 
     if (res.hasException) {
       if (res.exception?.linkException is CacheMissException) {
-         _logger.w('[ProfileBundleService] CacheMissException. Will attempt to proceed.');
+        _logger.w('[ProfileBundleService] CacheMissException. Will attempt to proceed.');
       } else {
         _logger.e('[ProfileBundleService] Error fetching bundle', error: res.exception);
         throw res.exception!;
       }
     }
 
-    final data = res.data ?? {};
+    final data    = res.data ?? {};
     final profile = data['profiles_by_pk'] as Map<String, dynamic>?;
-    final groups = (data['group_memberships'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final prayers = (data['prayer_requests'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    
+    final groups  = (data['group_memberships'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final prayers = (data['prayer_requests']   as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+
     final myFamilyList = (data['my_family'] as List<dynamic>? ?? []);
-    final familyId = myFamilyList.isNotEmpty ? (myFamilyList.first['family_id'] as String?) : null;
-    
-    final groupRSVPs = (data['event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final appRSVPs = (data['app_event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final familyId     = myFamilyList.isNotEmpty ? (myFamilyList.first['family_id'] as String?) : null;
+
+    final groupRSVPs = (data['event_attendance']     as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+    final appRSVPs   = (data['app_event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
     final eventRsvps = [
       ...groupRSVPs.map((r) => {...r, 'source': 'group'}),
-      ...appRSVPs.map((r) => {...r, 'source': 'app'}),
+      ...appRSVPs.map((r)   => {...r, 'source': 'app'}),
     ];
 
     return ProfileBundle(
@@ -183,7 +181,6 @@ class ProfileService {
     );
   }
 
-  /// Fetches the list of family members for a given family ID.
   Future<List<Map<String, dynamic>>> fetchFamilyMembers(String familyId) async {
     _logger.d('[FamilyService] Fetching members for family: $familyId');
     final res = await client.query(
@@ -193,43 +190,41 @@ class ProfileService {
         fetchPolicy: FetchPolicy.networkOnly,
       ),
     );
-
     if (res.hasException) {
       _logger.e('[FamilyService] Query failed', error: res.exception);
       throw res.exception!;
     }
-    
     return (res.data?['family_members'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
   }
 
-  /// Updates a single field in the user's profile.
   Future<void> updateProfileField(String userId, String key, dynamic value) async {
     _logger.d('[ProfileService] Updating $key for $userId to $value');
-    
-    final Map<String, dynamic> setVariables = { key: value };
-
     final res = await client.mutate(
       MutationOptions(
         document: gql(mUpdateProfileField),
-        variables: {
-          'id': userId,
-          '_set': setVariables,
-        },
+        variables: {'id': userId, '_set': <String, dynamic>{key: value}},
       ),
     );
     if (res.hasException) throw res.exception!;
   }
-  
-  Future<String> uploadAndSetProfilePhoto(String userId, File file) async {
-    _logger.d('[ProfileService] Starting photo upload and update for user $userId');
 
-    // 1. Upload the file using the specialized service
-    final uploadedUrl = await photoUploadService.uploadUserProfilePhoto(file, userId);
+  /// Uploads [bytes] as the user's profile photo and updates the DB.
+  /// [extension] should include the dot e.g. ".jpg".
+  /// [contentType] e.g. "image/jpeg".
+  Future<String> uploadAndSetProfilePhoto(
+      String userId, Uint8List bytes, String extension, String contentType) async {
+    _logger.d('[ProfileService] Starting photo upload for user $userId');
 
-    // 2. Create a cache-busting URL
+    // Infer content type from extension if not supplied.
+    final resolvedContentType = contentType.isNotEmpty
+        ? contentType
+        : _contentTypeFromExt(extension);
+
+    final uploadedUrl = await photoUploadService.uploadUserProfilePhoto(
+        bytes, userId, extension, resolvedContentType);
+
     final cacheBustedUrl = '$uploadedUrl?ts=${DateTime.now().millisecondsSinceEpoch}';
 
-    // 3. Update the GraphQL database with the new URL
     final res = await client.mutate(
       MutationOptions(
         document: gql(mSetPhoto),
@@ -240,41 +235,27 @@ class ProfileService {
       _logger.e('[ProfileService] Failed to set photo URL in DB', error: res.exception);
       throw res.exception!;
     }
-    
+
     return cacheBustedUrl;
   }
 
-  // NOTE: The previous, simple updateProfilePhotoUrl is removed as it is now encapsulated 
-  // within uploadAndSetProfilePhoto, which handles both parts of the operation.
-  // The old stub remains:
-  // Future<void> updateProfilePhotoUrl(String userId, String url) { ... }
-
-  /// Deletes a prayer request by ID.
   Future<void> deletePrayerRequest(String id) async {
     _logger.d('[ProfileService] Deleting prayer request $id');
     final res = await client.mutate(
-      MutationOptions(
-        document: gql(mDeletePrayer),
-        variables: {'id': id},
-      ),
+      MutationOptions(document: gql(mDeletePrayer), variables: {'id': id}),
     );
     if (res.hasException) throw res.exception!;
   }
 
-  /// Toggles the user's visibility in the directory.
   Future<void> toggleVisibility(String userId, bool visible) async {
     _logger.d('[ProfileService] Toggling visibility for $userId to $visible');
     await updateProfileField(userId, 'visible_in_directory', visible);
   }
 
-  /// Initiates the deletion of the user's account.
   Future<void> deleteUserAccount(String userId) async {
     _logger.w('[ProfileService] Initiating account deletion for $userId');
     final res = await client.mutate(
-      MutationOptions(
-        document: gql(mDeleteAccount),
-        variables: {'id': userId},
-      ),
+      MutationOptions(document: gql(mDeleteAccount), variables: {'id': userId}),
     );
     if (res.hasException) throw res.exception!;
   }

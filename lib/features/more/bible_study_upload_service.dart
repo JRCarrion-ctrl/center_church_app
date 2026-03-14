@@ -1,9 +1,7 @@
 // File: lib/features/more/bible_study_upload_service.dart
-import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:mime/mime.dart';
 
 class BibleStudyUploadService {
   final GraphQLClient _client;
@@ -17,12 +15,11 @@ class BibleStudyUploadService {
       }
     }
   ''';
-  
-  // Reusable core upload logic
+
   Future<String> _executeUpload({
-    required File file, 
-    required String filename, 
-    required String contentType
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
   }) async {
     final presignResult = await _client.mutate(
       MutationOptions(
@@ -35,7 +32,7 @@ class BibleStudyUploadService {
       throw Exception('Presign failed: ${presignResult.exception}');
     }
 
-    final payload = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
+    final payload   = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
     final uploadUrl = payload?['uploadUrl'] as String?;
     final finalUrl  = payload?['finalUrl']  as String?;
     if (uploadUrl == null || finalUrl == null) {
@@ -43,34 +40,34 @@ class BibleStudyUploadService {
     }
     debugPrint('🎯 Using Pre-signed URL: $uploadUrl');
 
-    final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
-    request.headers[HttpHeaders.contentTypeHeader] = contentType;
-    request.headers[HttpHeaders.contentLengthHeader] = (await file.length()).toString();
-
-    file.openRead().pipe(request.sink);
-
-    final response = await request.send();
+    final response = await http.put(
+      Uri.parse(uploadUrl),
+      headers: {
+        'content-type':   contentType,
+        'content-length': bytes.length.toString(),
+      },
+      body: bytes,
+    );
 
     if (response.statusCode != 200) {
-      final responseBody = await response.stream.bytesToString();
-      debugPrint('❌ Storage upload failed: ${response.statusCode} $responseBody');
-      throw Exception('Storage upload failed (${response.statusCode})');
+      debugPrint('❌ S3 upload failed: ${response.statusCode} ${response.body}');
+      throw Exception('S3 upload failed (${response.statusCode})');
     }
 
     debugPrint('✅ Uploaded to $finalUrl');
     return finalUrl;
   }
 
-  Future<String> uploadStudyNotes(File file, String logicalIdWithExtension) async {
+  /// [logicalIdWithExtension] e.g. "my-study-title.pdf"
+  /// [contentType] e.g. "application/pdf"
+  Future<String> uploadStudyNotes(
+      Uint8List bytes, String logicalIdWithExtension, String contentType) async {
     try {
-      // Filename construction: prefix/logical_id.ext
       final filename = 'bible_studies/$logicalIdWithExtension';
-      final contentType = lookupMimeType(file.path) ?? 'application/octet-stream';
-
-      return await _executeUpload(file: file, filename: filename, contentType: contentType);
+      return await _executeUpload(
+          bytes: bytes, filename: filename, contentType: contentType);
     } catch (e, st) {
-      debugPrint('❌ BibleStudyUploadService.uploadStudyNotes error: $e');
-      debugPrint(st.toString());
+      debugPrint('❌ BibleStudyUploadService.uploadStudyNotes error: $e\n$st');
       rethrow;
     }
   }

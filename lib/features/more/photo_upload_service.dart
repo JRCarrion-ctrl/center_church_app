@@ -1,11 +1,8 @@
-// File: lib/features/more/photo_upload_service.dart (Refactored)
-import 'dart:io';
+// File: lib/features/more/photo_upload_service.dart
 import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import 'package:mime/mime.dart';
 
 class PhotoUploadService {
   final GraphQLClient _client;
@@ -20,11 +17,12 @@ class PhotoUploadService {
     }
   ''';
 
-  // Core upload logic helper (extracted from uploadProfilePhoto)
+  /// Core upload logic. Accepts raw [bytes] instead of a File so it works
+  /// on all platforms including web.
   Future<String> _executeUpload({
-    required File file, 
-    required String filename, 
-    required String contentType
+    required Uint8List bytes,
+    required String filename,
+    required String contentType,
   }) async {
     final presignResult = await _client.mutate(
       MutationOptions(
@@ -34,11 +32,10 @@ class PhotoUploadService {
       ),
     );
     if (presignResult.hasException) {
-      // NOTE: Logging the backend error here is crucial for debugging
-      throw Exception('Presign failed: ${presignResult.exception}'); 
+      throw Exception('Presign failed: ${presignResult.exception}');
     }
 
-    final payload = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
+    final payload   = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
     final uploadUrl = payload?['uploadUrl'] as String?;
     final finalUrl  = payload?['finalUrl']  as String?;
     if (uploadUrl == null || finalUrl == null) {
@@ -46,67 +43,62 @@ class PhotoUploadService {
     }
     debugPrint('🎯 Using Pre-signed URL: $uploadUrl');
 
-    final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
-    request.headers[HttpHeaders.contentTypeHeader] = contentType;
-    request.headers[HttpHeaders.contentLengthHeader] = (await file.length()).toString();
-
-    file.openRead().pipe(request.sink);
-
-    final response = await request.send();
+    final response = await http.put(
+      Uri.parse(uploadUrl),
+      headers: {
+        'content-type':   contentType,
+        'content-length': bytes.length.toString(),
+      },
+      body: bytes,
+    );
 
     if (response.statusCode != 200) {
-      final responseBody = await response.stream.bytesToString();
-      debugPrint('❌ S3 upload failed: ${response.statusCode} $responseBody');
+      debugPrint('❌ S3 upload failed: ${response.statusCode} ${response.body}');
       throw Exception('S3 upload failed (${response.statusCode})');
     }
 
     debugPrint('✅ Uploaded to $finalUrl');
     return finalUrl;
   }
-  
-  // Method for child profile photos (scoped by familyId, using 'child_media' prefix)
-  Future<String> uploadProfilePhoto(File file, String familyId) async {
-    try {
-      // Used for Child Profile Photos
-      final filename = 'child_media/$familyId/${const Uuid().v4()}_${p.basename(file.path)}';
-      final contentType = lookupMimeType(file.path) ?? 'application/octet-stream';
 
-      return await _executeUpload(file: file, filename: filename, contentType: contentType);
+  /// Uploads a child profile photo. [extension] should include the dot (e.g. ".jpg").
+  Future<String> uploadProfilePhoto(
+      Uint8List bytes, String familyId, String extension, String contentType) async {
+    try {
+      final filename =
+          'child_media/$familyId/${const Uuid().v4()}$extension';
+      return await _executeUpload(
+          bytes: bytes, filename: filename, contentType: contentType);
     } catch (e, st) {
-      debugPrint('❌ PhotoUploadService.uploadProfilePhoto (child) error: $e');
-      debugPrint(st.toString());
+      debugPrint('❌ PhotoUploadService.uploadProfilePhoto error: $e\n$st');
       rethrow;
     }
   }
 
-  // NEW METHOD: For the authenticated user's profile photo (scoped by userId)
-  Future<String> uploadUserProfilePhoto(File file, String userId) async {
+  /// Uploads the authenticated user's profile photo.
+  Future<String> uploadUserProfilePhoto(
+      Uint8List bytes, String userId, String extension, String contentType) async {
     try {
-      const prefix = 'profile_photos';
-      // Use a timestamp to ensure uniqueness and cache busting.
       final uniqueId = DateTime.now().millisecondsSinceEpoch;
-      final extension = p.extension(file.path).isNotEmpty ? p.extension(file.path) : '.jpg';
-      final filename = '$prefix/$userId-$uniqueId$extension';
-      final contentType = lookupMimeType(file.path) ?? 'image/jpeg';
-      
-      return await _executeUpload(file: file, filename: filename, contentType: contentType);
+      final ext      = extension.isNotEmpty ? extension : '.jpg';
+      final filename = 'profile_photos/$userId-$uniqueId$ext';
+      return await _executeUpload(
+          bytes: bytes, filename: filename, contentType: contentType);
     } catch (e, st) {
-      debugPrint('❌ PhotoUploadService.uploadUserProfilePhoto (user) error: $e');
-      debugPrint(st.toString());
+      debugPrint('❌ PhotoUploadService.uploadUserProfilePhoto error: $e\n$st');
       rethrow;
     }
   }
 
-  Future<String> uploadQrCode(File file, String familyId, String childId) async {
+  /// Uploads a child QR code PNG.
+  Future<String> uploadQrCode(
+      Uint8List bytes, String familyId, String childId) async {
     try {
-      // Used for Child QR Codes
       final filename = 'child_media/$familyId/qrcodes/$childId.png';
-      const contentType = 'image/png'; 
-
-      return await _executeUpload(file: file, filename: filename, contentType: contentType);
+      return await _executeUpload(
+          bytes: bytes, filename: filename, contentType: 'image/png');
     } catch (e, st) {
-      debugPrint('❌ PhotoUploadService.uploadQrCode error: $e');
-      debugPrint(st.toString());
+      debugPrint('❌ PhotoUploadService.uploadQrCode error: $e\n$st');
       rethrow;
     }
   }

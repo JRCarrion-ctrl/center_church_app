@@ -1,6 +1,6 @@
 // File: lib/features/groups/widgets/input_row.dart
-import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
@@ -14,27 +14,34 @@ import '../../../app_state.dart';
 
 final _logger = Logger();
 
-Future<File> _compressImage(File file) async {
-  final targetPath = file.path.replaceFirst(
-    RegExp(r'\.(jpg|jpeg|png|heic|webp)$'),
-    '_compressed.jpg',
-  );
-  final compressedBytes = await FlutterImageCompress.compressWithFile(
-    file.absolute.path,
+/// Compresses image bytes on mobile; returns originals on web.
+Future<Uint8List> _compressImageBytes(Uint8List bytes) async {
+  if (kIsWeb) return bytes;
+  final compressed = await FlutterImageCompress.compressWithList(
+    bytes,
     minWidth: 1024,
     minHeight: 1024,
     quality: 85,
     format: CompressFormat.jpeg,
   );
-  return File(targetPath)..writeAsBytesSync(compressedBytes!);
+  return compressed;
+}
+
+bool _isImageFilename(String name) {
+  final lower = name.toLowerCase();
+  return lower.endsWith('.jpg') ||
+      lower.endsWith('.jpeg') ||
+      lower.endsWith('.png') ||
+      lower.endsWith('.webp') ||
+      lower.endsWith('.heic');
 }
 
 Future<List<String>> searchKlipyGifs(BuildContext context, String query) async {
   final userId = context.read<AppState>().profile?.id;
   if (userId == null || userId.isEmpty) throw Exception('User not logged in');
 
-  const appKey = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
-  const locale = 'US';
+  const appKey        = 'nGKv5SzsUhVjDfkzgTKwnQtwC2G9ED3qc5hHej1oYuQrY3OhzEdvr5a7YVq7dO9w';
+  const locale        = 'US';
   const contentFilter = 'high';
 
   final url = Uri.parse(
@@ -43,13 +50,10 @@ Future<List<String>> searchKlipyGifs(BuildContext context, String query) async {
   );
 
   _logger.i('Fetching GIFs from: $url');
-
   final response = await http.get(url);
-  // _logger.i('Klipy API response status: ${response.statusCode}'); // Reduced log spam
-
   if (response.statusCode != 200) throw Exception('Failed to fetch GIFs');
 
-  final data = json.decode(response.body);
+  final data  = json.decode(response.body);
   final items = data['data']?['data'];
 
   if (items is List && items.isNotEmpty) {
@@ -57,17 +61,30 @@ Future<List<String>> searchKlipyGifs(BuildContext context, String query) async {
         .map<String?>((g) => g['file']?['md']?['gif']?['url'] as String?)
         .whereType<String>()
         .toList();
-  } else {
-    _logger.w('No results returned from Klipy');
-    return [];
   }
+  _logger.w('No results returned from Klipy');
+  return [];
+}
+
+/// Holds bytes + metadata for a picked file so we never need dart:io File.
+class _AttachedFile {
+  final Uint8List bytes;
+  final String    filename;
+  final bool      isImage;
+
+  const _AttachedFile({
+    required this.bytes,
+    required this.filename,
+    required this.isImage,
+  });
 }
 
 class InputRow extends StatefulWidget {
   final TextEditingController controller;
-  final Future<void> Function() onSend;
-  final Future<void> Function(File file) onFilePicked;
-  final Future<void> Function(String gifUrl) onGifPicked;
+  final Future<void> Function()                          onSend;
+  // Callback now passes raw bytes + filename instead of a dart:io File.
+  final Future<void> Function(Uint8List bytes, String filename) onFilePicked;
+  final Future<void> Function(String gifUrl)             onGifPicked;
 
   const InputRow({
     super.key,
@@ -82,9 +99,7 @@ class InputRow extends StatefulWidget {
 }
 
 class _InputRowState extends State<InputRow> {
-  // CHANGED: Support multiple files
-  final List<File> _selectedFiles = [];
-  
+  final List<_AttachedFile> _selectedFiles = [];
   final FocusNode _focusNode = FocusNode();
   bool _canSend = false;
 
@@ -95,12 +110,8 @@ class _InputRowState extends State<InputRow> {
   }
 
   void _handleInputChange() {
-    final trimmed = widget.controller.text.trim();
-    // CHANGED: Check list not empty
-    final valid = trimmed.isNotEmpty || _selectedFiles.isNotEmpty;
-    if (valid != _canSend) {
-      setState(() => _canSend = valid);
-    }
+    final valid = widget.controller.text.trim().isNotEmpty || _selectedFiles.isNotEmpty;
+    if (valid != _canSend) setState(() => _canSend = valid);
   }
 
   @override
@@ -110,64 +121,68 @@ class _InputRowState extends State<InputRow> {
     super.dispose();
   }
 
+  Future<void> _addFromXFile(XFile xfile) async {
+    final raw      = await xfile.readAsBytes();
+    final isImage  = _isImageFilename(xfile.name);
+    final bytes    = isImage ? await _compressImageBytes(raw) : raw;
+    final filename = isImage
+        ? xfile.name.replaceAll(RegExp(r'\.(jpg|jpeg|png|webp|heic)$', caseSensitive: false), '_c.jpg')
+        : xfile.name;
+    setState(() => _selectedFiles.add(_AttachedFile(bytes: bytes, filename: filename, isImage: isImage)));
+    _handleInputChange();
+  }
+
   Future<void> _showAttachmentOptions() async {
     showModalBottomSheet(
       context: context,
       builder: (_) => SafeArea(
         child: Wrap(
           children: [
-            ListTile(
-              leading: const Icon(Icons.photo_camera),
-              title: Text("key_167".tr()), // "Camera"
-              onTap: () async {
-                Navigator.pop(context);
-                final picked = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75);
-                if (picked != null) {
-                  File file = File(picked.path);
-                  file = await _compressImage(file);
-                  setState(() => _selectedFiles.add(file)); // Add to list
-                  _handleInputChange();
-                }
-              },
-            ),
+            if (!kIsWeb) // Camera not available on web
+              ListTile(
+                leading: const Icon(Icons.photo_camera),
+                title: Text("key_167".tr()),
+                onTap: () async {
+                  Navigator.pop(context);
+                  final picked = await ImagePicker().pickImage(
+                    source: ImageSource.camera,
+                    imageQuality: 75,
+                  );
+                  if (picked != null) await _addFromXFile(picked);
+                },
+              ),
             ListTile(
               leading: const Icon(Icons.photo_library),
-              title: Text("key_168".tr()), // "Gallery"
+              title: Text("key_168".tr()),
               onTap: () async {
                 Navigator.pop(context);
-                // CHANGED: Use pickMultiImage to allow multiple selections
                 final pickedList = await ImagePicker().pickMultiImage(imageQuality: 75);
-                if (pickedList.isNotEmpty) {
-                  for (var picked in pickedList) {
-                    File file = File(picked.path);
-                    file = await _compressImage(file);
-                    _selectedFiles.add(file);
-                  }
-                  setState(() {}); // Trigger rebuild
-                  _handleInputChange();
+                for (final xfile in pickedList) {
+                  await _addFromXFile(xfile);
                 }
               },
             ),
             ListTile(
               leading: const Icon(Icons.insert_drive_file),
-              title: Text("key_169".tr()), // "File"
+              title: Text("key_169".tr()),
               onTap: () async {
                 Navigator.pop(context);
-                // CHANGED: allowMultiple: true
-                final result = await FilePicker.platform.pickFiles(allowMultiple: true);
-                if (result != null && result.files.isNotEmpty) {
-                  for (var f in result.files) {
-                    if (f.path == null) continue;
-                    File file = File(f.path!);
-                    final ext = file.path.toLowerCase();
-                    if (ext.endsWith('.jpg') || ext.endsWith('.jpeg') || ext.endsWith('.png') || ext.endsWith('.webp') || ext.endsWith('.heic')) {
-                      file = await _compressImage(file);
-                    }
-                    _selectedFiles.add(file);
-                  }
-                  setState(() {}); // Trigger rebuild
-                  _handleInputChange();
+                final result = await FilePicker.platform.pickFiles(
+                  allowMultiple: true,
+                  withData: true, // Required on web; harmless on mobile.
+                );
+                if (result == null) return;
+                for (final f in result.files) {
+                  final bytes = f.bytes;
+                  if (bytes == null) continue;
+                  final name    = f.name;
+                  final isImage = _isImageFilename(name);
+                  final compressed = isImage ? await _compressImageBytes(bytes) : bytes;
+                  setState(() => _selectedFiles.add(
+                    _AttachedFile(bytes: compressed, filename: name, isImage: isImage),
+                  ));
                 }
+                _handleInputChange();
               },
             ),
           ],
@@ -176,62 +191,50 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
-  bool _isGifUrl(String text) {
-    return text.toLowerCase().endsWith('.gif') && text.startsWith('http');
-  }
+  bool _isGifUrl(String text) =>
+      text.toLowerCase().endsWith('.gif') && text.startsWith('http');
 
   Future<void> _handleSend() async {
     final text = widget.controller.text.trim();
-    _logger.i('[InputRow] handleSend start text="${text.replaceAll('\n',' ')}" '
-              'files=${_selectedFiles.length} isGif=${_isGifUrl(text)}');
+    _logger.i('[InputRow] handleSend text="${text.replaceAll('\n', ' ')}" '
+        'files=${_selectedFiles.length} isGif=${_isGifUrl(text)}');
 
     try {
-      // CHANGED: Iterate and send all selected files
-      if (_selectedFiles.isNotEmpty) {
-        for (final file in _selectedFiles) {
-          _logger.i('[InputRow] onFilePicked: ${file.path}');
-          await widget.onFilePicked(file);
-        }
-        _logger.i('[InputRow] onFilePicked loop done');
+      for (final f in _selectedFiles) {
+        _logger.i('[InputRow] onFilePicked: ${f.filename}');
+        await widget.onFilePicked(f.bytes, f.filename);
       }
 
       if (_isGifUrl(text)) {
-        _logger.i('[InputRow] onGifPicked: $text');
         await widget.onGifPicked(text);
-        _logger.i('[InputRow] onGifPicked done');
       } else if (text.isNotEmpty) {
-        _logger.i('[InputRow] onSend() begin');
         await widget.onSend();
-        _logger.i('[InputRow] onSend() done');
       }
 
       widget.controller.clear();
       setState(() {
-        _selectedFiles.clear(); // Clear list
+        _selectedFiles.clear();
         _canSend = false;
       });
-      _logger.i('[InputRow] cleared UI state');
     } catch (e, st) {
       _logger.e('[InputRow] send failed', error: e, stackTrace: st);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to send')),
-        );
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Failed to send')));
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark         = Theme.of(context).brightness == Brightness.dark;
     final containerColor = isDark ? const Color(0xFF2C2C30) : const Color(0xFFF5F5FA);
-    final borderColor = isDark ? const Color(0xFF46464B) : const Color(0xFFDCDCE6);
+    final borderColor    = isDark ? const Color(0xFF46464B) : const Color(0xFFDCDCE6);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // CHANGED: Display horizontal list of selected files
         if (_selectedFiles.isNotEmpty)
           Container(
             height: 70,
@@ -241,13 +244,7 @@ class _InputRowState extends State<InputRow> {
               itemCount: _selectedFiles.length,
               separatorBuilder: (_, _) => const SizedBox(width: 8),
               itemBuilder: (context, index) {
-                final file = _selectedFiles[index];
-                final isImage = file.path.toLowerCase().endsWith('.jpg') ||
-                                file.path.toLowerCase().endsWith('.jpeg') ||
-                                file.path.toLowerCase().endsWith('.png') ||
-                                file.path.toLowerCase().endsWith('.webp') ||
-                                file.path.toLowerCase().endsWith('.heic');
-
+                final f = _selectedFiles[index];
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -261,8 +258,8 @@ class _InputRowState extends State<InputRow> {
                       ),
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(8),
-                        child: isImage
-                            ? Image.file(file, fit: BoxFit.cover)
+                        child: f.isImage
+                            ? Image.memory(f.bytes, fit: BoxFit.cover)
                             : const Center(child: Icon(Icons.insert_drive_file, size: 24)),
                       ),
                     ),
@@ -270,17 +267,12 @@ class _InputRowState extends State<InputRow> {
                       top: -6,
                       right: -6,
                       child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedFiles.removeAt(index);
-                            _handleInputChange();
-                          });
-                        },
+                        onTap: () => setState(() {
+                          _selectedFiles.removeAt(index);
+                          _handleInputChange();
+                        }),
                         child: Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
+                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
                           padding: const EdgeInsets.all(2),
                           child: const Icon(Icons.close, size: 14, color: Colors.white),
                         ),
@@ -291,7 +283,6 @@ class _InputRowState extends State<InputRow> {
               },
             ),
           ),
-        
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
           child: Row(
@@ -345,15 +336,14 @@ class _InputRowState extends State<InputRow> {
 
 class _KlipyGifPicker extends StatefulWidget {
   const _KlipyGifPicker();
-
   @override
   State<_KlipyGifPicker> createState() => _KlipyGifPickerState();
 }
 
 class _KlipyGifPickerState extends State<_KlipyGifPicker> {
   final TextEditingController _searchController = TextEditingController();
-  List<String> gifs = [];
-  bool loading = false;
+  List<String> gifs   = [];
+  bool         loading = false;
 
   Future<void> _search() async {
     final q = _searchController.text.trim();
@@ -371,9 +361,7 @@ class _KlipyGifPickerState extends State<_KlipyGifPicker> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.only(
-        top: 16,
-        left: 16,
-        right: 16,
+        top: 16, left: 16, right: 16,
         bottom: MediaQuery.of(context).viewInsets.bottom + 16,
       ),
       child: Column(
@@ -383,10 +371,7 @@ class _KlipyGifPickerState extends State<_KlipyGifPicker> {
             controller: _searchController,
             decoration: InputDecoration(
               labelText: 'Search GIFs',
-              suffixIcon: IconButton(
-                icon: const Icon(Icons.search),
-                onPressed: _search,
-              ),
+              suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: _search),
             ),
             onSubmitted: (_) => _search(),
           ),

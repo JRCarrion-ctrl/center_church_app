@@ -612,5 +612,6 @@
   "key_role_updated": "Role updated to {} for {}",
   "key_please_log_in": "Please log in to RSVP",
   "Be the first to say something!": "Be the first to say something!",
-  "key_show_less": "Show Less"
+  "key_show_less": "Show Less",
+  "only_admin": "Only Admins Can Send Messages"
 }

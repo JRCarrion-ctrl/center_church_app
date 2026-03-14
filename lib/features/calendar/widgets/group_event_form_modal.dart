@@ -1,9 +1,9 @@
 // File: lib/features/calendar/widgets/group_event_form_modal.dart
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'dart:io';
 
 import '../models/group_event.dart';
 import '../event_service.dart';
@@ -11,24 +11,20 @@ import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/media/image_picker_field.dart';
 import '../event_photo_storage_service.dart';
 
-// Helper class to track ID + UI state
 class _SlotEditor {
-  final String? id; 
+  final String? id;
   final TextEditingController controller;
   int maxSlots;
 
   _SlotEditor({this.id, required String title, required this.maxSlots})
       : controller = TextEditingController(text: title);
 
-  void dispose() {
-    controller.dispose();
-  }
+  void dispose() => controller.dispose();
 }
 
 class GroupEventFormModal extends StatefulWidget {
   final GroupEvent? existing;
-  final String? groupId;
-
+  final String?     groupId;
   const GroupEventFormModal({super.key, this.existing, this.groupId});
 
   @override
@@ -41,36 +37,32 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   late EventPhotoStorageService _photoService;
   bool _svcReady = false;
 
-  File? _localImageFile;
-  bool _imageRemoved = false;
-  String? _imageUrl;
+  Uint8List? _imageBytes;
+  String?    _imageExtension;
+  bool       _imageRemoved = false;
+  String?    _imageUrl;
 
   late TextEditingController _titleController;
   late TextEditingController _descController;
   late TextEditingController _locationController;
-
   final List<_SlotEditor> _slots = [];
 
   DateTime? _selectedDateTime;
-  DateTime? _endDateTime; 
-
-  String? _dateTimeError;
+  DateTime? _endDateTime;
+  String?   _dateTimeError;
   bool _saving = false;
 
   @override
   void initState() {
     super.initState();
     final ev = widget.existing;
-    _titleController = TextEditingController(text: ev?.title ?? '');
-    _descController = TextEditingController(text: ev?.description ?? '');
+    _titleController    = TextEditingController(text: ev?.title ?? '');
+    _descController     = TextEditingController(text: ev?.description ?? '');
     _locationController = TextEditingController(text: ev?.location ?? '');
     _imageUrl = widget.existing?.imageUrl;
-
     if (ev != null) {
       _selectedDateTime = ev.eventDate.toLocal();
-      if (ev.eventEnd != null) {
-        _endDateTime = ev.eventEnd!.toLocal();
-      }
+      if (ev.eventEnd != null) _endDateTime = ev.eventEnd!.toLocal();
     }
   }
 
@@ -80,13 +72,10 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     if (!_svcReady) {
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
-      _service = EventService(client, currentUserId: userId);
+      _service      = EventService(client, currentUserId: userId);
       _photoService = EventPhotoStorageService(client);
       _svcReady = true;
-
-      if (widget.existing != null) {
-        _loadSlots(widget.existing!.id);
-      }
+      if (widget.existing != null) _loadSlots(widget.existing!.id);
     }
   }
 
@@ -100,7 +89,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
         }
       });
     } catch (e) {
-      debugPrint("Error loading group slots: $e");
+      debugPrint('Error loading group slots: $e');
     }
   }
 
@@ -115,22 +104,11 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     super.dispose();
   }
 
-  void _addSlot() {
-    setState(() {
-      _slots.add(_SlotEditor(title: '', maxSlots: 1));
-    });
-  }
+  void _addSlot()         => setState(() => _slots.add(_SlotEditor(title: '', maxSlots: 1)));
+  void _removeSlot(int i) => setState(() { _slots[i].dispose(); _slots.removeAt(i); });
 
-  void _removeSlot(int index) {
-    setState(() {
-      _slots[index].dispose();
-      _slots.removeAt(index);
-    });
-  }
-
-  // ... [Keep Date/Time helpers] ...
   Future<void> _pickDate() async {
-    final now = DateTime.now();
+    final now  = DateTime.now();
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDateTime ?? now,
@@ -139,7 +117,11 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     );
     if (date != null && mounted) {
       setState(() {
-        _selectedDateTime = DateTime(date.year, date.month, date.day, _selectedDateTime?.hour ?? TimeOfDay.now().hour, _selectedDateTime?.minute ?? TimeOfDay.now().minute);
+        _selectedDateTime = DateTime(
+          date.year, date.month, date.day,
+          _selectedDateTime?.hour   ?? TimeOfDay.now().hour,
+          _selectedDateTime?.minute ?? TimeOfDay.now().minute,
+        );
         _dateTimeError = null;
       });
     }
@@ -148,7 +130,9 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   Future<void> _pickTime() async {
     final time = await showTimePicker(
       context: context,
-      initialTime: _selectedDateTime != null ? TimeOfDay.fromDateTime(_selectedDateTime!) : TimeOfDay.now(),
+      initialTime: _selectedDateTime != null
+          ? TimeOfDay.fromDateTime(_selectedDateTime!)
+          : TimeOfDay.now(),
     );
     if (time != null && mounted) {
       setState(() {
@@ -160,9 +144,9 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
   }
 
   Future<void> _pickEndDate() async {
-    final now = DateTime.now();
+    final now     = DateTime.now();
     final initial = _endDateTime ?? _selectedDateTime ?? now;
-    final date = await showDatePicker(
+    final date    = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: _selectedDateTime ?? now.subtract(const Duration(days: 1)),
@@ -170,19 +154,23 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     );
     if (date != null && mounted) {
       setState(() {
-        final time = _endDateTime != null ? TimeOfDay.fromDateTime(_endDateTime!) : const TimeOfDay(hour: 12, minute: 0);
+        final time = _endDateTime != null
+            ? TimeOfDay.fromDateTime(_endDateTime!)
+            : const TimeOfDay(hour: 12, minute: 0);
         _endDateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
       });
     }
   }
 
   Future<void> _pickEndTime() async {
-    final initial = _endDateTime != null ? TimeOfDay.fromDateTime(_endDateTime!) : const TimeOfDay(hour: 12, minute: 0);
+    final initial = _endDateTime != null
+        ? TimeOfDay.fromDateTime(_endDateTime!)
+        : const TimeOfDay(hour: 12, minute: 0);
     final time = await showTimePicker(context: context, initialTime: initial);
     if (time != null && mounted) {
       setState(() {
-        final baseDate = _endDateTime ?? _selectedDateTime ?? DateTime.now();
-        _endDateTime = DateTime(baseDate.year, baseDate.month, baseDate.day, time.hour, time.minute);
+        final base = _endDateTime ?? _selectedDateTime ?? DateTime.now();
+        _endDateTime = DateTime(base.year, base.month, base.day, time.hour, time.minute);
       });
     }
   }
@@ -197,28 +185,25 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
     setState(() => _saving = true);
 
     try {
-      final eventId = widget.existing?.id ?? "event_${DateTime.now().millisecondsSinceEpoch}";
+      final eventId = widget.existing?.id ?? 'event_${DateTime.now().millisecondsSinceEpoch}';
       final groupId = widget.existing?.groupId ?? widget.groupId ?? 'unknown_group';
 
       String? finalImageUrl = _imageUrl;
       if (_imageRemoved) {
         finalImageUrl = null;
-      } else if (_localImageFile != null) {
+      } else if (_imageBytes != null) {
         finalImageUrl = await _photoService.uploadEventPhoto(
-          file: _localImageFile!,
+          bytes: _imageBytes!,
+          extension: _imageExtension,
           keyPrefix: 'group_events',
           logicalId: '$groupId/$eventId',
         );
       }
 
-      // Map Editor back to Model, passing ID
-      final slots = _slots.map((s) {
-        return GroupEventSlot(
-          id: s.id, 
-          title: s.controller.text.trim(),
-          maxSlots: s.maxSlots,
-        );
-      }).where((s) => s.title.isNotEmpty).toList();
+      final slots = _slots
+          .map((s) => GroupEventSlot(id: s.id, title: s.controller.text.trim(), maxSlots: s.maxSlots))
+          .where((s) => s.title.isNotEmpty)
+          .toList();
 
       final groupEvent = GroupEvent(
         id: widget.existing?.id ?? '',
@@ -232,11 +217,12 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
       );
 
       await _service.saveGroupEventWithSlots(groupEvent, slots);
-    
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_043".tr())));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_043".tr())));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -269,10 +255,11 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
               ImagePickerField(
                 label: "key_041d2".tr(),
                 initialUrl: _imageUrl,
-                onChanged: (file, removed) {
+                onChanged: (bytes, ext, removed) {
                   setState(() {
-                    _localImageFile = file;
-                    _imageRemoved = removed;
+                    _imageBytes     = bytes;
+                    _imageExtension = ext;
+                    _imageRemoved   = removed;
                   });
                 },
               ),
@@ -281,56 +268,64 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                 decoration: InputDecoration(labelText: "key_041e".tr()),
               ),
               const SizedBox(height: 24),
-              const Text("Start Time", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('Start Time', style: TextStyle(fontWeight: FontWeight.bold)),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _pickDate,
-                      child: Text(_selectedDateTime == null ? "key_041f".tr() : DateFormat.yMMMd().format(_selectedDateTime!)),
+                      child: Text(_selectedDateTime == null
+                          ? "key_041f".tr()
+                          : DateFormat.yMMMd().format(_selectedDateTime!)),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _pickTime,
-                      child: Text(_selectedDateTime == null ? "key_041g".tr() : TimeOfDay.fromDateTime(_selectedDateTime!).format(context)),
+                      child: Text(_selectedDateTime == null
+                          ? "key_041g".tr()
+                          : TimeOfDay.fromDateTime(_selectedDateTime!).format(context)),
                     ),
                   ),
                 ],
               ),
               if (_dateTimeError != null)
                 Padding(
-                  padding: const EdgeInsets.only(top: 8.0),
+                  padding: const EdgeInsets.only(top: 8),
                   child: Text(_dateTimeError!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 ),
               const SizedBox(height: 16),
-              const Text("End Time (Optional)", style: TextStyle(fontWeight: FontWeight.bold)),
+              const Text('End Time (Optional)', style: TextStyle(fontWeight: FontWeight.bold)),
               Row(
                 children: [
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _pickEndDate,
-                      child: Text(_endDateTime == null ? "Select Date" : DateFormat.yMMMd().format(_endDateTime!)),
+                      child: Text(_endDateTime == null ? 'Select Date' : DateFormat.yMMMd().format(_endDateTime!)),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
                       onPressed: _pickEndTime,
-                      child: Text(_endDateTime == null ? "Select Time" : TimeOfDay.fromDateTime(_endDateTime!).format(context)),
+                      child: Text(_endDateTime == null
+                          ? 'Select Time'
+                          : TimeOfDay.fromDateTime(_endDateTime!).format(context)),
                     ),
                   ),
                   if (_endDateTime != null)
-                    IconButton(icon: const Icon(Icons.clear), onPressed: () => setState(() => _endDateTime = null))
+                    IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () => setState(() => _endDateTime = null),
+                    ),
                 ],
               ),
-
               const Divider(height: 48),
-              Text("Sign-up Slots (Optional)", style: Theme.of(context).textTheme.titleMedium),
-              const Text("Specify items or tasks needed for this group event.", style: TextStyle(fontSize: 12, color: Colors.grey)),
+              Text('Sign-up Slots (Optional)', style: Theme.of(context).textTheme.titleMedium),
+              const Text('Specify items or tasks needed for this group event.',
+                  style: TextStyle(fontSize: 12, color: Colors.grey)),
               const SizedBox(height: 16),
-
               ...List.generate(_slots.length, (index) {
                 final slot = _slots[index];
                 return Padding(
@@ -341,7 +336,7 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                         flex: 3,
                         child: TextFormField(
                           controller: slot.controller,
-                          decoration: const InputDecoration(labelText: "Item needed", isDense: true),
+                          decoration: const InputDecoration(labelText: 'Item needed', isDense: true),
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -349,9 +344,9 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                         flex: 1,
                         child: DropdownButtonFormField<int>(
                           initialValue: slot.maxSlots,
-                          decoration: const InputDecoration(labelText: "Qty", isDense: true),
+                          decoration: const InputDecoration(labelText: 'Qty', isDense: true),
                           items: List.generate(20, (i) => i + 1)
-                              .map((i) => DropdownMenuItem(value: i, child: Text("$i")))
+                              .map((i) => DropdownMenuItem(value: i, child: Text('$i')))
                               .toList(),
                           onChanged: (val) => setState(() => slot.maxSlots = val!),
                         ),
@@ -364,20 +359,20 @@ class _GroupEventFormModalState extends State<GroupEventFormModal> {
                   ),
                 );
               }),
-
               OutlinedButton.icon(
                 onPressed: _addSlot,
                 icon: const Icon(Icons.add),
-                label: const Text("Add Item Slot"),
+                label: const Text('Add Item Slot'),
               ),
-
               const SizedBox(height: 32),
               SizedBox(
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
                   onPressed: _saving ? null : _validateAndSave,
-                  child: _saving ? const CircularProgressIndicator() : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
+                  child: _saving
+                      ? const CircularProgressIndicator()
+                      : Text(widget.existing == null ? "key_041h".tr() : "key_041i".tr()),
                 ),
               ),
             ],

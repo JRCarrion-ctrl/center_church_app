@@ -8,6 +8,7 @@ import 'package:ccf_app/core/theme.dart';
 import 'package:ccf_app/features/splash/splash_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart'; // ✨ ADDED: Needed for kIsWeb and defaultTargetPlatform
 import 'package:go_router/go_router.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
@@ -17,7 +18,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
 import 'policy_screen.dart';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
-import 'dart:io';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:media_kit/media_kit.dart';
 import 'features/groups/group_service.dart';
 
@@ -25,11 +26,15 @@ import 'app_state.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  usePathUrlStrategy();
   MediaKit.ensureInitialized();
   await EasyLocalization.ensureInitialized();
 
-  OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
-  OneSignal.initialize("a75771e7-9bd5-4497-adf3-18b7c8901bcb");
+  // ✨ WRAPPED: Only run OneSignal setup on native mobile
+  if (!kIsWeb) {
+    OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
+    OneSignal.initialize("a75771e7-9bd5-4497-adf3-18b7c8901bcb");
+  }
 
   runApp(
     EasyLocalization(
@@ -42,7 +47,8 @@ void main() async {
 }
 
 Future<void> requestTrackingAuthorization() async {
-  if (Platform.isIOS) {
+  // ✨ CHANGED: Use defaultTargetPlatform instead of Platform.isIOS to avoid dart:io
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
     TrackingStatus status = await AppTrackingTransparency.trackingAuthorizationStatus;
 
     if (status == TrackingStatus.notDetermined) {
@@ -55,8 +61,11 @@ Future<void> requestTrackingAuthorization() async {
 }
 
 Future<void> requestPushPermission() async {
-  if (await Permission.notification.isDenied) {
-    await Permission.notification.request();
+  // ✨ WRAPPED: Skip permission handler on web
+  if (!kIsWeb) {
+    if (await Permission.notification.isDenied) {
+      await Permission.notification.request();
+    }
   }
 }
 
@@ -90,6 +99,9 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   }
 
   Future<void> _requestPushPermissionOnce() async {
+    // ✨ WRAPPED: Skip on web
+    if (kIsWeb) return;
+
     final prefs = await SharedPreferences.getInstance();
     final hasPrompted = prefs.getBool('notification_prompted') ?? false;
     if (!hasPrompted) {
@@ -107,7 +119,6 @@ class _CCFAppBootState extends State<CCFAppBoot> {
       if (uri == null) return;
 
       switch (uri.host) {
-        // 🛑 REMOVED: Handling for 'login-callback' has been removed to allow the OIDC library to handle the redirect Intent.
         case 'reset':
           if (mounted) _router.go('/reset-password');
           break;
@@ -121,7 +132,6 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     // Cold start link
     final initialUri = await _appLinks!.getInitialLink();
     if (initialUri != null) {
-      // 🛑 REMOVED: Handling for 'login-callback' on initial link has been removed.
       if (initialUri.host == 'reset') {
         if (mounted) _router.go('/reset-password');
       }
@@ -132,37 +142,31 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     await _requestPushPermissionOnce();
     await requestTrackingAuthorization();
     appState = AppState();
-    await appState.restoreSession();
-    final loginId = appState.profile?.id;
-    if (loginId != null) {
-      OneSignal.login(loginId);
-    } else {
-      OneSignal.logout();
-    }
     
     // 1. Create the router
     _router = createRouter(appState);
 
-    // 2. [INSERT THIS BLOCK] Handle Notification Clicks
-    OneSignal.Notifications.addClickListener((event) {
-      final data = event.notification.additionalData;
-      
-      if (data != null && data['route'] != null) {
-        String route = data['route'];
-
-        // Clean up the route if your backend sends full URLs (optional safety)
-        if (route.startsWith('ccfapp://')) {
-          route = route.replaceFirst('ccfapp://', '');
-        }
-        if (!route.startsWith('/')) {
-          route = '/$route';
-        }
-
-        debugPrint("OneSignal Deep Link: Navigating to $route");
+    // 2. ✨ WRAPPED: Handle Notification Clicks only on mobile
+    if (!kIsWeb) {
+      OneSignal.Notifications.addClickListener((event) {
+        final data = event.notification.additionalData;
         
-        _router.go(route);
-      }
-    });
+        if (data != null && data['route'] != null) {
+          String route = data['route'];
+
+          if (route.startsWith('ccfapp://')) {
+            route = route.replaceFirst('ccfapp://', '');
+          }
+          if (!route.startsWith('/')) {
+            route = '/$route';
+          }
+
+          debugPrint("OneSignal Deep Link: Navigating to $route");
+          
+          _router.go(route);
+        }
+      });
+    }
 
     await _handleIncomingLinks();
     
@@ -195,7 +199,6 @@ class _CCFAppBootState extends State<CCFAppBoot> {
             return MaterialApp(home: initialWidget);
           }
           
-          // Update the client notifier when the state changes
           final nextClient = state.isAuthenticated ? state.client : buildPublicHasuraClient();
           if (!identical(_clientNotifier.value, nextClient)) {
             _clientNotifier.value = nextClient;
@@ -212,17 +215,13 @@ class _CCFAppBootState extends State<CCFAppBoot> {
             data: MediaQuery.of(context).copyWith(
               textScaler: TextScaler.linear(state.fontScale),
             ),
-            // Use the official GraphQLProvider from graphql_flutter
             child: GraphQLProvider(
               client: _clientNotifier,
-              // ✨ ADD THIS MULTIPROVIDER BLOCK ✨
               child: MultiProvider(
                 providers: [
-                  // Provide GroupService and keep it updated with the current GraphQLClient
                   ProxyProvider<AppState, GroupService>(
                     update: (context, state, previous) => GroupService(_clientNotifier.value),
                   ),
-                  // You can add other services here in the future
                 ],
                 child: MaterialApp.router(
                   debugShowCheckedModeBanner: false,

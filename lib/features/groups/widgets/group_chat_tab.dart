@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'dart:typed_data';
 
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/core/time_service.dart';
@@ -477,13 +478,13 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                       child: InputRow(
                         controller: _messageController,
                         onSend: _sendMessage,
-                        onFilePicked: (file) async {
-                          final url = await _storageService.uploadFile(file, widget.groupId);
+                        onFilePicked: (Uint8List bytes, String filename) async {
+                          final url = await _storageService.uploadFile(bytes, filename, widget.groupId);
                           final isImage = url.endsWith('.png') ||
                               url.endsWith('.jpg') ||
                               url.endsWith('.jpeg') ||
                               url.endsWith('.webp');
-                        
+
                           _isTyping = false;
                           _typingThrottleTimer?.cancel();
                           await _chatService.updateLastTyped(widget.groupId, isTyping: false);

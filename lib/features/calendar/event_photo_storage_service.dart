@@ -1,10 +1,8 @@
-import 'dart:io';
+
 import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart' as p;
 import 'package:uuid/uuid.dart';
-import 'package:mime/mime.dart';
 
 class EventPhotoStorageService {
   final GraphQLClient _client;
@@ -21,7 +19,8 @@ class EventPhotoStorageService {
   ''';
 
   Future<String?> uploadEventPhoto({
-    required File file,
+    required Uint8List bytes,
+    required String? extension,
     required String keyPrefix,
     required String logicalId,
   }) async {
@@ -29,11 +28,12 @@ class EventPhotoStorageService {
       if (keyPrefix.isEmpty || logicalId.isEmpty) {
         throw ArgumentError('keyPrefix and logicalId cannot be empty.');
       }
-      
-      final filename = '$keyPrefix/$logicalId/${const Uuid().v4()}_${p.basename(file.path)}';
-      final contentType = lookupMimeType(file.path) ?? 'application/octet-stream';
 
-      // 1. Get Pre-signed URL from Hasura
+      final ext         = (extension != null && extension.isNotEmpty) ? extension : '.jpg';
+      final contentType = ext == '.png' ? 'image/png' : 'image/jpeg';
+      final filename    = '$keyPrefix/$logicalId/${const Uuid().v4()}$ext';
+
+      // 1. Get pre-signed URL from Hasura
       final presignResult = await _client.mutate(
         MutationOptions(
           document: gql(_mPresign),
@@ -45,7 +45,7 @@ class EventPhotoStorageService {
         throw Exception('Presign failed: ${presignResult.exception}');
       }
 
-      final payload = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
+      final payload   = presignResult.data?['get_presigned_upload'] as Map<String, dynamic>?;
       final uploadUrl = payload?['uploadUrl'] as String?;
       final finalUrl  = payload?['finalUrl']  as String?;
       if (uploadUrl == null || finalUrl == null) {
@@ -53,19 +53,18 @@ class EventPhotoStorageService {
       }
       debugPrint('🎯 Using Pre-signed URL: $uploadUrl');
 
-      // 2. Upload the file to S3
-      final request = http.StreamedRequest('PUT', Uri.parse(uploadUrl));
-
-      request.headers[HttpHeaders.contentTypeHeader] = contentType;
-      request.headers[HttpHeaders.contentLengthHeader] = (await file.length()).toString();
-
-      file.openRead().pipe(request.sink);
-
-      final response = await request.send();
+      // 2. Upload bytes to S3
+      final response = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {
+          'content-type':   contentType,
+          'content-length': bytes.length.toString(),
+        },
+        body: bytes,
+      );
 
       if (response.statusCode != 200) {
-        final responseBody = await response.stream.bytesToString();
-        debugPrint('❌ S3 upload failed: ${response.statusCode} $responseBody');
+        debugPrint('❌ S3 upload failed: ${response.statusCode} ${response.body}');
         throw Exception('S3 upload failed (${response.statusCode})');
       }
 
@@ -75,8 +74,7 @@ class EventPhotoStorageService {
     } catch (e, st) {
       debugPrint('❌ EventPhotoStorageService.uploadEventPhoto error: $e');
       debugPrint(st.toString());
-      // Re-throw the error so the caller can handle the failed upload
-      rethrow; 
+      rethrow;
     }
   }
 }

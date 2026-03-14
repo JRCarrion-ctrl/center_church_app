@@ -1,5 +1,5 @@
 // File: lib/features/groups/pages/group_settings_page.dart
-import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -13,7 +13,6 @@ import '../chat_storage_service.dart';
 
 class GroupSettingsPage extends StatefulWidget {
   final Group group;
-
   const GroupSettingsPage({super.key, required this.group});
 
   @override
@@ -23,26 +22,32 @@ class GroupSettingsPage extends StatefulWidget {
 class _GroupSettingsPageState extends State<GroupSettingsPage> {
   late TextEditingController _nameController;
   late TextEditingController _descController;
-  late GroupService _groupService;
-  late ChatStorageService _chatStorageService;
-  
+  late GroupService          _groupService;
+  late ChatStorageService    _chatStorageService;
+
   String? _tempPhotoUrl;
-  bool _isSaving = false;
+  bool _isSaving    = false;
   bool _isUploading = false;
+  
+  // ADDED: State variable for the toggle
+  late bool _onlyAdminsMessage; 
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.group.name);
     _descController = TextEditingController(text: widget.group.description ?? '');
-    _tempPhotoUrl = widget.group.photoUrl;
+    _tempPhotoUrl   = widget.group.photoUrl;
+    
+    // Initialize the toggle from the existing group data
+    _onlyAdminsMessage = widget.group.onlyAdminsMessage;
   }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final client = GraphProvider.of(context);
-    _groupService = GroupService(client);
+    final client    = GraphProvider.of(context);
+    _groupService   = GroupService(client);
     _chatStorageService = ChatStorageService(client);
   }
 
@@ -53,31 +58,35 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     super.dispose();
   }
 
-  Future<File> _compressImage(File file) async {
-    final targetPath = file.path.replaceFirst(
-      RegExp(r'\.(jpg|jpeg|png|heic|webp)$', caseSensitive: false),
-      '_compressed.jpg',
-    );
-    final compressedBytes = await FlutterImageCompress.compressWithFile(
-      file.absolute.path,
+  /// Compresses image bytes on mobile. Returns original bytes on web
+  /// (flutter_image_compress has no web support).
+  Future<Uint8List> _compressBytes(Uint8List bytes) async {
+    if (kIsWeb) return bytes;
+    final compressed = await FlutterImageCompress.compressWithList(
+      bytes,
       minWidth: 600,
       minHeight: 600,
       quality: 80,
       format: CompressFormat.jpeg,
     );
-    if (compressedBytes == null) return file;
-    return File(targetPath)..writeAsBytesSync(compressedBytes);
+    return compressed;
   }
 
   Future<void> _pickAndUploadImage() async {
     final messenger = ScaffoldMessenger.of(context);
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked    = await ImagePicker().pickImage(source: ImageSource.gallery);
     if (picked == null) return;
 
     setState(() => _isUploading = true);
     try {
-      final compressed = await _compressImage(File(picked.path));
-      final finalUrl = await _chatStorageService.uploadFile(compressed, widget.group.id);
+      final raw        = await picked.readAsBytes();
+      final compressed = await _compressBytes(raw);
+      // uploadFile now accepts bytes + filename (see chat_storage_service.dart)
+      final finalUrl = await _chatStorageService.uploadFile(
+        compressed,
+        '${widget.group.id}.jpg',
+        widget.group.id,  // ← add back
+      );
       setState(() => _tempPhotoUrl = finalUrl);
     } catch (e) {
       messenger.showSnackBar(
@@ -94,17 +103,25 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
 
     setState(() => _isSaving = true);
     try {
+      // 1. Update general group info
       await _groupService.updateGroup(
         groupId: widget.group.id,
         name: _nameController.text.trim(),
         description: _descController.text.trim(),
         photoUrl: _tempPhotoUrl,
       );
-      if (mounted) Navigator.pop(context, true); // Return true to trigger refresh
+      
+      // 2. Update specific group settings if the toggle changed
+      if (_onlyAdminsMessage != widget.group.onlyAdminsMessage) {
+        await _groupService.updateGroupSettings(
+          groupId: widget.group.id,
+          onlyAdminsMessage: _onlyAdminsMessage,
+        );
+      }
+      
+      if (mounted) Navigator.pop(context, true);
     } catch (e) {
-      messenger.showSnackBar(
-        SnackBar(content: Text('Failed to update: $e')),
-      );
+      messenger.showSnackBar(SnackBar(content: Text('Failed to update: $e')));
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -114,10 +131,15 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text("key_196g".tr()), // Update with your actual settings key
+        title: Text("key_196g".tr()),
         actions: [
           if (_isSaving)
-            const Center(child: Padding(padding: EdgeInsets.all(16), child: CircularProgressIndicator(strokeWidth: 2)))
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
           else
             IconButton(icon: const Icon(Icons.check), onPressed: _saveSettings),
         ],
@@ -133,10 +155,10 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
                 children: [
                   CircleAvatar(
                     radius: 60,
-                    backgroundImage: _tempPhotoUrl != null && _tempPhotoUrl!.isNotEmpty
+                    backgroundImage: (_tempPhotoUrl != null && _tempPhotoUrl!.isNotEmpty)
                         ? CachedNetworkImageProvider(_tempPhotoUrl!)
                         : null,
-                    child: _tempPhotoUrl == null || _tempPhotoUrl!.isEmpty
+                    child: (_tempPhotoUrl == null || _tempPhotoUrl!.isEmpty)
                         ? const Icon(Icons.group, size: 60)
                         : null,
                   ),
@@ -170,6 +192,15 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
               labelText: "key_068c".tr(),
               prefixIcon: const Icon(Icons.description),
             ),
+          ),
+          const SizedBox(height: 24),
+          
+          // Admin Only Message Toggle
+          SwitchListTile(
+            title: Text("only_admin".tr()),
+            value: _onlyAdminsMessage,
+            onChanged: (val) => setState(() => _onlyAdminsMessage = val),
+            contentPadding: EdgeInsets.zero, // Aligns nicely with the TextFields
           ),
         ],
       ),

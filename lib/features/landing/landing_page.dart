@@ -275,8 +275,6 @@ class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
       child: ListTile(
         leading: Radio<String>(
           value: value,
-          groupValue: _selectedLanguage,
-          onChanged: _handleLanguageChange,
           activeColor: Colors.white,
           fillColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.8)),
         ),
