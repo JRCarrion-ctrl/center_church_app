@@ -4,15 +4,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:http/http.dart' as http;
-import 'package:web/web.dart' as web;
 import 'dart:convert';
 import 'package:openid_client/openid_client.dart';
 import 'package:flutter_web_auth_2/flutter_web_auth_2.dart';
 
-// On web, dart:html BroadcastChannel is used directly to avoid flutter_web_auth_2's
-// source-validation, which rejects synthetic MessageEvents from a new tab.
-// The stub is a no-op on mobile so the conditional import is always safe.
-import 'web_auth_stub.dart' if (dart.library.html) 'web_auth_web.dart';
+// Import the provider, which handles the platform switching automatically.
+import 'web_auth_provider.dart';
 
 class OidcAuth {
   static const _storage = FlutterSecureStorage();
@@ -21,19 +18,8 @@ class OidcAuth {
   static const issuer = issuerUrl; // Alias for backward compatibility
   static const clientId  = '335963766606790668';
 
-  static String get redirectUri {
-    if (kIsWeb) {
-      if (kDebugMode) {
-        return 'http://localhost:8080/auth.html';
-      } else {
-        // This automatically grabs 'https://ccfapp.com' OR 'https://www.ccfapp.com' 
-        // depending on what the user typed!
-        final currentOrigin = web.window.location.origin;
-        return '$currentOrigin/auth.html';
-      }
-    }
-    return 'ccfapp://login-callback';
-  }
+  // Delegate this to the platform-specific getter from the provider
+  static String get redirectUri => platformRedirectUri;
 
   static const scopes = ['openid', 'profile', 'email', 'offline_access'];
 

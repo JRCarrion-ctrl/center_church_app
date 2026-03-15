@@ -1,9 +1,14 @@
 // file: lib/features/auth/web_auth_web.dart
 import 'dart:async';
-import 'dart:js_interop';
-import 'package:web/web.dart';
+import 'dart:js_interop' as jweb;
+import 'package:web/web.dart' as web;
+import 'package:flutter/foundation.dart';
 
-/// Opens [url] as a popup and waits for auth.html to send back the redirect URL.
+String get platformRedirectUri {
+  if (kDebugMode) return 'http://localhost:8080/auth.html';
+  return '${web.window.location.origin}/auth.html';
+}
+
 Future<String> webAuthenticate(String url) {
   final completer = Completer<String>();
 
@@ -11,42 +16,38 @@ Future<String> webAuthenticate(String url) {
     if (!completer.isCompleted) completer.complete(resultUrl);
   }
 
-  // Need to hold JSFunction references so we can remove them later
-  late JSFunction messageHandler;
-  late JSFunction channelHandler;
+  late jweb.JSFunction messageHandler;
+  late jweb.JSFunction channelHandler;
 
-  // Listener 1: popup → auth.html calls window.opener.postMessage()
-  messageHandler = ((MessageEvent event) {
+  messageHandler = ((web.MessageEvent event) {
     final data = event.data.dartify();
     if (data is String && data.contains('code=')) {
       complete(data);
-      window.removeEventListener('message', messageHandler);
+      web.window.removeEventListener('message', messageHandler);
     }
   }).toJS;
-  window.addEventListener('message', messageHandler);
+  web.window.addEventListener('message', messageHandler);
 
-  // Listener 2: new-tab fallback → auth.html uses BroadcastChannel
-  final channel = BroadcastChannel('flutter_web_auth_2');
-  channelHandler = ((MessageEvent event) {
+  final channel = web.BroadcastChannel('flutter_web_auth_2');
+  channelHandler = ((web.MessageEvent event) {
     final data = event.data.dartify();
     if (data is String && data.contains('code=')) {
       complete(data);
       channel.close();
-      window.removeEventListener('message', messageHandler);
+      web.window.removeEventListener('message', messageHandler);
     }
   }).toJS;
   channel.addEventListener('message', channelHandler);
 
-  // Open as a centered popup
-  const width  = 520;
+  const width = 520;
   const height = 680;
-  final left = (window.screen.width  - width)  ~/ 2;
-  final top  = (window.screen.height - height) ~/ 2;
-  window.open(
+  final left = (web.window.screen.width - width) ~/ 2;
+  final top = (web.window.screen.height - height) ~/ 2;
+  
+  web.window.open(
     url,
     'zitadel_auth',
-    'width=$width,height=$height,left=$left,top=$top,'
-    'toolbar=no,menubar=no,scrollbars=yes,resizable=yes',
+    'width=$width,height=$height,left=$left,top=$top,toolbar=no,menubar=no,scrollbars=yes,resizable=yes',
   );
 
   return completer.future;
