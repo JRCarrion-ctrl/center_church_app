@@ -21,6 +21,7 @@ import 'package:app_tracking_transparency/app_tracking_transparency.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:media_kit/media_kit.dart';
 import 'features/groups/group_service.dart';
+import 'dart:io' show Platform; // ✨ ADDED: Only import dart:io where necessary
 
 import 'app_state.dart';
 
@@ -100,7 +101,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
 
   Future<void> _requestPushPermissionOnce() async {
     // ✨ WRAPPED: Skip on web
-    if (kIsWeb) return;
+    if (kIsWeb || !Platform.isAndroid && !Platform.isIOS) return;
 
     final prefs = await SharedPreferences.getInstance();
     final hasPrompted = prefs.getBool('notification_prompted') ?? false;
@@ -147,7 +148,7 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     _router = createRouter(appState);
 
     // 2. ✨ WRAPPED: Handle Notification Clicks only on mobile
-    if (!kIsWeb) {
+    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
       OneSignal.Notifications.addClickListener((event) {
         final data = event.notification.additionalData;
         

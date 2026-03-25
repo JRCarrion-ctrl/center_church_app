@@ -10,6 +10,7 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:flutter/services.dart'; 
+import 'dart:io' show Platform;
 
 import 'features/auth/oidc_auth.dart';
 import 'core/hasura_client.dart';
@@ -353,7 +354,7 @@ class AppState extends ChangeNotifier {
       final loginId = _profile?.id;
       if (loginId == null || loginId.isEmpty) {
         // ✨ WRAPPED: Skip OneSignal logout on web
-        if (!kIsWeb) {
+        if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
           await OneSignal.logout();
         }
         _logger.i('OneSignal logged out');
@@ -362,7 +363,7 @@ class AppState extends ChangeNotifier {
 
       // ✨ WRAPPED: Skip OneSignal login and token gathering on web
       String? pushToken;
-      if (!kIsWeb) {
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         await OneSignal.login(loginId);
         pushToken = OneSignal.User.pushSubscription.id;
       }
@@ -397,7 +398,7 @@ class AppState extends ChangeNotifier {
       _logger.i('OneSignal endpoint updated in Hasura');
 
       // ✨ WRAPPED: Skip OneSignal tags on web
-      if (!kIsWeb) {
+      if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
         final role = _profile?.role;
         if (role != null && role.isNotEmpty) {
           await OneSignal.User.addTags({'role': role});

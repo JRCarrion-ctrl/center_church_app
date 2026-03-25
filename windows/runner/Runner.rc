@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "center_church_app" "\0"
+            VALUE "CompanyName", "com.jcarriondev" "\0"
+            VALUE "FileDescription", "ccf_app" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "center_church_app" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "center_church_app.exe" "\0"
-            VALUE "ProductName", "center_church_app" "\0"
+            VALUE "InternalName", "ccf_app" "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 com.jcarriondev. All rights reserved." "\0"
+            VALUE "OriginalFilename", "ccf_app.exe" "\0"
+            VALUE "ProductName", "ccf_app" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END
