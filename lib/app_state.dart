@@ -19,6 +19,12 @@ import 'features/groups/group_service.dart';
 import 'features/groups/models/group_model.dart';
 import 'shared/user_roles.dart';
 
+final bool isMobileDevice = !kIsWeb && 
+    (defaultTargetPlatform == TargetPlatform.iOS || 
+     defaultTargetPlatform == TargetPlatform.android);
+
+enum ChurchService { english, spanish, both }
+
 class AppState extends ChangeNotifier {
   // --- Core ---
   final _logger = Logger();
@@ -38,6 +44,7 @@ class AppState extends ChangeNotifier {
   bool _initialized = false;
   bool _isLoading = true;
   String? _timezone;
+  String? _pendingDeepLink;
 
   // --- UI ---
   int _selectedIndex = 0;
@@ -57,6 +64,21 @@ class AppState extends ChangeNotifier {
   Profile? _profile;
   List<GroupModel> _userGroups = [];
   List<String> _visibleCalendarGroupIds = [];
+  bool _calendarGroupsInitialized = false;
+  bool get calendarGroupsInitialized => _calendarGroupsInitialized;
+
+  // --- Bilingual Service State ---
+  ChurchService _selectedService = ChurchService.both;
+  ChurchService get selectedService => _selectedService;
+
+  // Helper to map UI enum to Database tags
+  List<String> get databaseServiceFilter {
+    return switch (_selectedService) {
+      ChurchService.english => ['english'],
+      ChurchService.spanish => ['spanish'],
+      ChurchService.both => ['english', 'spanish'],
+    };
+  }
 
   // --- Getters ---
   // (Getters omitted for brevity, keep your existing ones)
@@ -132,6 +154,61 @@ class AppState extends ChangeNotifier {
     _showCountdown = prefs.getBool('showCountdown') ?? true;
     _showGroupAnnouncements = prefs.getBool('showGroupAnnouncements') ?? true;
     _visibleCalendarGroupIds = prefs.getStringList('visibleCalendarGroupIds') ?? [];
+    _calendarGroupsInitialized = prefs.getBool('calendarGroupsInitialized') ?? false;
+    final storedService = prefs.getString('selected_service') ?? 'spanish';
+    _selectedService = ChurchService.values.firstWhere(
+      (e) => e.name == storedService,
+      orElse: () => ChurchService.spanish,
+    );
+  }
+
+  // --- Logic to Update Service ---
+  Future<void> updateServiceFilter(ChurchService service) async {
+    if (_selectedService == service) return;
+    
+    _selectedService = service;
+    notifyListeners();
+
+    // 1. Persist locally
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('selected_service', service.name);
+
+    // 2. Sync to Hasura Profile (if authenticated)
+    if (isAuthenticated && _profile?.id != null) {
+      await _syncLanguagesToProfile();
+    }
+  }
+
+  Future<void> _syncLanguagesToProfile() async {
+    const mUpdateLangs = r'''
+      mutation UpdateUserLanguages($id: String!, $langs: [String!]!) {
+        update_profiles_by_pk(
+          pk_columns: {id: $id}, 
+          _set: {preferred_languages: $langs}
+        ) { 
+          id 
+        }
+      }
+    ''';
+
+    try {
+      final res = await client.mutate(MutationOptions(
+        document: gql(mUpdateLangs),
+        variables: {
+          'id': _profile!.id,
+          // Now that the types match, passing the Dart List works perfectly
+          'langs': databaseServiceFilter, 
+        },
+      ));
+
+      if (res.hasException) {
+        _logger.e('Hasura Mutation Error: ${res.exception.toString()}');
+      } else {
+        _logger.i('Successfully synced language preferences to Hasura');
+      }
+    } catch (e) {
+      _logger.e('Failed to sync language preferences', error: e);
+    }
   }
 
   Future<void> _loadCachedProfile() async {
@@ -345,6 +422,12 @@ class AppState extends ChangeNotifier {
     await prefs.setStringList('visibleCalendarGroupIds', groupIds);
     notifyListeners();
   }
+  void markCalendarGroupsInitialized() async {
+    _calendarGroupsInitialized = true;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('calendarGroupsInitialized', true);
+    // no notifyListeners needed — this is a silent internal flag
+  }
 
   // --- OneSignal ---
   Future<void> updateOneSignalUser() async {
@@ -353,7 +436,7 @@ class AppState extends ChangeNotifier {
       final loginId = _profile?.id;
       if (loginId == null || loginId.isEmpty) {
         // ✨ WRAPPED: Skip OneSignal logout on web
-        if (!kIsWeb) {
+        if (isMobileDevice) {
           await OneSignal.logout();
         }
         _logger.i('OneSignal logged out');
@@ -362,7 +445,7 @@ class AppState extends ChangeNotifier {
 
       // ✨ WRAPPED: Skip OneSignal login and token gathering on web
       String? pushToken;
-      if (!kIsWeb) {
+      if (isMobileDevice) {
         await OneSignal.login(loginId);
         pushToken = OneSignal.User.pushSubscription.id;
       }
@@ -397,7 +480,7 @@ class AppState extends ChangeNotifier {
       _logger.i('OneSignal endpoint updated in Hasura');
 
       // ✨ WRAPPED: Skip OneSignal tags on web
-      if (!kIsWeb) {
+      if (isMobileDevice) {
         final role = _profile?.role;
         if (role != null && role.isNotEmpty) {
           await OneSignal.User.addTags({'role': role});
@@ -422,6 +505,15 @@ class AppState extends ChangeNotifier {
       _currentTabIndex = index;
       notifyListeners();
     }
+  }
+
+  void setPendingDeepLink(String link) {
+    _pendingDeepLink = link;
+  }
+  String? consumePendingDeepLink() {
+    final link = _pendingDeepLink;
+    _pendingDeepLink = null;
+    return link;
   }
 
   void setLanguageCode(BuildContext context, String code) async {

@@ -4,6 +4,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../app_state.dart';
@@ -121,6 +122,16 @@ class _LandingButtons extends StatelessWidget {
           padding: padding,
         ),
         SizedBox(height: padding * _kButtonSpacingFactor),
+        ElevatedButton(
+          onPressed: () async {
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.remove('terms_accepted');
+            await prefs.remove('selected_service');
+            debugPrint("CLEARED! Now Hot Restart your app.");
+          },
+          child: const Text('DEBUG: Reset Onboarding'),
+        ),
+        SizedBox(height: padding * _kButtonSpacingFactor),
         SecondaryButton(
           title: "landing_03".tr(),
           onTap: onSelectLanguage,
@@ -152,25 +163,36 @@ class _AuthStatusDisplay extends StatelessWidget {
         ? "landing_05".tr(args: [profile!.displayName])
         : "landing_06".tr();
 
+    // Set the dynamic border color
+    final borderColor = isAuth 
+        ? Colors.green.withAlpha(180) 
+        : Colors.red.withAlpha(180);
+        
+    final bottomPadding = MediaQuery.of(context).padding.bottom;
+
     return Positioned(
-      bottom: 30,
+      bottom: bottomPadding > 0 ? bottomPadding + 16 : 30,
       left: 0,
       right: 0,
       child: Center(
         child: GestureDetector(
           onTap: isAuth ? null : () => context.push('/auth'),
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.black.withAlpha(80),
-              borderRadius: BorderRadius.circular(6),
+              color: Colors.black.withAlpha(160),
+              borderRadius: BorderRadius.circular(8),
+              // Apply the dynamic border here
+              border: Border.all(color: borderColor, width: 1.5),
             ),
             child: Text(
               statusText,
               style: const TextStyle(
                 color: Colors.white,
                 fontSize: 14,
+                fontWeight: FontWeight.w500,
                 decoration: TextDecoration.none,
+                letterSpacing: 0.5,
               ),
             ),
           ),

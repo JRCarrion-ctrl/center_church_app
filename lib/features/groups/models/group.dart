@@ -8,6 +8,7 @@ class Group {
   final String visibility;
   final DateTime createdAt;
   final bool onlyAdminsMessage;
+  final List<String> languages;
 
   const Group({
     required this.id,
@@ -17,6 +18,7 @@ class Group {
     required this.visibility,
     required this.createdAt,
     this.onlyAdminsMessage = false,
+    this.languages = const ['spanish'],
   });
 
   factory Group.fromMap(Map<String, dynamic> map) {
@@ -28,6 +30,7 @@ class Group {
       visibility: map['visibility'] as String? ?? 'public',
       createdAt: _parseDate(map['created_at']),
       onlyAdminsMessage: map['only_admins_message'] as bool? ?? false,
+      languages: (map['targeted_audiences'] as List?)?.cast<String>().toList() ?? const ['spanish'],
     );
   }
 

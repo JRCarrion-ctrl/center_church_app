@@ -1,4 +1,6 @@
 // File: lib/features/groups/pages/manage_announcements_page.dart
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
@@ -44,7 +46,7 @@ class PhotoViewPage extends StatelessWidget {
             left: 10,
             child: SafeArea(
               child: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 30),
+                icon: const Icon(Icons.close, color: Colors.white, size: 30),
                 onPressed: () => context.pop(),
               ),
             ),
@@ -134,7 +136,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
           query AnnAll($gid: uuid!) {
             group_announcements(
               where: { group_id: { _eq: $gid } }
-              order_by: { published_at: asc }
+              order_by: { published_at: desc }
             ) {
               id
               group_id
@@ -167,7 +169,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
                 group_id: { _eq: $gid },
                 published_at: { _lte: $now }
               }
-              order_by: { published_at: asc }
+              order_by: { published_at: desc }
             ) {
               id
               group_id
@@ -207,12 +209,20 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
 
   void _openForm({GroupAnnouncement? existing}) async {
     if (!_canManage) return;
-    final result = await showModalBottomSheet<GroupAnnouncement>(
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
       context: context,
       isScrollControlled: true,
-      builder: (context) => AnnouncementFormModal(
-        groupId: widget.groupId,
-        existing: existing,
+      // 1. Make the modal background transparent so the blur shows through
+      backgroundColor: Colors.transparent, 
+      // 2. Make the dimming effect very subtle
+      barrierColor: Colors.black.withValues(alpha: 0.2), 
+      builder: (context) => BackdropFilter(
+        // 3. This blurs the content ALREADY on the screen (the list behind the form)
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: AnnouncementFormModal(
+          groupId: widget.groupId,
+          existing: existing,
+        ),
       ),
     );
 
@@ -228,11 +238,16 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: Text("key_126".tr()),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text("key_126".tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
         content: Text("key_127".tr()),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: Text("key_128".tr())),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: Text("key_129".tr())),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true), 
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: Text("key_129".tr()),
+          ),
         ],
       ),
     );
@@ -277,16 +292,22 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   Widget _buildFilterButtons() {
     if (!_canManage) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 0),
-      child: SegmentedButton<String>(
-        segments: [
-          ButtonSegment(value: 'all', label: Text("key_130".tr())),
-          ButtonSegment(value: 'published', label: Text("key_131".tr())),
-          ButtonSegment(value: 'scheduled', label: Text("key_132".tr())),
-        ],
-        selected: {filter},
-        onSelectionChanged: (v) => setState(() => filter = v.first),
-        showSelectedIcon: false,
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      child: SizedBox(
+        width: double.infinity,
+        child: SegmentedButton<String>(
+          segments: [
+            ButtonSegment(value: 'all', label: Text("key_130".tr())),
+            ButtonSegment(value: 'published', label: Text("key_131".tr())),
+            ButtonSegment(value: 'scheduled', label: Text("key_132".tr())),
+          ],
+          selected: {filter},
+          onSelectionChanged: (v) => setState(() => filter = v.first),
+          showSelectedIcon: false,
+          style: SegmentedButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+          ),
+        ),
       ),
     );
   }
@@ -294,147 +315,226 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   Widget _buildAnnouncementTile(GroupAnnouncement a) {
     final isExpanded = _expandedAnnouncementId == a.id;
     final isPublished = a.publishedAt?.isBefore(_nowUtc) ?? false;
-
-    final adminStatus = a.publishedAt != null
-        ? Text(
-            '${isPublished ? "key_131".tr() : "key_132".tr()}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
-            style: TextStyle(fontSize: 12, color: isPublished ? Colors.green[700] : Colors.orange[700]),
-          )
-        : null;
-
-    final createdBy = a.createdByName != null
-        ? Text('Posted by ${a.createdByName!}', style: const TextStyle(fontSize: 12, color: Colors.grey))
-        : null;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final hasImage = a.imageUrl != null && a.imageUrl!.isNotEmpty;
     final hasBody = a.body != null && a.body!.isNotEmpty;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ListTile(
-            title: Text(a.title, maxLines: isExpanded ? null : 1, overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                if (hasBody && !isExpanded)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SelectableLinkify(
-                      text: a.body!,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                      // This styling makes links look like traditional blue clickable links
-                      linkStyle: const TextStyle(
-                        color: Colors.blue,
-                        decoration: TextDecoration.underline,
-                      ),
-                      onOpen: (link) async {
-                        final Uri url = Uri.parse(link.url);
-                        if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text("Error")),
-                            );
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                if (_canManage) ...[
-                  ?adminStatus,
-                  ?createdBy,
-                ] else ...[
-                  if (a.publishedAt != null)
-                    Text(
-                      '${"key_131".tr()}: ${TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y')}',
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ?createdBy,
-                ],
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
+      child: ClipRRect( // ✨ 2. Clip the blur to the card's border radius
+        borderRadius: BorderRadius.circular(24),
+        child: BackdropFilter( // ✨ 3. Add the frosting effect
+          filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+          child: Container(
+            decoration: BoxDecoration(
+              // ✨ 4. Ensure these colors stay semi-transparent (alpha < 1.0)
+              color: isDark 
+                ? Colors.black.withValues(alpha: 0.2) 
+                : Colors.white.withValues(alpha: 0.85),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.2), 
+                width: 1.5
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.05),
+                  blurRadius: 15,
+                  offset: const Offset(0, 8),
+                ),
               ],
             ),
-            onTap: () {
-              setState(() {
-                if (isExpanded) {
-                  _expandedAnnouncementId = null;
-                } else {
-                  _expandedAnnouncementId = a.id;
-                }
-              });
-            },
-            trailing: _canManage
-                ? Row(
-                    mainAxisSize: MainAxisSize.min,
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  setState(() {
+                    _expandedAnnouncementId = isExpanded ? null : a.id;
+                  });
+                },
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      IconButton(
-                        icon: const Icon(Icons.edit),
-                        onPressed: () => _openForm(existing: a),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => _confirmAndDelete(a.id),
-                      ),
-                    ],
-                  )
-                : (isExpanded ? const Icon(Icons.expand_less) : const Icon(Icons.expand_more)),
-          ),
-          if (isExpanded)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (hasImage)
-                    GestureDetector( // Added GestureDetector to the image
-                      onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => PhotoViewPage(imageUrl: a.imageUrl!),
+                      // --- Header Row ---
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title and Badges
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  a.title,
+                                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.bold,
+                                    color: colorScheme.onSurface,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                if (a.publishedAt != null)
+                                  Row(
+                                    children: [
+                                      // Dynamic Status Badge
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                        decoration: BoxDecoration(
+                                          color: isPublished ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
+                                          borderRadius: BorderRadius.circular(8),
+                                          border: Border.all(color: isPublished ? Colors.green.withValues(alpha: 0.3) : Colors.orange.withValues(alpha: 0.3)),
+                                        ),
+                                        child: Text(
+                                          isPublished ? "key_131".tr().toUpperCase() : "key_132".tr().toUpperCase(),
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color: isPublished ? Colors.green[700] : Colors.orange[700],
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        TimeService.formatUtcToLocal(a.publishedAt!, pattern: 'MMM d, y'),
+                                        style: TextStyle(fontSize: 12, color: colorScheme.outline),
+                                      ),
+                                    ],
+                                  ),
+                              ],
+                            ),
                           ),
-                        );
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8.0),
-                          child: CachedNetworkImage(
-                            imageUrl: a.imageUrl!,
-                            placeholder: (context, url) => const CircularProgressIndicator(),
-                            errorWidget: (context, url, error) => const Icon(Icons.error),
+                          // Expand/Collapse Icon
+                          Icon(
+                            isExpanded ? Icons.expand_less : Icons.expand_more,
+                            color: colorScheme.outline,
                           ),
-                        ),
+                        ],
                       ),
-                    ),
-                  if (hasBody)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: SelectableLinkify(
-                        text: a.body!,
-                        style: Theme.of(context).textTheme.bodyLarge,
-                        // This styling makes links look like traditional blue clickable links
-                        linkStyle: const TextStyle(
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
+                      
+                      // --- Body Preview (Collapsed) ---
+                      if (hasBody && !isExpanded) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          a.body!,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
-                        onOpen: (link) async {
-                          final Uri url = Uri.parse(link.url);
-                          if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text("Error")),
+                      ],
+
+                      // --- Expanded Content ---
+                      if (isExpanded) ...[
+                        const SizedBox(height: 16),
+                        if (hasImage)
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => PhotoViewPage(imageUrl: a.imageUrl!),
+                                ),
                               );
-                            }
-                          }
-                        },
-                      ),
-                    ),
-                ],
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 16.0),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16.0),
+                                child: CachedNetworkImage(
+                                  imageUrl: a.imageUrl!,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                  placeholder: (context, url) => Container(
+                                    height: 150,
+                                    color: colorScheme.surfaceContainerHighest,
+                                    child: const Center(child: CircularProgressIndicator()),
+                                  ),
+                                  errorWidget: (context, url, error) => Container(
+                                    height: 150,
+                                    color: colorScheme.surfaceContainerHighest,
+                                    child: const Icon(Icons.broken_image),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        if (hasBody)
+                          SelectableLinkify(
+                            text: a.body!,
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                            linkStyle: TextStyle(
+                              color: colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                              decoration: TextDecoration.underline,
+                            ),
+                            onOpen: (link) async {
+                              final Uri url = Uri.parse(link.url);
+                              if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text("Error opening link")),
+                                  );
+                                }
+                              }
+                            },
+                          ),
+                        
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 12.0),
+                          child: Divider(height: 1),
+                        ),
+                        
+                        // --- Footer Row (Author & Admin Actions) ---
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            if (a.createdByName != null)
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.person_outline, size: 14, color: colorScheme.outline),
+                                    const SizedBox(width: 4),
+                                    Expanded(
+                                      child: Text(
+                                        'By ${a.createdByName!}', 
+                                        style: TextStyle(fontSize: 12, color: colorScheme.outline),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (_canManage)
+                              Row(
+                                children: [
+                                  IconButton.filledTonal(
+                                    icon: const Icon(Icons.edit, size: 18),
+                                    constraints: const BoxConstraints(),
+                                    padding: const EdgeInsets.all(8),
+                                    onPressed: () => _openForm(existing: a),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  IconButton.filledTonal(
+                                    icon: Icon(Icons.delete_outline, size: 18, color: colorScheme.error),
+                                    constraints: const BoxConstraints(),
+                                    padding: const EdgeInsets.all(8),
+                                    onPressed: () => _confirmAndDelete(a.id),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
               ),
             ),
-        ],
+          ),
+        ),
       ),
     );
   }
@@ -443,10 +543,14 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
   Widget build(BuildContext context) {
     final list = filteredAnnouncements;
     final canPop = GoRouter.of(context).canPop();
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        title: Text(_canManage ? "key_133".tr() : "key_131".tr()),
+        title: Text(_canManage ? "key_133".tr() : "key_131".tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         leading: canPop
             ? null
             : IconButton(
@@ -455,7 +559,7 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
               ),
       ),
       body: loading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
           : RefreshIndicator(
               onRefresh: () async => _bootstrap(),
               child: Column(
@@ -463,7 +567,16 @@ class _ManageAnnouncementsPageState extends State<ManageAnnouncementsPage> {
                   _buildFilterButtons(),
                   Expanded(
                     child: list.isEmpty
-                        ? Center(child: Text("key_134".tr()))
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.campaign_outlined, size: 48, color: colorScheme.outline),
+                                const SizedBox(height: 16),
+                                Text("key_134".tr(), style: Theme.of(context).textTheme.titleMedium),
+                              ],
+                            ),
+                          )
                         : ListView.builder(
                             physics: const AlwaysScrollableScrollPhysics(),
                             padding: const EdgeInsets.only(bottom: 80),

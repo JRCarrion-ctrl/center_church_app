@@ -10,7 +10,6 @@ import 'models/group_model.dart';
 final log = Logger();
 
 class GroupArchivedException implements Exception {
-// ... (GroupArchivedException and GroupInfoData remain unchanged)
   final String groupId;
   const GroupArchivedException(this.groupId);
   @override
@@ -289,13 +288,14 @@ class GroupService {
         .toList();
   }
 
-  Future<List<GroupModel>> getJoinableGroups() async {
+  Future<List<GroupModel>> getJoinableGroups(List<String> languages) async {
     const q = r'''
-      query Joinable {
+      query Joinable($langs: [String!]!) {
         groups(
           where: {
             archived: { _eq: false }
             visibility: { _in: ["public", "request"] }
+            target_audiences: { _contained_in: $langs }
           }
         ) {
           id
@@ -306,13 +306,31 @@ class GroupService {
           temporary
           archived
           created_at
+          target_audiences
         }
       }
     ''';
-    final res = await client.query(QueryOptions(document: gql(q)));
-    if (res.hasException) throw res.exception!;
-    final rows = (res.data?['groups'] as List<dynamic>? ?? []);
-    return rows.map((e) => GroupModel.fromMap(Map<String, dynamic>.from(e))).toList();
+    try {
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          // 3. Pass the languages from AppState into the query
+          variables: {'langs': languages},
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+      );
+
+      if (res.hasException) throw res.exception!;
+
+      final rows = (res.data?['groups'] as List<dynamic>? ?? []);
+      
+      return rows
+          .map((e) => GroupModel.fromMap(Map<String, dynamic>.from(e)))
+          .toList();
+    } catch (e) {
+      debugPrint('Error fetching joinable groups: $e');
+      rethrow;
+    }
   }
 
   Future<List<GroupModel>> getAdminGroups(String userId) async {
@@ -829,5 +847,131 @@ class GroupService {
       ),
     );
     if (res.hasException) throw res.exception!;
+  }
+
+  Future<void> ensureChildChatGroup({
+    required String childId, 
+    required String childName, 
+    required String staffUserId,
+  }) async {
+    // 1. Check if the chat group already exists
+    const qCheck = r'''
+      query CheckGroup($id: uuid!) {
+        groups_by_pk(id: $id) { id }
+      }
+    ''';
+    
+    final checkRes = await client.query(
+      QueryOptions(document: gql(qCheck), variables: {'id': childId}),
+    );
+    
+    if (checkRes.hasException) throw checkRes.exception!;
+    
+    final exists = checkRes.data?['groups_by_pk'] != null;
+
+    if (!exists) {
+      // ==========================================
+      // NEW LOGIC: Fetch Family Members
+      // ==========================================
+      List<String> parentUserIds = [];
+      
+      try {
+        // Step A: Get the child's family_id
+        const qFam = r'''
+          query GetFamilyId($cid: uuid!) {
+            family_members(where: {child_profile_id: {_eq: $cid}}, limit: 1) {
+              family_id
+            }
+          }
+        ''';
+        final famRes = await client.query(QueryOptions(document: gql(qFam), variables: {'cid': childId}));
+        final famData = famRes.data?['family_members'] as List?;
+        final familyId = (famData != null && famData.isNotEmpty) ? famData[0]['family_id'] : null;
+
+        // Step B: Get all user_ids (parents/guardians) attached to that family_id
+        if (familyId != null) {
+          const qParents = r'''
+            query GetParents($fid: uuid!) {
+              family_members(where: {family_id: {_eq: $fid}, user_id: {_is_null: false}}) {
+                user_id
+              }
+            }
+          ''';
+          final parentRes = await client.query(QueryOptions(document: gql(qParents), variables: {'fid': familyId}));
+          final parentRows = parentRes.data?['family_members'] as List? ?? [];
+          
+          for (var p in parentRows) {
+            if (p['user_id'] != null) parentUserIds.add(p['user_id'] as String);
+          }
+        }
+      } catch (e) {
+        log.e("Error fetching family members: $e");
+        // We catch this so the group creation doesn't completely fail if family lookup fails
+      }
+
+      // ==========================================
+      // Step C: Build the membership list
+      // ==========================================
+      final memberships = [
+        {'user_id': staffUserId, 'role': 'admin', 'status': 'approved'} // The Staff Member
+      ];
+      
+      for (var uid in parentUserIds) {
+        if (uid != staffUserId) { // Prevent duplicates if a staff member is checking in their own kid
+          memberships.add({'user_id': uid, 'role': 'member', 'status': 'approved'});
+        }
+      }
+
+      // ==========================================
+      // Step D: Create Group and Insert Everyone
+      // ==========================================
+      const mCreate = r'''
+        mutation CreateChildGroup($id: uuid!, $name: String!, $members: [group_memberships_insert_input!]!) {
+          insert_groups_one(
+            object: {
+              id: $id, 
+              name: $name, 
+              description: "Nursery Chat",
+              visibility: "invite_only",
+              group_memberships: {
+                data: $members
+              }
+            }
+          ) { id }
+        }
+      ''';
+      
+      final createRes = await client.mutate(
+        MutationOptions(
+          document: gql(mCreate), 
+          variables: {
+            'id': childId, 
+            'name': "$childName's Nursery Chat", 
+            'members': memberships // <--- Pass the dynamic array here
+          }
+        ),
+      );
+      
+      if (createRes.hasException) throw createRes.exception!;
+      log.i('Created new chat group for $childName with ${memberships.length} members.');
+      
+    } else {
+      // 3. If it DOES exist, just make sure the current staff member is inside it so they can see it
+      const mEnsureMember = r'''
+        mutation EnsureStaffMembership($gid: uuid!, $uid: String!) {
+          insert_group_memberships_one(
+            object: { group_id: $gid, user_id: $uid, role: "admin", status: "approved" },
+            on_conflict: { constraint: group_memberships_group_id_user_id_key, update_columns: [] }
+          ) { user_id }
+        }
+      ''';
+      
+      await client.mutate(
+        MutationOptions(
+          document: gql(mEnsureMember), 
+          variables: {'gid': childId, 'uid': staffUserId}
+        ),
+      );
+    }
   }
 }

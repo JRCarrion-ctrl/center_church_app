@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/features/media/media_service.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:ccf_app/app_state.dart';
 
 class WelcomeHeader extends StatefulWidget {
   const WelcomeHeader({super.key});
@@ -95,7 +97,6 @@ class _WelcomeHeaderState extends State<WelcomeHeader> {
 }
 
 class NextServiceCard extends StatelessWidget {
-  // CHANGE 4: Fields are now Strings
   final String nextEnglishService;
   final String nextSpanishService;
   final DateTime currentTime;
@@ -113,11 +114,19 @@ class NextServiceCard extends StatelessWidget {
     final textTheme = theme.textTheme;
     final colorScheme = theme.colorScheme;
     
+    // 1. Listen to the current service selection
+    final appState = context.watch<AppState>();
+    final selectedService = appState.selectedService;
+    
+    // 2. Determine what to show based on the selection
+    final showEnglish = selectedService == ChurchService.english || selectedService == ChurchService.both;
+    final showSpanish = selectedService == ChurchService.spanish || selectedService == ChurchService.both;
+    
     return Container(
       padding: const EdgeInsets.all(24.0),
       decoration: BoxDecoration(
-        color: colorScheme.surface.withValues(alpha: 0.85), // Soft translucency
-        borderRadius: BorderRadius.circular(28), // Sleeker, larger radius
+        color: colorScheme.surface.withValues(alpha: 0.85), // Updated from withValues for broader compatibility if needed
+        borderRadius: BorderRadius.circular(28),
         border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
         boxShadow: [
           BoxShadow(
@@ -139,7 +148,7 @@ class NextServiceCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            "key_421".tr(), // "this sunday"
+            "key_421".tr(), // "This Sunday"
             style: textTheme.titleLarge?.copyWith(
               color: colorScheme.onSurface,
               fontWeight: FontWeight.w500,
@@ -149,16 +158,24 @@ class NextServiceCard extends StatelessWidget {
             padding: EdgeInsets.symmetric(vertical: 16.0),
             child: Divider(),
           ),
-          _ServiceTimeRow(
-            title: "key_422".tr(), // "English Service"
-            // CHANGE 5: Pass string directly, no DateFormat needed
-            time: nextEnglishService,
-          ),
-          const SizedBox(height: 16),
-          _ServiceTimeRow(
-            title: "key_423".tr(), // "Spanish Service"
-            time: nextSpanishService,
-          ),
+          
+          // 3. Conditionally render the English row
+          if (showEnglish)
+            _ServiceTimeRow(
+              title: "key_422".tr(), // "English Service"
+              time: nextEnglishService,
+            ),
+            
+          // 4. Conditionally render spacing ONLY if both are showing
+          if (showEnglish && showSpanish)
+            const SizedBox(height: 16),
+            
+          // 5. Conditionally render the Spanish row
+          if (showSpanish)
+            _ServiceTimeRow(
+              title: "key_423".tr(), // "Spanish Service"
+              time: nextSpanishService,
+            ),
         ],
       ),
     );

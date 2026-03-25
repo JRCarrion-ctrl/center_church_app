@@ -53,8 +53,8 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
     final svc = await _service();
 
-    // Fetch joinable groups, my approved groups, AND my pending requests
-    final joinable = await svc.getJoinableGroups();
+    final joinable = await svc.getJoinableGroups(appState.databaseServiceFilter);
+    
     final myGroups = await svc.getUserGroups(userId);
     final myRequests = await svc.getMyPendingGroupRequests(userId);
 

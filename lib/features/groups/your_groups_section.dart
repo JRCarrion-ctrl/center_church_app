@@ -7,7 +7,7 @@ import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
-import 'package:ccf_app/features/groups/models/group_model.dart'; // Assume unreadCount is here
+import 'package:ccf_app/features/groups/models/group_model.dart'; 
 
 class YourGroupsSection extends StatefulWidget {
   const YourGroupsSection({super.key, this.excludeArchived = true});
@@ -42,10 +42,9 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     super.dispose();
   }
 
-  Future<GroupService> _service() async {
-    // Prefer the cached instance from AppState; otherwise build with GraphProvider
-    final appState = context.read<AppState>();
-    return appState.groupService;
+  // 🚀 FIXED: Read directly from the provider tree synchronously
+  GroupService _service() {
+    return context.read<GroupService>();
   }
 
   Future<List<GroupModel>> _loadGroups() async {
@@ -57,18 +56,15 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
       return [];
     }
 
-    final groups = await (await _service()).getUserGroups(userId);
+    // 🚀 FIXED: Removed the double await since _service() is synchronous now
+    final groups = await _service().getUserGroups(userId);
     
-    // NOTE: GroupModel must be extended in your data layer to include the unread count
-    // The getUserGroups query in GroupService must be updated to fetch:
-    // (count(messages) where message.created_at > membership.last_seen_at)
-
     // Defensive filter: hide archived if requested
     final visible = widget.excludeArchived
         ? groups.where((g) => (g.archived) == false).toList()
         : groups;
 
-    // Stable sort by name (consider sorting by unread status first)
+    // Stable sort by name
     visible.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
     _allGroups = visible;
@@ -100,45 +96,12 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
   }
 
   Future<void> _openGroup(GroupModel group) async {
-    if ((group.archived) == true) {
-      return;
-    }
+    if (group.archived) return;
 
-    // 1. Get the current user ID
-    final appState = context.read<AppState>();
-    final userId = appState.profile?.id;
-    
-    // Default to false
-    bool isAdmin = false;
-    bool isOwner = false;
-
-    // 2. Determine their role before navigating
-    if (userId != null) {
-      try {
-        final role = await appState.groupService.getMyGroupRole(
-          groupId: group.id, 
-          userId: userId
-        );
-        
-        isAdmin = const {'admin', 'leader', 'supervisor', 'owner'}.contains(role);
-        // They are an owner if their group role is owner, OR if they are a global app owner
-        isOwner = role == 'owner' || appState.userRole.name == 'owner';
-        
-      } catch (e) {
-        // If it fails, default to lowest permissions (false/false)
-        debugPrint('Failed to fetch role before opening group: $e');
-      }
-    }
-
-    // 3. Navigate and pass the extra data
+    // 🚀 CLEANED: We deleted all the redundant role-fetching logic. 
+    // GroupPortalPage is self-sufficient now, so we just pass the ID!
     if (mounted) {
-      await context.push(
-        '/groups/${group.id}',
-        extra: {
-          'isAdmin': isAdmin,
-          'isOwner': isOwner,
-        },
-      );
+      await context.push('/groups/${group.id}');
     }
 
     if (mounted) {
@@ -217,7 +180,6 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                 final group = _filteredGroups[index];
                 final archived = group.archived;
                 
-                // Assume 'unreadCount' is a field on GroupModel
                 final unreadCount = group.unreadCount; 
                 final hasUnread = unreadCount > 0;
 
@@ -239,7 +201,7 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                                 ? const Icon(Icons.group, size: 30)
                                 : null,
                           ),
-                          // NEW: Unread message badge
+                          // Unread message badge
                           if (hasUnread)
                             Positioned(
                               right: -4,
@@ -247,7 +209,7 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.error, // Red badge
+                                  color: Theme.of(context).colorScheme.error, 
                                   shape: BoxShape.circle,
                                   border: Border.all(
                                     color: Theme.of(context).colorScheme.surface,
@@ -255,13 +217,12 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
                                   ),
                                 ),
                                 child: Text(
-                                  // Display the count, or "9+" if over 9
                                   unreadCount > 9 ? '9+' : unreadCount.toString(),
                                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                                     color: Theme.of(context).colorScheme.onError,
                                     fontWeight: FontWeight.bold,
                                     fontSize: 10,
-                                    height: 1.0, // Tighten vertical space
+                                    height: 1.0, 
                                   ),
                                 ),
                               ),

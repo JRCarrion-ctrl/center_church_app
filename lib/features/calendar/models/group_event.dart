@@ -12,6 +12,7 @@ class GroupEvent {
   final int? attendingCount;
   final String? groupName;
   final List<GroupEventSlot> slots;
+  final String? rrule;
 
   GroupEvent({
     required this.id,
@@ -25,6 +26,7 @@ class GroupEvent {
     this.attendingCount,
     this.groupName,
     this.slots = const [],
+    this.rrule,
   });
 
   factory GroupEvent.fromMap(Map<String, dynamic> map) {
@@ -50,6 +52,7 @@ class GroupEvent {
       slots: (map['event_slots'] as List?)
           ?.map((s) => GroupEventSlot.fromMap(s))
           .toList() ?? [],
+      rrule: map['rrule'] as String?,
     );
   }
 

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:url_launcher/url_launcher.dart'; 
+import 'package:ccf_app/core/widgets/ccf_query.dart';
 
 class ChildStaffProfilePage extends StatelessWidget {
   final String childId;
@@ -281,30 +282,21 @@ class ChildStaffProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Query(
-      options: QueryOptions(
-        document: gql(_childQuery),
-        variables: {'id': childId},
-        fetchPolicy: FetchPolicy.cacheAndNetwork,
+    return Scaffold(
+      body: CCFQuery(
+        options: QueryOptions(
+          document: gql(_childQuery),
+          variables: {'id': childId},
+          fetchPolicy: FetchPolicy.cacheAndNetwork,
+        ),
+        onData: (data, refetch) {
+          final childData = data['child_profiles_by_pk'] as Map<String, dynamic>?;
+          if (childData == null) {
+            return const Center(child: Text('Child not found'));
+          }
+          return _buildProfileBody(context, childData);
+        },
       ),
-      builder: (QueryResult result, {VoidCallback? refetch, FetchMore? fetchMore}) {
-        if (result.hasException) {
-          final errorText = 'Failed to load child profile: ${result.exception.toString()}';
-          return Scaffold(body: Center(child: Text(errorText)));
-        }
-
-        if (result.isLoading && result.data == null) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        
-        final childData = result.data?['child_profiles_by_pk'] as Map<String, dynamic>?;
-
-        if (childData == null) {
-          return Scaffold(body: Center(child: Text('Child not found')));
-        }
-        
-        return _buildProfileBody(context, childData);
-      },
     );
   }
 }

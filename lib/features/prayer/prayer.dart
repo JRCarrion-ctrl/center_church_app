@@ -20,7 +20,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   String _userRole = 'anonymous';
   bool _loading = true;
   bool _bootstrapped = false;
-  
+
+  // FIX 2: Track expanded state per prayer item by ID
+  final Map<String, bool> _expandedItems = {};
+
   AppState? _appState;
   VoidCallback? _authSub;
 
@@ -40,8 +43,8 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       _bootstrapped = true;
       _loadRoleAndRequests();
 
-      _appState = context.read<AppState>(); 
-      
+      _appState = context.read<AppState>();
+
       _authSub = () {
         _loadRoleAndRequests();
       };
@@ -100,10 +103,19 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
 
   Future<void> _loadPrayerRequests() async {
     final client = _client(context);
+    final appState = context.read<AppState>();
+    final userLangs = appState.databaseServiceFilter;
 
     const q = r'''
-      query DebugPrayer {
-        prayer_requests(where: { status: { _eq: "open" } }, order_by: { created_at: desc }, limit: 20) {
+      query LoadPrayers($langs: [String!]!) {
+        prayer_requests(
+          where: { 
+            status: { _eq: "open" },
+            target_audiences: { _contained_in: $langs }
+          }, 
+          order_by: { created_at: desc }, 
+          limit: 20
+        ) {
           id
           status
           user_id
@@ -121,6 +133,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     try {
       final res = await client.query(QueryOptions(
         document: gql(q),
+        variables: {'langs': userLangs},
         fetchPolicy: FetchPolicy.networkOnly,
       ));
 
@@ -167,20 +180,20 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       final res = await client.mutate(
         MutationOptions(document: gql(m), variables: {'id': prayerId}),
       );
-    
+
       if (res.hasException) throw res.exception!;
-    
+
       await _loadPrayerRequests();
-    
+
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Marked as checked".tr())), 
+          SnackBar(content: Text("Marked as checked".tr())),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error: $e")), 
+          SnackBar(content: Text("Error: $e")),
         );
       }
     }
@@ -194,14 +207,14 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         title: Text(
-          "key_332".tr(), 
+          "key_332".tr(),
           style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold),
         ),
         content: Text("key_333".tr()),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text("key_334".tr()), 
+            child: Text("key_334".tr()),
           ),
           FilledButton(
             style: FilledButton.styleFrom(
@@ -216,7 +229,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         actionsAlignment: MainAxisAlignment.end,
       ),
     );
-    
+
     if (confirmed != true || !mounted) return;
 
     final client = _client(context);
@@ -234,7 +247,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       await _loadPrayerRequests();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("key_336".tr()))
+          SnackBar(content: Text("key_336".tr())),
         );
       }
     } catch (e) {
@@ -247,53 +260,66 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   }
 
   void _showPrayerRequestForm() {
+    final initialLangs = context.read<AppState>().databaseServiceFilter;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (ctx) => PrayerRequestForm(onSubmit: (request, includeName) async {
-        final client = _client(context);
-        final userId = _userId(context);
-        if (userId == null) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_338".tr())));
-          return;
-        }
-        final navigator = Navigator.of(context);
+      builder: (ctx) => PrayerRequestForm(
+        initialAudiences: initialLangs,
+        onSubmit: (request, includeName, audiences) async {
+          final client = _client(context);
+          final userId = _userId(context);
+          if (userId == null) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_338".tr())));
+            return;
+          }
+          final navigator = Navigator.of(context);
 
-        const m = r'''
-          mutation InsertPrayer($user_id: String!, $request: String!, $include_name: Boolean!) {
-            insert_prayer_requests_one(object: {
-              user_id: $user_id,
-              request: $request,
-              include_name: $include_name,
-              status: "open"
-            }) { id }
-          }
-        ''';
+          // FIX 1: Use [String!] instead of _text so graphql_flutter can
+          // serialize the Dart List<String> directly as a JSON array.
+          const m = r'''
+            mutation InsertPrayer($user_id: String!, $request: String!, $include_name: Boolean!, $audiences: [String!]) {
+              insert_prayer_requests_one(object: {
+                user_id: $user_id,
+                request: $request,
+                include_name: $include_name,
+                status: "open",
+                target_audiences: $audiences
+              }) { id }
+            }
+          ''';
 
-        try {
-          final res = await client.mutate(
-            MutationOptions(
-              document: gql(m),
-              variables: {'user_id': userId, 'request': request, 'include_name': includeName},
-            ),
-          );
-          if (res.hasException) throw res.exception!;
-          if (mounted) {
-            navigator.pop();
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_339".tr())));
-            _loadPrayerRequests();
+          try {
+            final res = await client.mutate(
+              MutationOptions(
+                document: gql(m),
+                variables: {
+                  'user_id': userId,
+                  'request': request,
+                  'include_name': includeName,
+                  'audiences': audiences, // List<String> serializes correctly now
+                },
+              ),
+            );
+            if (res.hasException) throw res.exception!;
+            if (mounted) {
+              navigator.pop();
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_339".tr())));
+              _loadPrayerRequests();
+            }
+          } catch (e) {
+            if (mounted) {
+              navigator.pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("key_340".tr(args: [e.toString()]))));
+            }
           }
-        } catch (e) {
-          if (mounted) {
-            navigator.pop();
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("key_340".tr(args: [e.toString()]))));
-          }
-        }
-      }),
+        },
+      ),
     );
   }
 
@@ -324,21 +350,21 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                     Icon(Icons.lock_outline, size: 48, color: colorScheme.outline),
                     const SizedBox(height: 16),
                     Text(
-                      "key_338".tr(), 
+                      "key_338".tr(),
                       textAlign: TextAlign.center,
                       style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      "key_338a".tr(), 
+                      "key_338a".tr(),
                       textAlign: TextAlign.center,
                       style: const TextStyle(color: Colors.grey),
                     ),
                     const SizedBox(height: 24),
                     FilledButton.icon(
                       style: FilledButton.styleFrom(shape: const StadiumBorder()),
-                      onPressed: () => context.push('/auth'), 
-                      icon: const Icon(Icons.login), 
+                      onPressed: () => context.push('/auth'),
+                      icon: const Icon(Icons.login),
                       label: Text("key_017".tr()),
                     ),
                   ],
@@ -364,15 +390,12 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       ),
       body: Stack(
         children: [
-          // 1. Atmospheric Background
           Positioned.fill(
             child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
           ),
-          // 2. Translucent Overlay
           Positioned.fill(
             child: Container(color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75)),
           ),
-          // 3. Main Content
           SafeArea(
             child: _loading
                 ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
@@ -430,10 +453,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final canClose = isSupervisorOrOwner || isPrayerOwner;
     final isChecked = item['checked'] == true;
     final showCheckAction = isSupervisorOrOwner && !isChecked;
-    final createdAtDateTime = item['created_at'] != null 
+    final createdAtDateTime = item['created_at'] != null
         ? DateTime.parse(item['created_at']).toLocal()
         : null;
-    final createdAt = createdAtDateTime != null 
+    final createdAt = createdAtDateTime != null
         ? DateFormat('dd/MM/yy h:mm a').format(createdAtDateTime)
         : '';
 
@@ -443,7 +466,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
 
     String subtitleText;
     if (!shouldShowName) {
-      subtitleText = "key_posted_on".tr(args: [createdAt]); 
+      subtitleText = "key_posted_on".tr(args: [createdAt]);
     } else if (!includeName && canClose) {
       subtitleText = "key_posted_on".tr(args: [createdAt]);
     } else {
@@ -458,7 +481,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
           if (showCheckAction)
             IconButton(
               icon: const Icon(Icons.check_circle_outline),
-              color: Colors.green, 
+              color: Colors.green,
               tooltip: "Mark as checked",
               onPressed: () => _markPrayerAsChecked(item['id'] as String),
             ),
@@ -471,6 +494,11 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         ],
       );
     }
+
+    // FIX 2: Read expanded state from the map using the item's ID
+    final String itemId = item['id'] as String;
+    final String requestText = (item['request'] ?? '') as String;
+    final bool isExpanded = _expandedItems[itemId] ?? false;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 16.0),
@@ -497,44 +525,38 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                 color: colorScheme.primary,
                 size: 32,
               ),
-              title: StatefulBuilder(
-                builder: (context, setLocalState) {
-                  bool isExpanded = false; 
-                  final String requestText = (item['request'] ?? '') as String;
-                  
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8.0),
+                    child: Text(
+                      requestText,
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                      ),
+                      // FIX 2: maxLines and overflow now correctly react to isExpanded
+                      maxLines: isExpanded ? null : 3,
+                      overflow: isExpanded ? TextOverflow.visible : TextOverflow.ellipsis,
+                    ),
+                  ),
+                  if (requestText.length > 100)
+                    InkWell(
+                      // FIX 2: Toggle uses setState on the parent, not a dead local variable
+                      onTap: () => setState(() => _expandedItems[itemId] = !isExpanded),
+                      child: Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Text(
-                          requestText,
-                          style: textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.onSurface,
+                          isExpanded ? "key_read_less".tr() : "key_read_more".tr(),
+                          style: textTheme.labelLarge?.copyWith(
+                            color: colorScheme.primary,
+                            fontWeight: FontWeight.bold,
                           ),
-                          // ✨ Expandable Logic
-                          maxLines: 3, 
-                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      if (requestText.length > 100) 
-                        InkWell(
-                          onTap: () => setLocalState(() => isExpanded = !isExpanded),
-                          child: Padding(
-                            padding: const EdgeInsets.only(bottom: 8.0),
-                            child: Text(
-                              "key_read_more".tr(),
-                              style: textTheme.labelLarge?.copyWith(
-                                color: colorScheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  );
-                },
+                    ),
+                ],
               ),
               subtitle: Text(
                 subtitleText,
@@ -551,9 +573,10 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
 
 // --- FORM WIDGET REMAINS UNCHANGED ---
 class PrayerRequestForm extends StatefulWidget {
-  final Future<void> Function(String request, bool includeName) onSubmit;
+  final List<String> initialAudiences;
+  final Future<void> Function(String request, bool includeName, List<String> audiences) onSubmit;
 
-  const PrayerRequestForm({super.key, required this.onSubmit});
+  const PrayerRequestForm({super.key, required this.onSubmit, required this.initialAudiences});
 
   @override
   State<PrayerRequestForm> createState() => _PrayerRequestFormState();
@@ -562,74 +585,48 @@ class PrayerRequestForm extends StatefulWidget {
 class _PrayerRequestFormState extends State<PrayerRequestForm> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _requestController = TextEditingController();
-  
-  String _request = '';
+
   bool _includeName = true;
+  late List<String> _selectedAudiences;
 
   @override
   void initState() {
     super.initState();
-    _requestController.addListener(_updateRequest);
-    _request = _requestController.text;
+    _selectedAudiences = List<String>.from(widget.initialAudiences);
   }
 
   @override
   void dispose() {
-    _requestController.removeListener(_updateRequest);
     _requestController.dispose();
     super.dispose();
-  }
-
-  void _updateRequest() {
-    _request = _requestController.text;
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final primaryColor = colorScheme.primary;
-    
-    final buttonStyle = ElevatedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 32),
-        textStyle: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-        shape: const StadiumBorder(),
-        foregroundColor: colorScheme.onPrimary, 
-    );
 
     return SingleChildScrollView(
       child: Padding(
         padding: EdgeInsets.only(
           bottom: MediaQuery.of(context).viewInsets.bottom,
-          top: 24,
-          left: 20,
-          right: 20,
+          top: 24, left: 20, right: 20,
         ),
         child: Form(
           key: _formKey,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                "key_428".tr(),
-                style: const TextStyle(
-                  fontSize: 20, 
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black, 
-                ),
-              ),
+              Text("key_428".tr(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _requestController,
                 maxLines: 5,
-                style: textTheme.bodyLarge,
                 decoration: InputDecoration(
-                    labelText: "key_427".tr(),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                    filled: true,
-                    fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                    alignLabelWithHint: true,
-                    floatingLabelBehavior: FloatingLabelBehavior.never,
+                  labelText: "key_427".tr(),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                  filled: true,
+                  fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
                 ),
                 validator: (val) => val == null || val.trim().isEmpty ? "key_047d".tr() : null,
               ),
@@ -639,34 +636,42 @@ class _PrayerRequestFormState extends State<PrayerRequestForm> {
                 subtitle: Text("key_426".tr(), style: textTheme.bodySmall),
                 value: _includeName,
                 onChanged: (val) => setState(() => _includeName = val),
-                activeThumbColor: Colors.white,
-                activeTrackColor: Colors.green,
-                inactiveThumbColor: primaryColor,
-                inactiveTrackColor: Colors.white,
-                contentPadding: const EdgeInsets.symmetric(horizontal: 0),
+                contentPadding: EdgeInsets.zero,
               ),
               const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Text("Target Audience".tr(), style: textTheme.labelLarge),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 12,
+                children: [
+                  FilterChip(
+                    label: const Text("TCCF"),
+                    selected: _selectedAudiences.contains('english'),
+                    onSelected: (val) => setState(() => val ? _selectedAudiences.add('english') : _selectedAudiences.remove('english')),
+                  ),
+                  FilterChip(
+                    label: const Text("Centro"),
+                    selected: _selectedAudiences.contains('spanish'),
+                    onSelected: (val) => setState(() => val ? _selectedAudiences.add('spanish') : _selectedAudiences.remove('spanish')),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
-                child: Material(
-                  color: Theme.of(context).colorScheme.primary,
-                  shape: const StadiumBorder(),
-                  elevation: 8,
-                  shadowColor: primaryColor.withValues(alpha: 0.8),
-                  child: ElevatedButton.icon(
-                    icon: const Icon(Icons.local_library_outlined),
-                    label: Text("key_242".tr()), 
-                    style: buttonStyle.copyWith(
-                      backgroundColor: WidgetStateProperty.all(Colors.transparent),
-                      overlayColor: WidgetStateProperty.all(colorScheme.onPrimary.withValues(alpha: 0.1)),
-                      elevation: WidgetStateProperty.all(0),
-                    ),
-                    onPressed: () {
-                      if (_formKey.currentState?.validate() ?? false) {
-                        widget.onSubmit(_request, _includeName);
-                      }
-                    },
-                  ),
+                child: FilledButton.icon(
+                  icon: const Icon(Icons.send),
+                  label: Text("key_242".tr()),
+                  onPressed: () {
+                    if ((_formKey.currentState?.validate() ?? false) && _selectedAudiences.isNotEmpty) {
+                      widget.onSubmit(_requestController.text, _includeName, _selectedAudiences);
+                    } else if (_selectedAudiences.isEmpty) {
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Select at least one audience")));
+                    }
+                  },
                 ),
               ),
               const SizedBox(height: 24),

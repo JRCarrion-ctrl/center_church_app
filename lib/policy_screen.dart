@@ -1,10 +1,14 @@
 // file: lib/features/policy/policy_screen.dart
 
-import 'package:ccf_app/app_state.dart';
-import 'package:ccf_app/core/theme.dart';
+import 'dart:ui'; // Required for the glassmorphic blur
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart'; // Import url_launcher
+import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/foundation.dart';
+import 'package:onesignal_flutter/onesignal_flutter.dart';
+import 'package:app_tracking_transparency/app_tracking_transparency.dart';
+
+import '../../app_state.dart';
 
 // --- Helper function to open URLs ---
 Future<void> _launchUrl(String url) async {
@@ -12,35 +16,70 @@ Future<void> _launchUrl(String url) async {
   if (await canLaunchUrl(uri)) {
     await launchUrl(uri, mode: LaunchMode.inAppWebView);
   } else {
-    // Handle the error (e.g., show a Snackbar)
     debugPrint('Could not launch $url');
-    // You might want to throw an exception or show a user-friendly error
   }
 }
 
-// --- Custom Widget for Clickable Link ---
-class PolicyLink extends StatelessWidget {
-  final String label;
+// --- Modernized Clickable Card ---
+class PolicyCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
   final String url;
-  
-  const PolicyLink({
+
+  const PolicyCard({
     super.key,
-    required this.label,
+    required this.title,
+    required this.subtitle,
+    required this.icon,
     required this.url,
   });
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: () => _launchUrl(url),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4.0),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: Theme.of(context).colorScheme.primary, // Make it look clickable
-            decoration: TextDecoration.underline,
-            fontWeight: FontWeight.bold,
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => _launchUrl(url),
+        child: Container(
+          padding: const EdgeInsets.all(16.0),
+          decoration: BoxDecoration(
+            color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.4),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: colorScheme.outlineVariant.withValues(alpha: 0.5)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: colorScheme.primary.withValues(alpha: 0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: colorScheme.primary),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(color: colorScheme.onSurfaceVariant, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.open_in_new_rounded, color: colorScheme.onSurfaceVariant, size: 20),
+            ],
           ),
         ),
       ),
@@ -48,10 +87,8 @@ class PolicyLink extends StatelessWidget {
   }
 }
 
-
 // --- Main Policy Acceptance Screen ---
 class PolicyAcceptanceScreen extends StatelessWidget {
-  // 1. Required URLs must now be passed into the constructor
   final String privacyPolicyUrl;
   final String termsAndConditionsUrl;
 
@@ -63,77 +100,198 @@ class PolicyAcceptanceScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // PopScope prevents the user from navigating back using the system back button
+    final colorScheme = Theme.of(context).colorScheme;
+
     return PopScope(
-      canPop: false, // Explicitly prevent back navigation
-      onPopInvokedWithResult: (bool didPop, Object? result) {}, // Handle the invocation (or leave empty)
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, Object? result) {},
       child: Scaffold(
-        backgroundColor: kWhite,
+        backgroundColor: colorScheme.surface,
         appBar: AppBar(
-          backgroundColor: kWhite,
+          backgroundColor: Colors.transparent,
+          elevation: 0,
           automaticallyImplyLeading: false,
-          title: const Text('Policies & Terms'),
         ),
-        body: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Important Notice', 
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)
-                      ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Before using this application, please review our Privacy Policy and Terms & Conditions. This is required to proceed.',
-                      ),
-                      const SizedBox(height: 24),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                // Icon Header
+                Icon(
+                  Icons.shield_outlined,
+                  size: 64,
+                  color: colorScheme.primary,
+                ),
+                const SizedBox(height: 24),
+                
+                const Text(
+                  'Before you begin',
+                  style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                
+                Text(
+                  'Please review our privacy policy and terms of service to continue using the app.',
+                  style: TextStyle(fontSize: 15, color: colorScheme.onSurfaceVariant, height: 1.5),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 40),
 
-                      // 2. Use the PolicyLink widget for clickable links
-                      const Text(
-                        'Privacy Policy:', 
-                        style: TextStyle(fontWeight: FontWeight.bold)
-                      ),
-                      PolicyLink(
-                        label: 'View Full Privacy Policy',
-                        url: privacyPolicyUrl,
-                      ),
-                      
-                      const SizedBox(height: 16),
+                // Policy Cards
+                PolicyCard(
+                  title: 'Privacy Policy',
+                  subtitle: 'How we protect your data',
+                  icon: Icons.lock_outline_rounded,
+                  url: privacyPolicyUrl,
+                ),
+                const SizedBox(height: 16),
+                PolicyCard(
+                  title: 'Terms & Conditions',
+                  subtitle: 'Rules and guidelines',
+                  icon: Icons.description_outlined,
+                  url: termsAndConditionsUrl,
+                ),
+                
+                const Spacer(),
 
-                      const Text(
-                        'Terms & Conditions:', 
-                        style: TextStyle(fontWeight: FontWeight.bold)
-                      ),
-                      PolicyLink(
-                        label: 'View Full Terms & Conditions',
-                        url: termsAndConditionsUrl,
-                      ),
-                      
-                      const SizedBox(height: 32),
-                    ],
+                // Modern Pill Button
+                FilledButton(
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(double.infinity, 56),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                  onPressed: () {
+                    // Trigger the Service Selector Modal
+                    showModalBottomSheet(
+                      context: context,
+                      backgroundColor: Colors.transparent,
+                      barrierColor: Colors.black.withValues(alpha: 0.5),
+                      isDismissible: false,
+                      enableDrag: false,
+                      builder: (_) => const _ServiceSelectorModal(),
+                    );
+                  },
+                  child: const Text(
+                    'I Agree & Continue',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ),
-              ),
-              // Acceptance Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    // Call the acceptTerms method from AppState
-                    Provider.of<AppState>(context, listen: false).acceptTerms();
-                  },
-                  child: const Text('I Agree and Continue'),
+                const SizedBox(height: 16),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// --- The Glassmorphic Service Selector Modal ---
+class _ServiceSelectorModal extends StatelessWidget {
+  const _ServiceSelectorModal();
+
+  void _handleSelection(BuildContext context, ChurchService service) async {
+    final appState = Provider.of<AppState>(context, listen: false);
+    
+    // 1. Save the language preference to the Database
+    await appState.updateServiceFilter(service);
+    
+    // 2. Accept terms to boot up the GoRouter (hides the policy screen)
+    await appState.acceptTerms();
+    
+    // 3. Close the modal smoothly so the Home Screen appears behind the popups
+    if (context.mounted) {
+      Navigator.pop(context);
+    }
+
+    // 4. Trigger the Permission Prompts in sequence
+    final isMobileDevice = !kIsWeb && 
+        (defaultTargetPlatform == TargetPlatform.iOS || 
+         defaultTargetPlatform == TargetPlatform.android);
+
+    if (isMobileDevice) {
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        TrackingStatus status = await AppTrackingTransparency.trackingAuthorizationStatus;
+        if (status == TrackingStatus.notDetermined) {
+          await Future.delayed(const Duration(milliseconds: 500)); 
+          await AppTrackingTransparency.requestTrackingAuthorization();
+        }
+      }
+
+      await OneSignal.Notifications.requestPermission(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.65), // Dark frosted glass
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+          ),
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 24),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const SizedBox(height: 32),
+              const Text(
+                "Which service do you primarily attend?",
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 24),
+              
+              _buildServiceTile(context, ChurchService.english, '9:30am (English)'),
+              _buildServiceTile(context, ChurchService.spanish, '11:30am (Español)'),
+              _buildServiceTile(context, ChurchService.both, '9:30am & 11:30am (Both)'),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildServiceTile(BuildContext context, ChurchService value, String label) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+      ),
+      child: ListTile(
+        title: Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.white70),
+        onTap: () => _handleSelection(context, value),
       ),
     );
   }

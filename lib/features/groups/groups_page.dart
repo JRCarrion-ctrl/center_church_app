@@ -32,20 +32,22 @@ class _GroupsPageState extends State<GroupsPage> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_futuresInitialized) {
-      final app = context.read<AppState>();
-      final service = context.read<GroupService>();
-      final userId = app.profile?.id;
+    
+    final app = context.watch<AppState>(); // Listen for changes
+    final service = context.read<GroupService>();
+    final userId = app.profile?.id;
 
-      // Initialize futures once here to avoid Provider errors during build
-      if (userId != null) {
-        _invitesFuture = service.getGroupInvitations(userId);
-      } else {
-        _invitesFuture = Future.value([]);
-      }
-      _joinableFuture = service.getJoinableGroups();
+    // 1. One-time setup for Invites (since they don't depend on language)
+    if (!_futuresInitialized) {
+      _invitesFuture = userId != null 
+          ? service.getGroupInvitations(userId) 
+          : Future.value([]);
       _futuresInitialized = true;
     }
+
+    // 2. Always refresh Joinable Groups if the language changes
+    // This ensures the UI stays in sync with their preference!
+    _joinableFuture = service.getJoinableGroups(app.databaseServiceFilter);
   }
 
   Future<void> _refreshAllSections() async {
@@ -60,6 +62,9 @@ class _GroupsPageState extends State<GroupsPage> {
     final nameController = TextEditingController();
     final descController = TextEditingController();
     String visibility = 'invite_only';
+    
+    // ✨ NEW: State for the new group's language tags
+    List<String> selectedAudiences = ['english', 'spanish']; 
     bool creating = false;
 
     final created = await showDialog<bool>(
@@ -69,36 +74,74 @@ class _GroupsPageState extends State<GroupsPage> {
         builder: (ctx, setLocal) => GestureDetector(
           onTap: () => FocusScope.of(ctx).unfocus(),
           child: AlertDialog(
-            title: Text("key_052".tr()), // Create Group
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
+            title: Text("key_052".tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   TextField(
                     controller: nameController,
                     textInputAction: TextInputAction.next,
-                    decoration: InputDecoration(labelText: "key_052a".tr()), // Name
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: descController,
-                    decoration: InputDecoration(labelText: "key_052b".tr()), // Description
-                    maxLines: 3,
+                    decoration: InputDecoration(
+                      labelText: "key_052a".tr(),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
                   ),
                   const SizedBox(height: 12),
+                  TextField(
+                    controller: descController,
+                    decoration: InputDecoration(
+                      labelText: "key_052b".tr(),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+                    ),
+                    maxLines: 2,
+                  ),
+                  const SizedBox(height: 20),
+                  
+                  // ✨ NEW: Target Audience Selector
+                  Text(
+                    "Target Audience".tr(), 
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    children: ['english', 'spanish'].map((lang) {
+                      final isSelected = selectedAudiences.contains(lang);
+                      return FilterChip(
+                        label: Text(lang == 'english' ? 'TCCF' : 'Centro'),
+                        selected: isSelected,
+                        onSelected: (bool selected) {
+                          setLocal(() {
+                            if (selected) {
+                              selectedAudiences.add(lang);
+                            } else {
+                              selectedAudiences.remove(lang);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
+                  ),
+                  
+                  const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     initialValue: visibility,
                     decoration: InputDecoration(
-                      labelText: "key_052c".tr(), // Visibility
-                      border: const OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(32)),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      labelText: "key_052c".tr(),
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
                     ),
-                    borderRadius: BorderRadius.circular(16),
                     items: [
-                      DropdownMenuItem(value: 'invite_only', child: Text("key_053".tr())), // Invite only
-                      DropdownMenuItem(value: 'public', child: Text("key_054".tr())),      // Public
+                      DropdownMenuItem(value: 'invite_only', child: Text("key_053".tr())),
+                      DropdownMenuItem(value: 'public', child: Text("key_054".tr())),
                     ],
                     onChanged: creating
                         ? null
@@ -110,39 +153,29 @@ class _GroupsPageState extends State<GroupsPage> {
             actions: [
               TextButton(
                 onPressed: creating ? null : () => Navigator.pop(ctx, false),
-                child: Text("key_055".tr()), // Cancel
+                child: Text("key_055".tr()),
               ),
               ElevatedButton(
-                onPressed: creating
+                onPressed: (creating || selectedAudiences.isEmpty)
                     ? null
                     : () async {
                         setLocal(() => creating = true);
 
                         final name = nameController.text.trim();
                         final desc = descController.text.trim();
+                        
+                        // Validation
                         if (name.length < 3) {
-                          ScaffoldMessenger.of(ctx).showSnackBar(
-                            SnackBar(content: Text("key_056".tr())), // Name too short
-                          );
+                          ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text("key_056".tr())));
                           setLocal(() => creating = false);
                           return;
                         }
 
-                        final app = context.read<AppState>();
-                        final userId = app.profile?.id;
-                        if (userId == null || userId.isEmpty) {
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(content: Text("key_058a".tr())), // Please sign in...
-                            );
-                          }
-                          setLocal(() => creating = false);
-                          return;
-                        }
-
-                        // Hasura mutation: create group and make creator owner (nested insert)
+                        final userId = context.read<AppState>().profile?.id;
+                        
+                        // ✨ UPDATED MUTATION: Added targeted_audiences
                         const mCreate = r'''
-                          mutation CreateGroup($name: String!, $desc: String, $vis: String!, $uid: String!) {
+                          mutation CreateGroup($name: String!, $desc: String, $vis: String!, $uid: String!, $langs: [String!]!) {
                             insert_groups_one(
                               object: {
                                 name: $name,
@@ -150,6 +183,7 @@ class _GroupsPageState extends State<GroupsPage> {
                                 visibility: $vis,
                                 temporary: false,
                                 archived: false,
+                                targeted_audiences: $langs,
                                 group_memberships: {
                                   data: [{
                                     user_id: $uid,
@@ -173,21 +207,13 @@ class _GroupsPageState extends State<GroupsPage> {
                                 'desc': desc.isEmpty ? null : desc,
                                 'vis': visibility,
                                 'uid': userId,
+                                'langs': selectedAudiences, // ✨ PASS THE ARRAY
                               },
                               fetchPolicy: FetchPolicy.noCache,
                             ),
                           );
 
-                          if (res.hasException) {
-                            if (ctx.mounted) {
-                              ScaffoldMessenger.of(ctx).showSnackBar(
-                                SnackBar(content: Text(res.exception.toString())),
-                              );
-                            }
-                            setLocal(() => creating = false);
-                            return;
-                          }
-
+                          if (res.hasException) throw res.exception!;
                           if (ctx.mounted) Navigator.pop(ctx, true);
                         } catch (e) {
                           if (ctx.mounted) {
@@ -200,9 +226,8 @@ class _GroupsPageState extends State<GroupsPage> {
                         }
                       },
                 child: creating
-                    ? const SizedBox(
-                        width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                    : Text("key_058".tr()), // Create
+                    ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text("key_058".tr()),
               ),
             ],
           ),

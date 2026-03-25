@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
+import 'dart:ui';
 
 import '../../../core/graph_provider.dart';
 import '../../../core/time_service.dart';
@@ -173,82 +174,147 @@ class _AnnouncementFormModalState extends State<AnnouncementFormModal> {
     }
 
     final isEditing = widget.existing != null;
-    final bottom    = MediaQuery.of(context).viewInsets.bottom;
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
 
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottom),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                isEditing ? "key_154".tr() : "key_155".tr(),
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _title,
-                decoration: InputDecoration(labelText: "key_156".tr()),
-                validator: (v) => v == null || v.isEmpty ? "key_156a".tr() : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _body,
-                decoration: InputDecoration(labelText: "key_157".tr()),
-                maxLines: 2,
-              ),
-              const SizedBox(height: 12),
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const Icon(Icons.schedule),
-                title: Text(
-                  _scheduledUtc == null
-                      ? 'No schedule set'
-                      : 'Scheduled: ${TimeService.formatUtcToLocal(_scheduledUtc!)}',
-                ),
-                trailing: TextButton(
-                  onPressed: _pickDateTime,
-                  child: Text("key_158".tr()),
-                ),
-              ),
-              const SizedBox(height: 12),
-              ImagePickerField(
-                label: 'Announcement Image',
-                initialUrl: widget.existing?.imageUrl,
-                onChanged: (bytes, ext, removed) {
-                  setState(() {
-                    _imageBytes     = bytes;
-                    _imageExtension = ext;
-                    _removedImage   = removed;
-                  });
-                },
-              ),
-              const SizedBox(height: 20),
-              if (saving)
-                const CircularProgressIndicator()
-              else
-                Row(
-                  children: [
-                    Expanded(
-                      child: ElevatedButton(
+    // ✨ 2. Clip the blur to the top rounded corners
+    return ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      child: BackdropFilter(
+        // ✨ 3. Apply the blur to the background behind the modal
+        filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+        child: Container(
+          padding: EdgeInsets.only(bottom: bottom),
+          decoration: BoxDecoration(
+            // ✨ 4. Use a semi-transparent background color
+            color: isDark 
+                ? Colors.black.withValues(alpha: 0.6) 
+                : Colors.white.withValues(alpha: 0.8),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.2), 
+              width: 1.5
+            ),
+          ),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // iOS-style drag handle
+                  Container(
+                    width: 40,
+                    height: 5,
+                    margin: const EdgeInsets.only(bottom: 24),
+                    decoration: BoxDecoration(
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(2.5),
+                    ),
+                  ),
+                  
+                  Text(
+                    isEditing ? "key_154".tr() : "key_155".tr(),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  
+                  // ✨ 5. Use the modern input decoration helper if you have it, 
+                  // or style them rounded and filled here:
+                  TextFormField(
+                    controller: _title,
+                    decoration: _sleekInput(context, "key_156".tr(), Icons.title),
+                    validator: (v) => v == null || v.isEmpty ? "key_156a".tr() : null,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  TextFormField(
+                    controller: _body,
+                    decoration: _sleekInput(context, "key_157".tr(), Icons.subject),
+                    maxLines: 3,
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  // Modern Schedule Row
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.schedule, color: colorScheme.primary, size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            _scheduledUtc == null
+                                ? 'No schedule set'
+                                : 'Scheduled: ${TimeService.formatUtcToLocal(_scheduledUtc!)}',
+                            style: const TextStyle(fontSize: 14),
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: _pickDateTime,
+                          child: Text("key_158".tr()),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  
+                  ImagePickerField(
+                    label: 'Announcement Image',
+                    initialUrl: widget.existing?.imageUrl,
+                    onChanged: (bytes, ext, removed) {
+                      setState(() {
+                        _imageBytes     = bytes;
+                        _imageExtension = ext;
+                        _removedImage   = removed;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 32),
+                  
+                  if (saving)
+                    CircularProgressIndicator(color: colorScheme.primary)
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: FilledButton(
                         onPressed: _submit,
+                        style: FilledButton.styleFrom(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
                         child: Text(isEditing ? "key_041i".tr() : "key_041h".tr()),
                       ),
                     ),
-                    const SizedBox(width: 12),
-                    TextButton(
-                      onPressed: () => Navigator.of(context).pop(),
-                      child: Text("key_159".tr()),
-                    ),
-                  ],
-                ),
-            ],
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: Text("key_159".tr(), style: TextStyle(color: colorScheme.outline)),
+                  ),
+                ],
+              ),
+            ),
           ),
         ),
       ),
+    );
+  }
+  InputDecoration _sleekInput(BuildContext context, String label, IconData icon) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return InputDecoration(
+      labelText: label,
+      prefixIcon: Icon(icon, color: colorScheme.primary, size: 20),
+      filled: true,
+      fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(16), borderSide: BorderSide.none),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     );
   }
 }

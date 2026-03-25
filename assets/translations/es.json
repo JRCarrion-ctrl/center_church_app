@@ -61,7 +61,7 @@
   "key_034": "Calendario",
   "key_list_view": "Lista",
   "key_035": "Error:",
-  "key_036": "No hay eventos próximos.",
+  "key_036": "No hay eventos.",
   "key_036a": "Eventos",
   "key_036b": "Tus eventos de grupo",
   "key_036c": "Agregar evento",
@@ -614,5 +614,10 @@
   "key_please_log_in": "Por favor inica una sesión para RSVP",
   "Be the first to say something!": "Se el primero en decir algo!",
   "key_show_less": "Mostrar menos",
-  "only_admin": "Solo Admins Pueden Mandar Mensajes"
+  "only_admin": "Solo Admins Pueden Mandar Mensajes",
+  "Past Church Events": "Eventos Pasados",
+  "Past Group Events": "Eventos de Grupo Pasados",
+  "View Past Events": "Ver Eventos Pasados",
+  "Target Audience": "Audiencia",
+  "key_read_less": "Leer Menos"
 }

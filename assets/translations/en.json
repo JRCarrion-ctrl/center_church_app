@@ -613,5 +613,10 @@
   "key_please_log_in": "Please log in to RSVP",
   "Be the first to say something!": "Be the first to say something!",
   "key_show_less": "Show Less",
-  "only_admin": "Only Admins Can Send Messages"
+  "only_admin": "Only Admins Can Send Messages",
+  "Past Church Events": "Past Church Events",
+  "Past Group Events": "Past Group Events",
+  "View Past Events": "View Past Events",
+  "Target Audience": "Target Audience",
+  "key_read_less": "Read Less"
 }
