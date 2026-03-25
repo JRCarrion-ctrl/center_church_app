@@ -5,7 +5,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
+import 'package:provider/provider.dart'; // ADDED: For AppState
+import 'package:go_router/go_router.dart'; // ADDED: For routing after delete
 
+import '../../../app_state.dart'; // ADDED: For role checking
 import '../../../core/graph_provider.dart';
 import '../group_service.dart';
 import '../models/group.dart';
@@ -29,7 +32,6 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
   bool _isSaving    = false;
   bool _isUploading = false;
   
-  // ADDED: State variable for the toggle
   late bool _onlyAdminsMessage; 
 
   @override
@@ -38,8 +40,6 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     _nameController = TextEditingController(text: widget.group.name);
     _descController = TextEditingController(text: widget.group.description ?? '');
     _tempPhotoUrl   = widget.group.photoUrl;
-    
-    // Initialize the toggle from the existing group data
     _onlyAdminsMessage = widget.group.onlyAdminsMessage;
   }
 
@@ -58,8 +58,6 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     super.dispose();
   }
 
-  /// Compresses image bytes on mobile. Returns original bytes on web
-  /// (flutter_image_compress has no web support).
   Future<Uint8List> _compressBytes(Uint8List bytes) async {
     if (kIsWeb) return bytes;
     final compressed = await FlutterImageCompress.compressWithList(
@@ -81,11 +79,10 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     try {
       final raw        = await picked.readAsBytes();
       final compressed = await _compressBytes(raw);
-      // uploadFile now accepts bytes + filename (see chat_storage_service.dart)
       final finalUrl = await _chatStorageService.uploadFile(
         compressed,
         '${widget.group.id}.jpg',
-        widget.group.id,  // ← add back
+        widget.group.id, 
       );
       setState(() => _tempPhotoUrl = finalUrl);
     } catch (e) {
@@ -103,7 +100,6 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
 
     setState(() => _isSaving = true);
     try {
-      // 1. Update general group info
       await _groupService.updateGroup(
         groupId: widget.group.id,
         name: _nameController.text.trim(),
@@ -111,7 +107,6 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
         photoUrl: _tempPhotoUrl,
       );
       
-      // 2. Update specific group settings if the toggle changed
       if (_onlyAdminsMessage != widget.group.onlyAdminsMessage) {
         await _groupService.updateGroupSettings(
           groupId: widget.group.id,
@@ -127,8 +122,55 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
     }
   }
 
+  // ==========================================
+  // NEW LOGIC: Delete Group Flow
+  // ==========================================
+  Future<void> _deleteGroup() async {
+    final colorScheme = Theme.of(context).colorScheme;
+    
+    // 1. Ask for confirmation
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Delete Group?"),
+        content: const Text("Are you sure you want to permanently delete this group and all its messages? This cannot be undone."),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false), 
+            child: Text("key_074".tr()) // Cancel
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true), 
+            child: Text("key_075".tr(), style: TextStyle(color: colorScheme.error, fontWeight: FontWeight.bold)) // Delete
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    setState(() => _isSaving = true);
+    try {
+      // 2. Perform the deletion (archiving)
+      await _groupService.deleteGroup(widget.group.id);
+      
+      // 3. Navigate away to safety (root/home page) so they don't see a broken group page
+      if (mounted) {
+        context.go('/'); 
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete group: $e')));
+        setState(() => _isSaving = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // 🛡️ ROLE CHECK: Are they the global owner?
+    final isGlobalOwner = context.select<AppState, bool>((s) => s.userRole.name == 'owner');
+
     return Scaffold(
       appBar: AppBar(
         title: Text("key_196g".tr()),
@@ -195,15 +237,75 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
           ),
           const SizedBox(height: 24),
           
-          // Admin Only Message Toggle
           SwitchListTile(
             title: Text("only_admin".tr()),
             value: _onlyAdminsMessage,
             onChanged: (val) => setState(() => _onlyAdminsMessage = val),
-            contentPadding: EdgeInsets.zero, // Aligns nicely with the TextFields
+            contentPadding: EdgeInsets.zero, 
           ),
+
+          // ==========================================
+          // NEW LOGIC: Conditional Delete Button
+          // ==========================================
+          if (isGlobalOwner) ...[
+            const SizedBox(height: 32),
+            const Divider(),
+            const SizedBox(height: 16),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                foregroundColor: Theme.of(context).colorScheme.error,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                elevation: 0,
+              ),
+              icon: const Icon(Icons.delete_forever),
+              label: const Text("Delete Group", style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: _isSaving ? null : _deleteGroup,
+            ),
+          ],
         ],
       ),
+    );
+  }
+}
+
+// ... GroupSettingsWrapper remains exactly the same
+
+class GroupSettingsWrapper extends StatefulWidget {
+  final String groupId;
+  const GroupSettingsWrapper({super.key, required this.groupId});
+
+  @override
+  State<GroupSettingsWrapper> createState() => _GroupSettingsWrapperState();
+}
+
+class _GroupSettingsWrapperState extends State<GroupSettingsWrapper> {
+  // 🚀 FIXED: Changed GroupModel to Group
+  Future<Group?>? _groupFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_groupFuture == null) {
+      final service = GroupService(GraphProvider.of(context));
+      _groupFuture = service.getGroupById(widget.groupId); 
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // 🚀 FIXED: Changed GroupModel to Group here as well
+    return FutureBuilder<Group?>(
+      future: _groupFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        }
+        if (snapshot.hasError || snapshot.data == null) {
+          return const Scaffold(body: Center(child: Text("Group not found")));
+        }
+        return GroupSettingsPage(group: snapshot.data!);
+      },
     );
   }
 }

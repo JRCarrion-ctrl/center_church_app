@@ -5,6 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
+import 'package:ccf_app/core/widgets/ccf_query.dart';
+
 class ViewChildProfilePage extends StatelessWidget {
   final String childId;
   const ViewChildProfilePage({super.key, required this.childId});
@@ -85,7 +87,7 @@ class ViewChildProfilePage extends StatelessWidget {
             icon: const Icon(Icons.edit),
             onPressed: () {
               // Pass the entire child map for editing
-              context.pushNamed('edit_child_profile', extra: child);
+              context.push('/more/family/edit_child?childId=${child['id']}');
             },
           ),
         ],
@@ -174,35 +176,21 @@ class ViewChildProfilePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Query(
-      options: QueryOptions(
-        document: gql(_childQuery),
-        variables: {'id': childId},
-        fetchPolicy: FetchPolicy.cacheAndNetwork, // Use cache if available, but check network
+    return Scaffold(
+      body: CCFQuery(
+        options: QueryOptions(
+          document: gql(_childQuery),
+          variables: {'id': childId},
+          fetchPolicy: FetchPolicy.cacheAndNetwork, // Use cache if available, but check network
+        ),
+        onData: (data, refetch) {
+          final childData = data['child_profiles_by_pk'] as Map<String, dynamic>?;
+          if (childData == null) {
+            return const Center(child: Text('Child not found'));
+          }
+          return _buildChildProfile(context, childData);
+        },
       ),
-      builder: (QueryResult result, {VoidCallback? refetch, FetchMore? fetchMore}) {
-        if (result.hasException) {
-          // Display error message
-          final errorText = 'Failed to load child profile: ${result.exception.toString()}';
-          return Scaffold(body: Center(child: Text(errorText)));
-        }
-
-        if (result.isLoading && result.data == null) {
-          // Display a loading indicator on first load
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        
-        // Extract data
-        final childData = result.data?['child_profiles_by_pk'] as Map<String, dynamic>?;
-
-        if (childData == null) {
-          // Child not found or data is null
-          return Scaffold(body: Center(child: Text('Child not found')));
-        }
-
-        // Build the profile UI
-        return _buildChildProfile(context, childData);
-      },
     );
   }
 }

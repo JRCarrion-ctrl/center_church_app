@@ -219,7 +219,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       final familyId = _cachedFamilyId ?? widget.child['family_id'] ?? await _fetchFamilyId();
       if (!mounted) return;
       if (familyId != null) {
-        context.go('/more/family', extra: {'familyId': familyId});
+        context.go('/more/family?familyId=$familyId');
       } else {
         context.go('/more');
       }

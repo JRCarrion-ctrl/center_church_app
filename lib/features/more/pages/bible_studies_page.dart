@@ -7,172 +7,94 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/core/widgets/ccf_query.dart';
 
+const String _getStudiesQuery = r'''
+  query LoadBibleStudies($uid: String!, $langs: [String!]!) {
+    profiles_by_pk(id: $uid) { role }
+    bible_studies(
+      where: { target_audiences: { _contained_in: $langs } },
+      order_by: {date: desc}
+    ) {
+      id
+      title
+      date
+      youtube_url
+      notes_url
+    }
+    bible_study_access_requests(where: {user_id: {_eq: $uid}}) {
+      bible_study_id
+      status
+    }
+  }
+''';
 
-class BibleStudiesPage extends StatefulWidget {
+const String _requestAccessMutation = r'''
+  mutation RequestAccess($studyId: uuid!, $uid: String!, $reason: String) {
+    insert_bible_study_access_requests_one(object: {
+      bible_study_id: $studyId,
+      user_id: $uid,
+      reason: $reason
+    }) {
+      id
+    }
+  }
+''';
+
+class BibleStudiesPage extends StatelessWidget {
   const BibleStudiesPage({super.key});
 
-  @override
-  State<BibleStudiesPage> createState() => _BibleStudiesPageState();
-}
-
-class _BibleStudiesPageState extends State<BibleStudiesPage> {
-  List<Map<String, dynamic>> studies = [];
-  Map<String, String> accessStatus = {};
-  String userRole = 'member';
-  bool isLoading = true;
-  // Flag to ensure _loadPage is only run once on initial dependency change
-  bool _isDataLoaded = false; 
-
-  @override
-  void initState() {
-    super.initState();
-    // initState is now clean and only calls super.
-  }
-
-  // --- START REFACTOR CHANGE ---
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    // This is the correct place to access inherited widgets (like GraphQLProvider)
-    // and initiate data loading logic that depends on the context.
-    if (!_isDataLoaded) {
-      _loadPage();
-      _isDataLoaded = true;
-    }
-  }
-  // --- END REFACTOR CHANGE ---
-
-  Future<void> _loadPage() async {
-    // The context is now guaranteed to be safe for inherited widget lookups
-    // when this async function is first called from didChangeDependencies.
-    final userId = context.read<AppState>().profile?.id;
-    if (userId == null) {
-      if (mounted) setState(() => isLoading = false);
-      return;
-    }
-    // We already set isLoading = true in the initial state, 
-    // but good practice to reset if calling this again (e.g., after an action)
-    if (!isLoading) setState(() => isLoading = true); 
-
-    // Accessing the InheritedWidget (GraphQLProvider) is now safe!
-    final client = GraphQLProvider.of(context).value;
-
-    // One round-trip: role + all studies + my access statuses
-    const q = r'''
-      query LoadBibleStudies($uid: String!) {
-        profiles_by_pk(id: $uid) { role }
-        bible_studies(order_by: {date: desc}) {
-          id
-          title
-          date
-          youtube_url
-          notes_url
-        }
-        bible_study_access_requests(where: {user_id: {_eq: $uid}}) {
-          bible_study_id
-          status
-        }
-      }
-    ''';
-
-    try {
-      final res = await client.query(
-        QueryOptions(
-          document: gql(q),
-          variables: {'uid': userId},
-          fetchPolicy: FetchPolicy.networkOnly,
-        ),
-      );
-
-      if (res.hasException) {
-        debugPrint('LoadBibleStudies error: ${res.exception}');
-        if (mounted) setState(() => isLoading = false);
-        return;
-      }
-
-      final role = (res.data?['profiles_by_pk']?['role'] as String?) ?? 'member';
-
-      final rows = (res.data?['bible_studies'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-
-      final accessRows = (res.data?['bible_study_access_requests'] as List<dynamic>? ?? [])
-          .cast<Map<String, dynamic>>();
-
-      final statusMap = {
-        for (final r in accessRows)
-          r['bible_study_id'] as String: (r['status'] as String?) ?? 'pending'
-      };
-
-      if (!mounted) return;
-      setState(() {
-        userRole = role;
-        studies = rows;
-        accessStatus = statusMap;
-        isLoading = false;
-      });
-    } catch (e) {
-      debugPrint('LoadBibleStudies exception: $e');
-      if (mounted) setState(() => isLoading = false);
-    }
-  }
-
-  Future<void> _submitAccessRequest(String studyId) async {
+  Future<void> _submitAccessRequest(
+    BuildContext context, 
+    String studyId, 
+    String userId, 
+    VoidCallback refetch
+  ) async {
+    final reasonController = TextEditingController();
+    
     final reason = await showDialog<String>(
       context: context,
-      builder: (context) {
-        final controller = TextEditingController();
-        return AlertDialog(
-          title: Text("key_240".tr()),
-          content: TextField(controller: controller, maxLines: 3),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text("key_241".tr())),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(context, controller.text.trim()),
-              child: Text("key_242".tr()),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => AlertDialog(
+        title: Text("key_240".tr()),
+        content: TextField(
+          controller: reasonController, 
+          maxLines: 3,
+          decoration: const InputDecoration(
+            hintText: "Why would you like to join?",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: Text("key_241".tr())),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, reasonController.text.trim()),
+            child: Text("key_242".tr()),
+          ),
+        ],
+      ),
     );
 
-    if (!mounted) return;
+    if (reason == null || !context.mounted) return;
 
-    // Access is safe here as this is called by an event handler long after initState
     final client = GraphQLProvider.of(context).value;
-    final userId = context.read<AppState>().profile?.id;
-    if (userId == null) return;
-
-    const m = r'''
-      mutation RequestAccess($studyId: uuid!, $uid: String!, $reason: String) {
-        insert_bible_study_access_requests_one(object: {
-          bible_study_id: $studyId,
-          user_id: $uid,
-          reason: $reason
-        }) {
-          id
-        }
-      }
-    ''';
 
     try {
       final res = await client.mutate(
         MutationOptions(
-          document: gql(m),
+          document: gql(_requestAccessMutation),
           variables: {'studyId': studyId, 'uid': userId, 'reason': reason},
         ),
       );
+      
       if (res.hasException) {
         debugPrint('RequestAccess error: ${res.exception}');
+        return;
       }
 
-      // Reloading data after the mutation
-      // We set _isDataLoaded to false temporarily so _loadPage can run
-      _isDataLoaded = false; 
-      await _loadPage();
-      _isDataLoaded = true; // Set back to true after load
+      // Automatically refresh the Query widget!
+      refetch();
 
-      if (!mounted) return;
+      if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text("key_243".tr())),
       );
@@ -183,77 +105,167 @@ class _BibleStudiesPageState extends State<BibleStudiesPage> {
 
   @override
   Widget build(BuildContext context) {
-    final canCreate = userRole == 'owner' || userRole == 'group_admin';
+    final theme = Theme.of(context);
+    final appState = context.read<AppState>(); // Access AppState
+    final userId = appState.profile?.id;
+    final userLangs = appState.databaseServiceFilter; // Get the language filter
+
+    if (userId == null) {
+      return Scaffold(
+        appBar: AppBar(title: Text("key_245".tr())),
+        body: const Center(child: Text("User not logged in.")),
+      );
+    }
 
     return Scaffold(
       appBar: AppBar(
         title: Text("key_245".tr()),
-        actions: [
-          if (canCreate)
-            IconButton(
-              icon: const Icon(Icons.add),
-              onPressed: () => context.pushNamed('edit_bible_study'),
-            ),
-        ],
       ),
-      body: isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              itemCount: studies.length,
-              itemBuilder: (context, index) {
-                final study = studies[index];
-                final dateIso = study['date'] as String;
-                final formattedDate = DateFormat('MMM d, yyyy').format(DateTime.parse(dateIso));
+      body: CCFQuery(
+        options: QueryOptions(
+          document: gql(_getStudiesQuery),
+          variables: {
+            'uid': userId,
+            'langs': userLangs, // Pass the languages to Hasura
+          },
+          fetchPolicy: FetchPolicy.networkOnly,
+        ),
+        onData: (data, refetch) {
+          
+          // 2. Parse Data directly (no isLoading checks needed!)
+          final role = (data['profiles_by_pk']?['role'] as String?) ?? 'member';
+          final canCreate = role == 'owner' || role == 'group_admin';
+          
+          final studies = (data['bible_studies'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+          final accessRows = (data['bible_study_access_requests'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+          
+          final accessStatus = {
+            for (final r in accessRows)
+              r['bible_study_id'] as String: (r['status'] as String?) ?? 'pending'
+          };
 
-                final status = accessStatus[study['id'] as String];
-                // Access is granted if status is 'approved' or if user is an 'admin' or 'owner'
-                final hasAccess = status == 'approved' || userRole == 'admin' || userRole == 'owner';
+          // 3. Use a nested transparent Scaffold to inject the FAB!
+          return Scaffold(
+            backgroundColor: Colors.transparent, // Ensures it matches your app theme
+            
+            // ✨ Moved the "Add" button here! It only renders if they have permission.
+            floatingActionButton: canCreate 
+              ? FloatingActionButton.extended(
+                  onPressed: () => context.push('/more/study/edit'), // Path-based navigation
+                  icon: const Icon(Icons.add),
+                  label: const Text("New Study"),
+                )
+              : null,
+                
+            body: studies.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.menu_book, size: 64, color: theme.disabledColor),
+                        const SizedBox(height: 16),
+                        Text("No Bible studies available.", style: TextStyle(color: theme.disabledColor)),
+                      ],
+                    ),
+                  )
+                : RefreshIndicator(
+                    onRefresh: () async => refetch(),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(top: 8, bottom: 80), // Added bottom padding so the FAB doesn't block the last card
+                      itemCount: studies.length,
+                      itemBuilder: (context, index) {
+                        final study = studies[index];
+                        final studyId = study['id'] as String;
+                        final title = study['title'] as String;
+                        
+                        final dateIso = study['date'] as String;
+                        final formattedDate = DateFormat('MMM d, yyyy').format(DateTime.parse(dateIso));
 
-                final youtubeUrl = (study['youtube_url'] as String?) ?? '';
-                final notesUrl = (study['notes_url'] as String?) ?? '';
+                        final status = accessStatus[studyId];
+                        final hasAccess = status == 'approved' || role == 'admin' || role == 'owner';
 
-                return Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: ListTile(
-                    title: Text(study['title'] as String),
-                    subtitle: Text(formattedDate),
-                    trailing: hasAccess
-                        ? Wrap(
-                            spacing: 8,
-                            children: [
-                              TextButton(
-                                onPressed: () async {
-                                  if (youtubeUrl.isNotEmpty) {
-                                    final u = Uri.tryParse(youtubeUrl);
-                                    if (u != null) await launchUrl(u, mode: LaunchMode.externalApplication);
-                                  }
-                                },
-                                child: Text("key_246".tr()), // "Watch"
-                              ),
-                              if (notesUrl.isNotEmpty)
-                                TextButton(
-                                  // Navigating to a separate notes viewer page
-                                  onPressed: () => context.push('/more/study/notes_viewer', extra: notesUrl),
-                                  child: Text("key_247".tr()), // "Notes"
+                        final youtubeUrl = (study['youtube_url'] as String?) ?? '';
+                        final notesUrl = (study['notes_url'] as String?) ?? '';
+
+                        return Card(
+                          elevation: 0,
+                          color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                                          const SizedBox(height: 4),
+                                          Text(formattedDate, style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary)),
+                                        ],
+                                      ),
+                                    ),
+                                    if (canCreate)
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        visualDensity: VisualDensity.compact,
+                                        tooltip: 'Edit Study',
+                                        onPressed: () => context.push('/more/study/edit?studyId=${study['id']}'),
+                                      ),
+                                  ],
                                 ),
-                              if (canCreate)
-                                IconButton(
-                                  icon: const Icon(Icons.edit),
-                                  tooltip: 'Edit Study',
-                                  onPressed: () => context.pushNamed('edit_bible_study', extra: study),
-                                ),
-                            ],
-                          )
-                        : status == 'pending'
-                            ? Text("key_249".tr(), style: const TextStyle(color: Colors.orange)) // "Pending"
-                            : TextButton(
-                                onPressed: () => _submitAccessRequest(study['id'] as String),
-                                child: Text("key_248".tr()), // "Request Access"
-                              ),
+                                const SizedBox(height: 16),
+                                OverflowBar(
+                                  spacing: 8,
+                                  alignment: MainAxisAlignment.end,
+                                  children: [
+                                    if (hasAccess) ...[
+                                      if (notesUrl.isNotEmpty)
+                                        TextButton.icon(
+                                          icon: const Icon(Icons.description_outlined, size: 18),
+                                          label: Text("key_247".tr()),
+                                          onPressed: () => context.push('/more/study/notes_viewer?url=${Uri.encodeComponent(notesUrl)}'),
+                                        ),
+                                      if (youtubeUrl.isNotEmpty)
+                                        FilledButton.icon(
+                                          icon: const Icon(Icons.play_circle_outline, size: 18),
+                                          label: Text("key_246".tr()),
+                                          onPressed: () async {
+                                            final u = Uri.tryParse(youtubeUrl);
+                                            if (u != null) await launchUrl(u, mode: LaunchMode.externalApplication);
+                                          },
+                                        ),
+                                    ] else if (status == 'pending') ...[
+                                      Chip(
+                                        avatar: const Icon(Icons.schedule, size: 16),
+                                        label: Text("key_249".tr()),
+                                        backgroundColor: Colors.orange.shade100,
+                                        side: BorderSide.none,
+                                      )
+                                    ] else ...[
+                                      FilledButton.tonalIcon(
+                                        icon: const Icon(Icons.lock_outline, size: 18),
+                                        label: Text("key_248".tr()),
+                                        onPressed: () => _submitAccessRequest(context, studyId, userId, refetch),
+                                      )
+                                    ]
+                                  ],
+                                )
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                );
-              },
-            ),
+          );
+        },
+      ),
     );
   }
 }

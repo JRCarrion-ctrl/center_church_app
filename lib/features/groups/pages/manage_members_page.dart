@@ -12,12 +12,10 @@ import '../widgets/invite_user_modal.dart';
 
 class ManageMembersPage extends StatefulWidget {
   final String groupId;
-  final bool isAdmin; 
 
   const ManageMembersPage({
     super.key,
     required this.groupId,
-    this.isAdmin = false, 
   });
 
   @override
@@ -30,10 +28,16 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   late Future<List<Map<String, dynamic>>> _futureInvitations;
   late GroupService _groups;
   bool _inited = false;
+  bool _isAdmin = false;
+  bool _isInit = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
+    if (!_isInit) {
+      _isInit = true;
+      _checkAdminRole();
+    }
     if (_inited) return;
     _inited = true;
     final client = GraphProvider.of(context);
@@ -43,23 +47,37 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     _futureMembers = _groups.getGroupMembers(widget.groupId);
     
     // Incoming requests (users asking to join)
-    _futurePending = widget.isAdmin
+    _futurePending = _isAdmin
         ? _groups.getGroupJoinRequests(widget.groupId)
         : Future.value([]); 
         
     // Outgoing invitations (users invited by an admin)
-    _futureInvitations = widget.isAdmin
+    _futureInvitations = _isAdmin
         ? _groups.getPendingMembers(widget.groupId)
         : Future.value([]);
+  }
+
+  Future<void> _checkAdminRole() async {
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+    if (userId != null) {
+      final service = GroupService(GraphProvider.of(context));
+      final role = await service.getMyGroupRole(groupId: widget.groupId, userId: userId);
+      if (mounted) {
+        setState(() {
+          _isAdmin = const {'leader', 'supervisor', 'owner', 'admin'}.contains(role) || appState.userRole.name == 'owner';
+        });
+      }
+    }
   }
 
   // --- Centralized Refresh Logic ---
   Future<void> _refreshAllLists() async {
     final updatedMembers = _groups.getGroupMembers(widget.groupId);
-    final updatedPending = widget.isAdmin
+    final updatedPending = _isAdmin
         ? _groups.getGroupJoinRequests(widget.groupId)
         : Future.value(<Map<String, dynamic>>[]); 
-    final updatedInvitations = widget.isAdmin
+    final updatedInvitations = _isAdmin
         ? _groups.getPendingMembers(widget.groupId)
         : Future.value(<Map<String, dynamic>>[]);
 
@@ -77,7 +95,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
 
     return Scaffold(
       appBar: AppBar(title: Text("key_144".tr())),
-      floatingActionButton: widget.isAdmin 
+      floatingActionButton: _isAdmin 
           ? FloatingActionButton(
               onPressed: () {
                 showModalBottomSheet(
@@ -126,7 +144,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
                 },
               ),
               
-              if (widget.isAdmin) ...[
+              if (_isAdmin) ...[
                 const SizedBox(height: 32),
 
                 // --- Incoming Join Requests ---
@@ -218,7 +236,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       subtitle: Text(member['role']),
       onTap: () => context.push('/profile/${member['user_id']}'),
       onLongPress: () async {
-        if (!widget.isAdmin || isCurrentUser) return;
+        if (!_isAdmin || isCurrentUser) return;
 
         final myRole = await _groups.getMyGroupRole(
           groupId: widget.groupId,

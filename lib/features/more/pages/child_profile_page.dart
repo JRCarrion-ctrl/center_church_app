@@ -1,6 +1,7 @@
 // File: lib/features/nursery/pages/child_profile_page.dart
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:graphql_flutter/graphql_flutter.dart';
 
 class ChildProfilePage extends StatelessWidget {
   final Map<String, dynamic> child;
@@ -108,6 +109,48 @@ class ChildProfilePage extends StatelessWidget {
           const SizedBox(height: 20),
         ],
       ),
+    );
+  }
+}
+
+class NurseryChildProfileWrapper extends StatefulWidget {
+  final String childId;
+  const NurseryChildProfileWrapper({super.key, required this.childId});
+
+  @override
+  State<NurseryChildProfileWrapper> createState() => _NurseryChildProfileWrapperState();
+}
+
+class _NurseryChildProfileWrapperState extends State<NurseryChildProfileWrapper> {
+  Future<Map<String, dynamic>?>? _childFuture;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (_childFuture == null) {
+      final client = GraphQLProvider.of(context).value;
+      const query = r'''
+        query GetNurseryChild($id: uuid!) {
+          child_profiles_by_pk(id: $id) {
+            id display_name birthday photo_url allergies notes emergency_contact family_id
+          }
+        }
+      ''';
+      _childFuture = client.query(QueryOptions(
+        document: gql(query), variables: {'id': widget.childId}, fetchPolicy: FetchPolicy.networkOnly,
+      )).then((res) => res.data?['child_profiles_by_pk']);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _childFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        if (snapshot.hasError || snapshot.data == null) return const Scaffold(body: Center(child: Text("Child not found")));
+        return ChildProfilePage(child: snapshot.data!);
+      },
     );
   }
 }

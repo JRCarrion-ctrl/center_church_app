@@ -49,7 +49,7 @@ class _MorePageState extends State<MorePage> {
     } catch (_) {}
 
     if (!mounted) return;
-    context.push('/more/family', extra: {'familyId': familyId});
+    context.push('/more/family?familyId=$familyId');
   }
 
   @override

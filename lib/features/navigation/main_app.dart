@@ -43,34 +43,121 @@ class MainApp extends StatelessWidget {
           // MODERN TOP BANNER (AppBar)
           // ====================================================================
           appBar: AppBar(
-            // Use M3 surface and rely on shadow for separation
-            backgroundColor: colorScheme.surface, 
+            backgroundColor: colorScheme.surface,
             elevation: 0,
-            scrolledUnderElevation: 4.0, // Shows subtle shadow when content scrolls under
-            
-            // Layout is now asymmetric (branding to the left)
+            scrolledUnderElevation: 4.0,
             leadingWidth: 0,
-            centerTitle: false, 
-
-            title: Padding(
-              padding: const EdgeInsets.only(left: 8.0),
-              child: Image.asset(
-                'assets/logo_light.png', 
-                height: 36,
-                fit: BoxFit.contain,
-                color: colorScheme.onSurface, // Use M3 color for tinting
-              ),
+            centerTitle: false,
+            title: Row(
+              children: [
+                Image.asset(
+                  'assets/logo_light.png',
+                  height: 32,
+                  fit: BoxFit.contain,
+                  color: colorScheme.onSurface,
+                ),
+                const SizedBox(width: 8),
+                
+                // THE CLEAN DROPDOWN
+                MenuAnchor(
+                  // 1. STYLE THE DROPDOWN MENU (The Glass Pane)
+                  style: MenuStyle(
+                    backgroundColor: WidgetStatePropertyAll(
+                      colorScheme.surface.withValues(alpha: 0.85), // Translucent background
+                    ),
+                    surfaceTintColor: const WidgetStatePropertyAll(Colors.transparent), // Removes M3 purple tint
+                    elevation: const WidgetStatePropertyAll(8), // Soft floating shadow
+                    shape: WidgetStatePropertyAll(
+                      RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16), // Match your app's rounded cards
+                        side: BorderSide(
+                          color: colorScheme.onSurface.withValues(alpha: 0.1), // Subtle glass edge
+                          width: 1,
+                        ),
+                      ),
+                    ),
+                    padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(vertical: 8)),
+                  ),
+                  builder: (BuildContext context, MenuController controller, Widget? child) {
+                    // 2. STYLE THE MASTER BUTTON (The Sleek Pill)
+                    return Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () {
+                          if (controller.isOpen) {
+                            controller.close();
+                          } else {
+                            controller.open();
+                          }
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: colorScheme.surface.withValues(alpha: 0.4), // Very subtle frosted fill
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                              color: colorScheme.onSurface.withValues(alpha: 0.15), // Glass rim outline
+                              width: 1,
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _getServiceLabel(appState.selectedService),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600, 
+                                  fontSize: 14,
+                                  color: colorScheme.onSurface, // Crisp text
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Icon(
+                                controller.isOpen 
+                                    ? Icons.keyboard_arrow_up_rounded 
+                                    : Icons.keyboard_arrow_down_rounded, 
+                                size: 18,
+                                color: colorScheme.onSurface.withValues(alpha: 0.7), // Slightly faded icon
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                  menuChildren: _getSortedServices(appState.selectedService).map((service) {
+                    final isSelected = service == appState.selectedService;
+                    return MenuItemButton(
+                      style: MenuItemButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        backgroundColor: Colors.transparent, // Let the glass background show through
+                      ),
+                      leadingIcon: isSelected 
+                          ? Icon(Icons.check_rounded, size: 18, color: colorScheme.primary) 
+                          : const SizedBox(width: 18), 
+                      child: Text(
+                        _getServiceLabel(service),
+                        style: TextStyle(
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          color: isSelected ? colorScheme.primary : colorScheme.onSurface,
+                        ),
+                      ),
+                      onPressed: () {
+                        appState.updateServiceFilter(service);
+                      },
+                    );
+                  }).toList(),
+                )
+              ],
             ),
-            
             actions: [
-              // Added profile icon for better user navigation structure
               IconButton(
                 icon: Icon(Icons.account_circle_outlined, color: colorScheme.onSurface),
-                onPressed: () => context.push('/more/profile'), 
+                onPressed: () => context.push('/more/profile'),
               ),
               const SizedBox(width: 8),
             ],
-            // Removed the explicit bottom divider line (PreferredSize)
           ),
 
           body: child,
@@ -114,4 +201,27 @@ class _TabItem {
     required this.icon,
     required this.labelKey,
   });
+}
+
+String _getServiceLabel(ChurchService service) {
+  return switch (service) {
+    ChurchService.english => 'TCCF',
+    ChurchService.spanish => 'Centro',
+    ChurchService.both => 'TCCF & Centro',
+  };
+}
+List<ChurchService> _getSortedServices(ChurchService selected) {
+  // Get the options that are NOT currently selected
+  final List<ChurchService> others = ChurchService.values
+      .where((e) => e != selected)
+      .toList();
+      
+  // If "Both" is in the unselected list, move it to the very end
+  if (others.contains(ChurchService.both)) {
+    others.remove(ChurchService.both);
+    others.add(ChurchService.both);
+  }
+  
+  // Return the selected item first, followed by the sorted others
+  return [selected, ...others];
 }

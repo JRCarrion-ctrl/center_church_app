@@ -21,6 +21,8 @@ class PrimaryButton extends StatelessWidget {
       width: double.infinity,
       constraints: const BoxConstraints(maxWidth: 280),
       decoration: BoxDecoration(
+        color: Colors.white, // Solid white background
+        borderRadius: BorderRadius.circular(30),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.2),
@@ -29,23 +31,27 @@ class PrimaryButton extends StatelessWidget {
           ),
         ],
       ),
-      child: ElevatedButton(
-        style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black87,
-          elevation: 0, // Elevation is handled by the BoxShadow above
-          padding: EdgeInsets.symmetric(vertical: padding),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(30), // Matching pill shape
-          ),
-          textStyle: TextStyle(
-            fontSize: fontSize,
-            fontWeight: FontWeight.w700, // Thicker weight for the call to action
-            letterSpacing: 1.1,
+      // Material widget needed so the InkWell ripple effect works properly
+      child: Material(
+        color: Colors.transparent, 
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(30),
+          child: Padding(
+            // Matching the 0.8 multiplier from SecondaryButton
+            padding: EdgeInsets.symmetric(vertical: padding * 0.8),
+            child: Text(
+              title.toUpperCase(),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.black87,
+                fontSize: fontSize,
+                fontWeight: FontWeight.w700, 
+                letterSpacing: 1.1,
+              ),
+            ),
           ),
         ),
-        onPressed: onTap,
-        child: Text(title.toUpperCase()), // Uppercase adds a modern touch
       ),
     );
   }

@@ -18,14 +18,16 @@ import 'package:ccf_app/features/more/pages/public_profile.dart';
 import 'package:go_router/go_router.dart';
 import '../features/features.dart';
 import '../features/giving/give_page.dart';
-import 'package:ccf_app/features/calendar/pages/app_event_details_page.dart';
-import '../features/calendar/models/app_event.dart';
 import '../features/more/pages/family_page.dart';
 import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
 import '../features/more/pages/child_staff_profile.dart';
 import 'package:ccf_app/features/more/pages/role_management_page.dart';
-import '../features/calendar/widgets/app_event_form_modal.dart';
+
+// ✨ NEW UNIFIED IMPORTS
+import '../features/calendar/models/church_event.dart';
+import '../features/calendar/widgets/church_event_form_modal.dart';
+import '../features/calendar/pages/church_event_details_page.dart';
 
 final List<GoRoute> miscRoutes = [
   GoRoute(
@@ -60,18 +62,21 @@ final List<GoRoute> miscRoutes = [
     path: '/more/directory',
     builder: (_, state) => const DirectoryPage(),
   ),
+  
+  // ✨ UPDATED: Main Calendar App Event Deep Link
   GoRoute(
     path: '/calendar/app-event/:id',
     builder: (context, state) {
       final eventId = state.pathParameters['id']!;
-      final extraEvent = state.extra as AppEvent?; 
+      final extraEvent = state.extra as ChurchEvent?; 
 
-      return AppEventDeepLinkWrapper(
+      return ChurchEventDeepLinkWrapper(
         eventId: eventId,
         preloadedEvent: extraEvent,
       );
     },
   ),
+  
   GoRoute(
     path: '/profile/:id',
     builder: (context, state) => PublicProfile(userId: state.pathParameters['id']!),
@@ -87,8 +92,9 @@ final List<GoRoute> miscRoutes = [
     path: '/more/family/add_child',
     name: 'add_child_profile',
     builder: (context, state) {
-      final familyId = state.extra;
-      if (familyId is! String) {
+      // Use query parameter instead of extra
+      final familyId = state.uri.queryParameters['familyId']; 
+      if (familyId == null) {
         throw Exception('Missing or invalid family ID');
       }
       return AddChildProfilePage(familyId: familyId);
@@ -98,6 +104,9 @@ final List<GoRoute> miscRoutes = [
     path: '/more/family/edit_child',
     name: 'edit_child_profile',
     builder: (context, state) {
+      // If passing a complex map, extra is okay, but passing the ID and fetching it 
+      // inside the page is safer. For now, since your edit page expects a Map, 
+      // we'll keep using extra, but be aware it won't survive a web refresh.
       final child = state.extra;
       if (child is! Map<String, dynamic>) {
         throw Exception('Missing or invalid child data for edit');
@@ -109,8 +118,9 @@ final List<GoRoute> miscRoutes = [
     path: '/more/family/view_child',
     name: 'view_child_profile',
     builder: (context, state) {
-      final childId = state.extra;
-      if (childId is! String) {
+      // 💡 FIX: Use query parameter to match how FamilyPage pushes it
+      final childId = state.uri.queryParameters['childId']; 
+      if (childId == null) {
         throw Exception('Missing or invalid child ID for view');
       }
       return ViewChildProfilePage(childId: childId);
@@ -134,11 +144,10 @@ final List<GoRoute> miscRoutes = [
   ),
   GoRoute(
     path: '/more/study/edit',
-    name: 'edit_bible_study',
-    builder: (context, state) {
-      final study = state.extra as Map<String, dynamic>?;
-      return EditBibleStudyPage(study: study);
-    },
+    name: 'edit',
+    builder: (context, state) => EditBibleStudyWrapper(
+      studyId: state.uri.queryParameters['studyId'] ?? '', 
+    ),
   ),
   GoRoute(
     path: '/more/study/notes_viewer',
@@ -149,9 +158,7 @@ final List<GoRoute> miscRoutes = [
   ),
   GoRoute(
     path: '/nursery/child-profile',
-    builder: (context, state) => ChildProfilePage(
-      child: state.extra as Map<String, dynamic>
-    ),
+    builder: (context, state) => NurseryChildProfileWrapper(childId: state.uri.queryParameters['childId']!)
   ),
   GoRoute(
     path: '/more/nursery/child-staff/:childId',
@@ -181,17 +188,17 @@ final List<GoRoute> miscRoutes = [
     path: '/group-announcements',
     builder: (context, state) => const GroupAnnouncementsPage(),
   ),
+  
+  // ✨ UPDATED: Point to unified form without a prefilledGroupId (acting as App Event)
   GoRoute(
     path: '/manage-app-event/new',
-    builder: (context, state) => const AppEventFormModal(),
+    builder: (context, state) => const ChurchEventFormWrapper(),
   ),
-  
   GoRoute(
     path: '/manage-app-event/edit',
     builder: (context, state) {
-      // Pass the existing event object via the 'extra' parameter
-      final event = state.extra as AppEvent?;
-      return AppEventFormModal(existing: event);
+      final eventId = state.uri.queryParameters['eventId'];
+      return ChurchEventFormWrapper(eventId: eventId);
     },
   ),
 ];

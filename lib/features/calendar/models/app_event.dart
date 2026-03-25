@@ -9,6 +9,9 @@ class AppEvent {
   final String? imageUrl;
   final String? location;
   final List<AppEventSlot> slots;
+  final List<String> targetAudiences; 
+  bool get isBilingual => targetAudiences.contains('english') && targetAudiences.contains('spanish');
+  final String? rrule;
 
   AppEvent({
     required this.id,
@@ -19,6 +22,8 @@ class AppEvent {
     this.imageUrl,
     this.location,
     this.slots = const [],
+    this.targetAudiences = const [], // Default to empty list
+    this.rrule,
   });
 
   factory AppEvent.fromMap(Map<String, dynamic> map) => AppEvent(
@@ -31,10 +36,14 @@ class AppEvent {
             : null,
         imageUrl: map['image_url'] as String?,
         location: map['location'] as String?,
-        // Parse nested slots if they exist in the query
+        // ✨ NEW: Safely parse the database array
+        targetAudiences: (map['target_audiences'] as List?)
+                ?.cast<String>()
+                .toList() ?? [],
         slots: (map['event_slots'] as List?)
                 ?.map((s) => AppEventSlot.fromMap(s))
                 .toList() ?? [],
+        rrule: map['rrule'] as String?,
       );
 }
 

@@ -8,13 +8,12 @@ import 'package:ccf_app/core/theme.dart';
 import 'package:ccf_app/features/splash/splash_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart'; // ✨ ADDED: Needed for kIsWeb and defaultTargetPlatform
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:app_links/app_links.dart';
 import 'policy_screen.dart';
 import 'package:app_tracking_transparency/app_tracking_transparency.dart';
@@ -25,6 +24,10 @@ import 'dart:io' show Platform; // ✨ ADDED: Only import dart:io where necessar
 
 import 'app_state.dart';
 
+final bool isMobileDevice = !kIsWeb && 
+    (defaultTargetPlatform == TargetPlatform.iOS || 
+     defaultTargetPlatform == TargetPlatform.android);
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   usePathUrlStrategy();
@@ -32,7 +35,7 @@ void main() async {
   await EasyLocalization.ensureInitialized();
 
   // ✨ WRAPPED: Only run OneSignal setup on native mobile
-  if (!kIsWeb) {
+  if (isMobileDevice) {
     OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
     OneSignal.initialize("a75771e7-9bd5-4497-adf3-18b7c8901bcb");
   }
@@ -63,7 +66,7 @@ Future<void> requestTrackingAuthorization() async {
 
 Future<void> requestPushPermission() async {
   // ✨ WRAPPED: Skip permission handler on web
-  if (!kIsWeb) {
+  if (isMobileDevice) {
     if (await Permission.notification.isDenied) {
       await Permission.notification.request();
     }
@@ -99,19 +102,6 @@ class _CCFAppBootState extends State<CCFAppBoot> {
     super.dispose();
   }
 
-  Future<void> _requestPushPermissionOnce() async {
-    // ✨ WRAPPED: Skip on web
-    if (kIsWeb || !Platform.isAndroid && !Platform.isIOS) return;
-
-    final prefs = await SharedPreferences.getInstance();
-    final hasPrompted = prefs.getBool('notification_prompted') ?? false;
-    if (!hasPrompted) {
-      final accepted = await OneSignal.Notifications.requestPermission(true);
-      debugPrint('Push permission accepted: $accepted');
-      await prefs.setBool('notification_prompted', true);
-    }
-  }
-
   Future<void> _handleIncomingLinks() async {
     _appLinks = AppLinks();
 
@@ -140,15 +130,13 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   }
 
   Future<void> _initializeApp() async {
-    await _requestPushPermissionOnce();
-    await requestTrackingAuthorization();
     appState = AppState();
     
     // 1. Create the router
     _router = createRouter(appState);
 
     // 2. ✨ WRAPPED: Handle Notification Clicks only on mobile
-    if (!kIsWeb && (Platform.isAndroid || Platform.isIOS)) {
+    if (isMobileDevice) {
       OneSignal.Notifications.addClickListener((event) {
         final data = event.notification.additionalData;
         

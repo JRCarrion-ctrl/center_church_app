@@ -100,10 +100,7 @@ class GroupDashboardTab extends StatelessWidget {
             children: [
               Expanded(
                 child: FilledButton.tonalIcon(
-                  onPressed: () => context.push(
-                    '/groups/${pageData.group.id}/info/members',
-                    extra: {'isAdmin': isAdmin},
-                  ),
+                  onPressed: () => context.push('/groups/${pageData.group.id}/info/members'),
                   icon: const Icon(Icons.people_outline),
                   label: Text("key_112e".tr()), // Members
                 ),
@@ -115,7 +112,6 @@ class GroupDashboardTab extends StatelessWidget {
                     onPressed: () async {
                       final refresh = await context.push<bool>(
                         '/groups/${pageData.group.id}/info/settings',
-                        extra: {'group': pageData.group},
                       );
                       if (refresh == true) onRefresh();
                     },

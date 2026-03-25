@@ -1,4 +1,4 @@
-// filename: lib/features/calendar/pages/app_event_details_page.dart
+// filename: lib/features/calendar/pages/church_event_details_page.dart
 import 'package:flutter/material.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
@@ -11,27 +11,28 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
-import '../event_service.dart';
-import '../models/app_event.dart';
+import '../church_event_service.dart';
+import '../models/church_event.dart';
 
-class AppEventDetailsPage extends StatefulWidget {
-  final AppEvent event;
-  const AppEventDetailsPage({super.key, required this.event});
+class ChurchEventDetailsPage extends StatefulWidget {
+  final ChurchEvent event;
+  const ChurchEventDetailsPage({super.key, required this.event});
 
   @override
-  State<AppEventDetailsPage> createState() => _AppEventDetailsPageState();
+  State<ChurchEventDetailsPage> createState() => _ChurchEventDetailsPageState();
 }
 
-class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTickerProviderStateMixin {
-  late EventService _eventService;
+class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with SingleTickerProviderStateMixin {
+  late ChurchEventService _eventService;
   late TabController _tabController;
   bool _svcReady = false;
 
   int _attendingCount = 1;
   bool _saving = false;
+  bool _canEdit = false;
   List<Map<String, dynamic>> _rsvps = [];
   
-  List<AppEventSlot> _slots = [];
+  List<ChurchEventSlot> _slots = [];
   bool _loadingSlots = true;
   Map<String, int> _mySlots = {};
 
@@ -47,9 +48,10 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     if (!_svcReady) {
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
-      _eventService = EventService(client, currentUserId: userId);
+      _eventService = ChurchEventService(client, currentUserId: userId);
       _svcReady = true;
 
+      _checkRole();
       _loadData();
     }
   }
@@ -58,6 +60,28 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  Future<void> _checkRole() async {
+    final userRole = context.read<AppState>().userRole;
+    // Global Admins can edit anything
+    if (userRole == UserRole.owner || userRole == UserRole.supervisor) {
+       if (mounted) setState(() => _canEdit = true);
+       return;
+    }
+    
+    // If it's a group event, check if they are a leader of that specific group
+    final uid = context.read<AppState>().profile?.id;
+    if (uid != null && widget.event.groupId != null) {
+      try {
+        final role = await _eventService.checkGroupMemberRole(groupId: widget.event.groupId!, userId: uid);
+        if (mounted) {
+          setState(() => _canEdit = const {'leader', 'supervisor', 'owner', 'admin'}.contains(role));
+        }
+      } catch (_) {
+        if (mounted) setState(() => _canEdit = false);
+      }
+    }
   }
 
   Future<void> _loadData() async {
@@ -69,7 +93,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
 
   Future<void> _loadSlots() async {
     try {
-      final slotsData = await _eventService.fetchAppEventSlots(widget.event.id);
+      final slotsData = await _eventService.fetchEventSlots(widget.event.id);
       final slotIds = slotsData.map((s) => s.id).whereType<String>().toList();
       final myAssignments = await _eventService.fetchUserAssignments(slotIds);
 
@@ -86,159 +110,10 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     }
   }
 
-  Future<void> _onUnclaimSlot(String slotId) async {
-    setState(() => _saving = true);
-    try {
-      await _eventService.unclaimSlot(slotId: slotId);
-      await _loadSlots(); 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Removed sign-up")));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error removing sign-up")));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
-  // --- REFACTORED: Sleek iOS Bottom Sheet ---
-  Future<void> _showSlotBottomSheet(dynamic slot, int myCurrentQty) async {
-    final int othersCount = slot.currentCount - myCurrentQty;
-    final int maxAvailableForMe = slot.maxSlots - othersCount;
-
-    if (maxAvailableForMe <= 0 && myCurrentQty == 0) return;
-
-    int selectedQty = myCurrentQty > 0 ? myCurrentQty : 1;
-
-    final result = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Container(
-              decoration: const BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
-              child: SafeArea(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    // iOS Drag Handle
-                    Container(
-                      width: 40,
-                      height: 5,
-                      margin: const EdgeInsets.only(bottom: 24),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2.5),
-                      ),
-                    ),
-                    
-                    Text(
-                      slot.title,
-                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      "How many are you bringing?",
-                      style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Modern Quantity Selector
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        _buildCircleBtn(Icons.remove, onPressed: selectedQty > 0 
-                            ? () => setSheetState(() => selectedQty--) 
-                            : null),
-                        Container(
-                          width: 100,
-                          alignment: Alignment.center,
-                          child: Text(
-                            "$selectedQty",
-                            style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w600),
-                          ),
-                        ),
-                        _buildCircleBtn(Icons.add, onPressed: selectedQty < maxAvailableForMe 
-                            ? () => setSheetState(() => selectedQty++) 
-                            : null),
-                      ],
-                    ),
-                    
-                    const SizedBox(height: 32),
-
-                    // Big Action Button
-                    SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: () => Navigator.pop(ctx, selectedQty),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: selectedQty == 0 ? Colors.red[50] : Theme.of(context).primaryColor,
-                          foregroundColor: selectedQty == 0 ? Colors.red : Colors.white,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                        ),
-                        child: Text(
-                          selectedQty == 0 ? "Remove Sign-up" : "Confirm",
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          },
-        );
-      },
-    );
-
-    if (result == null || result == myCurrentQty) return;
-    if (result == 0) {
-      await _onUnclaimSlot(slot.id!);
-    } else {
-      await _onUpdateSlotQty(slot.id!, result);
-    }
-  }
-
-  Widget _buildCircleBtn(IconData icon, {VoidCallback? onPressed}) {
-    return Container(
-      width: 56,
-      height: 56,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: onPressed == null ? Colors.grey[100] : Colors.grey[200],
-      ),
-      child: IconButton(
-        icon: Icon(icon, color: onPressed == null ? Colors.grey : Colors.black87, size: 28),
-        onPressed: onPressed,
-      ),
-    );
-  }
-
-  Future<void> _onUpdateSlotQty(String slotId, int qty) async {
-    setState(() => _saving = true);
-    try {
-      await _eventService.claimSlot(slotId: slotId, quantity: qty);
-      await _loadSlots(); 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Updated!")));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error updating")));
-    } finally {
-      if (mounted) setState(() => _saving = false);
-    }
-  }
-
   Future<void> _loadRSVPs() async {
     if (!_svcReady) return;
     try {
-      final data = await _eventService.fetchAppEventRSVPs(widget.event.id);
+      final data = await _eventService.fetchEventRSVPs(widget.event.id);
       if (mounted) {
         final currentUserId = context.read<AppState>().profile?.id;
         final existingRsvp = data.firstWhere(
@@ -256,14 +131,41 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     } catch (_) {}
   }
 
+  // --- SLOT ACTIONS ---
+
+  Future<void> _onClaimSlot(String slotId, {int qty = 1}) async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.claimSlot(slotId: slotId, quantity: qty);
+      await _loadSlots(); 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Signed up!")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error signing up")));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _onUnclaimSlot(String slotId) async {
+    setState(() => _saving = true);
+    try {
+      await _eventService.unclaimSlot(slotId: slotId);
+      await _loadSlots(); 
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Removed sign-up")));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error removing sign-up")));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  // --- RSVP ACTIONS ---
+
   Future<void> _submitRSVP() async {
     if (!_svcReady) return;
     setState(() => _saving = true);
     try {
-      await _eventService.rsvpAppEvent(
-        appEventId: widget.event.id,
-        count: _attendingCount,
-      );
+      await _eventService.rsvpEvent(eventId: widget.event.id, count: _attendingCount);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_027".tr())));
       _loadData();
@@ -279,7 +181,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     if (!_svcReady) return;
     setState(() => _saving = true);
     try {
-      await _eventService.removeAppEventRSVP(widget.event.id);
+      await _eventService.removeRSVP(widget.event.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("key_029".tr())));
       _loadData();
@@ -291,26 +193,23 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     }
   }
 
-  Future<void> _onClaimSlot(String slotId) async {
-    setState(() => _saving = true);
-    try {
-      await _eventService.claimSlot(slotId: slotId);
-      await _loadSlots(); 
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Signed up!")));
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Error signing up")));
-    } finally {
-      if (mounted) setState(() => _saving = false);
+  // --- UI HELPERS ---
+
+  Future<void> _onEditEvent() async {
+    if (widget.event.groupId != null) {
+      await context.push('/groups/${widget.event.groupId}/info/events/edit?eventId=${widget.event.id}');
+    } else {
+      await context.push('/manage-app-event/edit?eventId=${widget.event.id}');
+    }
+    
+    if (mounted) {
+      _loadData();
+      _checkRole();
     }
   }
 
-  Future<void> _onEditEvent() async {
-    await context.push('/manage-app-event/edit', extra: widget.event);
-    if (mounted) _loadData(); 
-  }
-
-  void addEventToCalendar(AppEvent event) {
-    final Event calendarEvent = Event(
+  void addEventToCalendar(ChurchEvent event) {
+    final calendarEvent = Event(
       title: event.title,
       description: event.description ?? '',
       startDate: event.eventDate,
@@ -342,14 +241,11 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
   Widget build(BuildContext context) {
     final e = widget.event;
     final canPop = GoRouter.of(context).canPop();
-    final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
     final currentUserId = context.select<AppState, String?>((s) => s.profile?.id);
     final hasRSVP = _rsvps.any((r) => r['user_id'] == currentUserId);
-    final bool canEdit = userRole == UserRole.supervisor || userRole == UserRole.owner;
 
     return Scaffold(
       body: NestedScrollView(
-        // ✅ FIX: Bouncing Physics prevents "Build scheduled during frame" crash
         physics: const BouncingScrollPhysics(),
         headerSliverBuilder: (BuildContext context, bool innerBoxIsScrolled) {
           return <Widget>[
@@ -361,7 +257,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
                   ? null
                   : IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/')),
               actions: [
-                if (canEdit)
+                if (_canEdit)
                   IconButton(
                     icon: const Icon(Icons.edit),
                     tooltip: "key_038".tr(),
@@ -376,6 +272,31 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // ✨ NEW: Pending Approval Badge
+                    if (e.isPending)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.shade50,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.orange.shade200),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(Icons.pending_actions, color: Colors.orange.shade800),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                "Pending Approval",
+                                style: TextStyle(color: Colors.orange.shade900, fontWeight: FontWeight.w600),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
                     if (e.imageUrl != null)
                       ClipRRect(
                         borderRadius: BorderRadius.circular(16),
@@ -392,12 +313,24 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
                       ),
                     const SizedBox(height: 16),
                     Text(e.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                    
+                    // Show Group Name if applicable
+                    if (e.groupName != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4.0),
+                        child: Text(
+                          e.groupName!,
+                          style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary, fontSize: 16),
+                        ),
+                      ),
+                      
                     const SizedBox(height: 6),
                     Text(
                       _formatEventTime(e.eventDate, e.eventEnd),
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600, color: Colors.grey[800]),
                     ),
                     const SizedBox(height: 6),
+                    
                     if ((e.description ?? '').isNotEmpty) ...[
                       SelectableLinkify(
                         text: e.description!,
@@ -408,6 +341,22 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
                         },
                       ),
                       const SizedBox(height: 6),
+                      if (e.rrule != null && e.rrule!.contains('FREQ=DAILY')) ...[
+                        Row(
+                          children: [
+                            Icon(Icons.event_repeat, size: 16, color: Theme.of(context).colorScheme.primary),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Repeats Daily',
+                              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                                color: Theme.of(context).colorScheme.primary, 
+                                fontWeight: FontWeight.bold
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                      ],
                     ],
                     if ((e.location ?? '').isNotEmpty)
                       Padding(
@@ -474,9 +423,6 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
   }
 
   Widget _buildRsvpSection(bool hasRSVP, String? currentUserId) {
-    final userRole = context.select<AppState, UserRole?>((s) => s.userRole);
-    final bool isSupervisor = userRole == UserRole.supervisor || userRole == UserRole.owner || userRole == UserRole.leader;
-
     int othersCount = 0;
     for (var rsvp in _rsvps) {
       if (rsvp['user_id'] != currentUserId) {
@@ -544,7 +490,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
             child: Text("key_033b".tr(), style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
           ),
-          if (isSupervisor)
+          if (_canEdit) // If they can edit the event, they get to see everyone's RSVPs
             ..._rsvps.map((rsvp) => _buildRsvpTile(rsvp))
           else ...[
             if (hasRSVP) _buildRsvpTile(myRsvpEntry),
@@ -560,8 +506,19 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     );
   }
 
-  // --- REFACTORED: Sleek Cards & Progress Bars ---
   Widget _buildSignUpSection(bool hasRSVP) {
+    if (!hasRSVP && widget.event.isGroupOnly) { 
+      // Force RSVPs for group events before they can see slots
+      return Center(child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.lock_outline, size: 48, color: Colors.grey[300]),
+          const SizedBox(height: 16),
+          Text("Please RSVP to view sign-ups", style: TextStyle(color: Colors.grey[600], fontSize: 16)),
+        ],
+      )); 
+    }
+    
     if (_loadingSlots) return const Center(child: CircularProgressIndicator());
     if (_slots.isEmpty) return Center(child: Text("No items needed.", style: TextStyle(color: Colors.grey[600])));
 
@@ -632,7 +589,7 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     );
   }
 
-  Widget _buildSlotAction(AppEventSlot slot, bool isFull, bool iSignedUp, int myQty, bool canMulti) {
+  Widget _buildSlotAction(ChurchEventSlot slot, bool isFull, bool iSignedUp, int myQty, bool canMulti) {
     if (canMulti) {
        return SizedBox(
          height: 36,
@@ -681,7 +638,103 @@ class _AppEventDetailsPageState extends State<AppEventDetailsPage> with SingleTi
     }
   }
 
+  Future<void> _showSlotBottomSheet(dynamic slot, int myCurrentQty) async {
+    final int othersCount = slot.currentCount - myCurrentQty;
+    final int maxAvailableForMe = slot.maxSlots - othersCount;
+
+    if (maxAvailableForMe <= 0 && myCurrentQty == 0) return;
+
+    int selectedQty = myCurrentQty > 0 ? myCurrentQty : 1;
+
+    final result = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            return Container(
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+              child: SafeArea(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 5,
+                      margin: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(color: Colors.grey[300], borderRadius: BorderRadius.circular(2.5)),
+                    ),
+                    Text(
+                      slot.title,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, letterSpacing: -0.5),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text("How many are you bringing?", style: TextStyle(fontSize: 16, color: Colors.grey[600]), textAlign: TextAlign.center),
+                    const SizedBox(height: 32),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        _buildCircleBtn(Icons.remove, onPressed: selectedQty > 0 ? () => setSheetState(() => selectedQty--) : null),
+                        Container(
+                          width: 100,
+                          alignment: Alignment.center,
+                          child: Text("$selectedQty", style: const TextStyle(fontSize: 40, fontWeight: FontWeight.w600)),
+                        ),
+                        _buildCircleBtn(Icons.add, onPressed: selectedQty < maxAvailableForMe ? () => setSheetState(() => selectedQty++) : null),
+                      ],
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, selectedQty),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: selectedQty == 0 ? Colors.red[50] : Theme.of(context).primaryColor,
+                          foregroundColor: selectedQty == 0 ? Colors.red : Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                        ),
+                        child: Text(selectedQty == 0 ? "Remove Sign-up" : "Confirm", style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null || result == myCurrentQty) return;
+    if (result == 0) {
+      await _onUnclaimSlot(slot.id!);
+    } else {
+      await _onClaimSlot(slot.id!, qty: result);
+    }
+  }
+
+  Widget _buildCircleBtn(IconData icon, {VoidCallback? onPressed}) {
+    return Container(
+      width: 56,
+      height: 56,
+      decoration: BoxDecoration(shape: BoxShape.circle, color: onPressed == null ? Colors.grey[100] : Colors.grey[200]),
+      child: IconButton(
+        icon: Icon(icon, color: onPressed == null ? Colors.grey : Colors.black87, size: 28),
+        onPressed: onPressed,
+      ),
+    );
+  }
+
   Widget _buildRsvpTile(Map<String, dynamic> rsvp) {
+    // Note: ensure this matches the `profile` object returned by your new V2 query
     final profile = rsvp['profile'] ?? {};
     final photoUrl = profile['photo_url'];
     final displayName = profile['display_name'] ?? 'Unknown';
@@ -727,57 +780,37 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
   bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
 }
 
-class AppEventDeepLinkWrapper extends StatefulWidget {
+// ✨ UNIFIED DEEP LINK WRAPPER
+class ChurchEventDeepLinkWrapper extends StatefulWidget {
   final String eventId;
-  final AppEvent? preloadedEvent;
-  const AppEventDeepLinkWrapper({super.key, required this.eventId, this.preloadedEvent});
+  final ChurchEvent? preloadedEvent;
+  const ChurchEventDeepLinkWrapper({super.key, required this.eventId, this.preloadedEvent});
 
   @override
-  State<AppEventDeepLinkWrapper> createState() => _AppEventDeepLinkWrapperState();
+  State<ChurchEventDeepLinkWrapper> createState() => _ChurchEventDeepLinkWrapperState();
 }
 
-class _AppEventDeepLinkWrapperState extends State<AppEventDeepLinkWrapper> {
-  Future<AppEvent?>? _eventFuture;
+class _ChurchEventDeepLinkWrapperState extends State<ChurchEventDeepLinkWrapper> {
+  Future<ChurchEvent?>? _eventFuture;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     if (_eventFuture == null && widget.preloadedEvent == null) {
-      _eventFuture = _fetchEvent(widget.eventId);
-    }
-  }
-
-  Future<AppEvent?> _fetchEvent(String id) async {
-    try {
       final client = GraphQLProvider.of(context).value;
-      const String query = r'''
-        query GetAppEvent($id: uuid!) {
-          app_events_by_pk(id: $id) {
-            id, title, description, event_date, event_end, location, image_url
-          }
-        }
-      ''';
-      final result = await client.query(QueryOptions(
-        document: gql(query), variables: {'id': id}, fetchPolicy: FetchPolicy.networkOnly,
-      ));
-      if (result.hasException) return null;
-      final data = result.data?['app_events_by_pk'];
-      if (data == null) return null;
-      return AppEvent(
-        id: data['id'], title: data['title'], description: data['description'],
-        eventDate: DateTime.parse(data['event_date']), 
-        eventEnd: data['event_end'] != null ? DateTime.parse(data['event_end']) : null,
-        location: data['location'], imageUrl: data['image_url'],
-      );
-    } catch (e) { return null; }
+      final userId = context.read<AppState>().profile?.id;
+      final service = ChurchEventService(client, currentUserId: userId);
+      
+      _eventFuture = service.getEventById(widget.eventId);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     if (widget.preloadedEvent != null) {
-      return AppEventDetailsPage(event: widget.preloadedEvent!);
+      return ChurchEventDetailsPage(event: widget.preloadedEvent!);
     }
-    return FutureBuilder<AppEvent?>(
+    return FutureBuilder<ChurchEvent?>(
       future: _eventFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
@@ -786,7 +819,7 @@ class _AppEventDeepLinkWrapperState extends State<AppEventDeepLinkWrapper> {
         if (snapshot.hasError || snapshot.data == null) {
            return Scaffold(appBar: AppBar(title: Text("key_error".tr())), body: Center(child: Text("key_event_not_found".tr())));
         }
-        return AppEventDetailsPage(event: snapshot.data!);
+        return ChurchEventDetailsPage(event: snapshot.data!);
       },
     );
   }
