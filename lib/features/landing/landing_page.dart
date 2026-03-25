@@ -4,7 +4,6 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../app_state.dart';
@@ -120,16 +119,6 @@ class _LandingButtons extends StatelessWidget {
           onTap: () => launchUrl(Uri.parse('https://www.centrocristianofrederick.com/')),
           fontSize: fontSize,
           padding: padding,
-        ),
-        SizedBox(height: padding * _kButtonSpacingFactor),
-        ElevatedButton(
-          onPressed: () async {
-            final prefs = await SharedPreferences.getInstance();
-            await prefs.remove('terms_accepted');
-            await prefs.remove('selected_service');
-            debugPrint("CLEARED! Now Hot Restart your app.");
-          },
-          child: const Text('DEBUG: Reset Onboarding'),
         ),
         SizedBox(height: padding * _kButtonSpacingFactor),
         SecondaryButton(
