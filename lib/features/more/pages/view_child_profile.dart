@@ -5,6 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
+import 'package:ccf_app/core/widgets/ccf_query.dart';
+
 class ViewChildProfilePage extends StatelessWidget {
   final String childId;
   const ViewChildProfilePage({super.key, required this.childId});
