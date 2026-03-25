@@ -10,7 +10,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:jwt_decoder/jwt_decoder.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:flutter/services.dart'; 
-import 'dart:io' show Platform;
 
 import 'features/auth/oidc_auth.dart';
 import 'core/hasura_client.dart';
