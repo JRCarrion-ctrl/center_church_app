@@ -186,8 +186,8 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   ) {
     final imageUrl = a['image_url'] as String?;
     final hasImage = imageUrl != null && imageUrl.isNotEmpty;
-    // ✅ EXTRACT GROUP NAME
     final groupName = a['group']?['name'] as String?;
+    final groupId = a['group_id'] as String?;
     final colorScheme = Theme.of(context).colorScheme;
 
     showDialog(
@@ -224,20 +224,23 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // ✅ SHOW GROUP NAME IN DIALOG
-                    if (groupName != null) ...[
-                      Chip(
+                    if (groupName != null && groupId != null) ...[
+                      ActionChip(
+                        avatar: Icon(Icons.groups_2_outlined, size: 16, color: colorScheme.primary),
                         label: Text(
                           groupName,
                           style: TextStyle(
-                            color: colorScheme.onTertiaryContainer,
+                            color: colorScheme.primary,
                             fontWeight: FontWeight.bold,
                             fontSize: 12,
                           ),
                         ),
-                        backgroundColor: colorScheme.secondaryContainer,
+                        backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
                         side: BorderSide.none,
-                        padding: EdgeInsets.zero,
-                        visualDensity: VisualDensity.compact,
+                        onPressed: () {
+                          Navigator.of(dialogContext).pop(); // Close dialog first
+                          context.push('/groups/$groupId'); // Navigate to group
+                        },
                       ),
                       const SizedBox(height: 8),
                     ],

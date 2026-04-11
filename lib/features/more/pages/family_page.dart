@@ -547,7 +547,13 @@ class _FamilyPageState extends State<FamilyPage> {
       appBar: AppBar(
         title: Text("key_279".tr(), style: const TextStyle(fontWeight: FontWeight.bold)),
         centerTitle: true,
-        leading: BackButton(onPressed: () => context.go('/more')),
+        leading: BackButton(onPressed: () {
+          if (context.canPop()) {
+            context.pop();
+          } else {
+            context.go('/more');
+          }
+        }),
       ),
       body: RefreshIndicator(
         onRefresh: _loadFamily,

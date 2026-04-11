@@ -75,8 +75,11 @@ class GroupService {
   // ---------- Reads ----------
 
   Future<GroupInfoData> getGroupInfoData(String groupId) async {
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
     const consolidatedQuery = r'''
-      query GetGroupInfoData($groupId: uuid!) {
+      query GetGroupInfoData($groupId: uuid!, $now: timestamptz!) {
+        # 1. Fetch Group Data
         groups_by_pk(id: $groupId) {
           id
           name
@@ -96,11 +99,6 @@ class GroupService {
               last_seen
             }
           }
-          group_events(limit: 3, order_by: {event_date: asc}) {
-            title
-            event_date
-            location
-          }
           group_announcements(limit: 2, order_by: {published_at: desc}) {
             title
             body
@@ -117,16 +115,37 @@ class GroupService {
             created_at
           }
         }
+
+        # 2. Fetch Events completely independently at the top level!
+        events(
+          where: { 
+            group_id: { _eq: $groupId },
+            event_date: { _gte: $now },
+            status: { _in: ["approved", "pending_approval"] } 
+          }
+          limit: 3, 
+          order_by: {event_date: asc}
+        ) {
+          id
+          title
+          event_date
+          location
+        }
       }
     ''';
     
     final result = await client.query(QueryOptions(
       document: gql(consolidatedQuery),
-      variables: {'groupId': groupId},
-      fetchPolicy: FetchPolicy.networkOnly, // Ensures you get fresh data
+      variables: {
+        'groupId': groupId,
+        'now': nowIso,
+      },
+      fetchPolicy: FetchPolicy.networkOnly, 
     ));
 
     if (result.hasException) {
+      // Added a print statement here so if a GraphQL error happens again, you can see exactly why!
+      debugPrint('GraphQL Error in getGroupInfoData: ${result.exception}');
       throw result.exception!;
     }
     
@@ -135,13 +154,13 @@ class GroupService {
       throw Exception('Group not found');
     }
 
-    // Parse the single, nested response into your new data model
     return GroupInfoData(
       group: Group.fromMap(groupData),
       memberships: List<Map<String, dynamic>>.from(groupData['group_memberships'] ?? []),
-      events: List<Map<String, dynamic>>.from(groupData['group_events'] ?? []),
       announcements: List<Map<String, dynamic>>.from(groupData['group_announcements'] ?? []),
       media: List<Map<String, dynamic>>.from(groupData['group_messages'] ?? []),
+      // ✨ We now map events from the top-level result instead of inside groupData
+      events: List<Map<String, dynamic>>.from(result.data?['events'] ?? []),
     );
   }
 

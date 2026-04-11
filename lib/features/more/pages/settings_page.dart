@@ -14,7 +14,6 @@ import '../models/calendar_settings_modal.dart';
 
 // --- Helper Widgets for Settings UI ---
 
-/// Base structure for a settings group (replaces _settingsCard).
 class _SettingsCard extends StatelessWidget {
   final String title;
   final List<Widget> children;
@@ -39,7 +38,6 @@ class _SettingsCard extends StatelessWidget {
       );
 }
 
-/// A standard tappable settings tile (replaces _tile).
 class _TappableTile extends StatelessWidget {
   final String title;
   final VoidCallback? onTap;
@@ -55,7 +53,6 @@ class _TappableTile extends StatelessWidget {
       );
 }
 
-/// A standard disabled settings tile (replaces _disabledTile).
 class _DisabledTile extends StatelessWidget {
   final String title;
 
@@ -69,7 +66,6 @@ class _DisabledTile extends StatelessWidget {
       );
 }
 
-/// A settings tile with a switch (replaces _switchTile).
 class _SwitchTile extends StatelessWidget {
   final String title;
   final bool value;
@@ -86,9 +82,8 @@ class _SwitchTile extends StatelessWidget {
       );
 }
 
-// --- Extracted Modals using RadioGroup Pattern ---
+// --- Extracted Modals using the Modern RadioGroup Pattern ---
 
-/// Language Selection Modal
 class _LanguageSelectorModal extends StatefulWidget {
   const _LanguageSelectorModal();
 
@@ -133,22 +128,21 @@ class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
             "key_318a".tr(),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          
-          // Use RadioGroup for managing selection state (NON-DEPRECATED)
+          const SizedBox(height: 16),
+          // Cleanly uses RadioGroup while retaining the full-width tap area of RadioListTile
           RadioGroup<String>(
             groupValue: _selectedLanguage,
             onChanged: _handleLanguageChange,
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                ListTile(
-                  // Radio only needs value; state and handler come from RadioGroup
-                  leading: const Radio<String>(value: 'en'), 
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                RadioListTile<String>(
+                  value: 'en',
                   title: Text("key_347".tr()),
                   contentPadding: EdgeInsets.zero,
                 ),
-                ListTile(
-                  leading: const Radio<String>(value: 'es'),
+                RadioListTile<String>(
+                  value: 'es',
                   title: Text("key_348".tr()),
                   contentPadding: EdgeInsets.zero,
                 ),
@@ -161,7 +155,6 @@ class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
   }
 }
 
-/// Font Size Selection Modal
 class _FontSizeSelectorModal extends StatefulWidget {
   const _FontSizeSelectorModal();
 
@@ -209,15 +202,19 @@ class __FontSizeSelectorModalState extends State<_FontSizeSelectorModal> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // Use RadioGroup for managing selection state (NON-DEPRECATED)
+          Text(
+            "set_5a".tr(),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
           RadioGroup<double>(
             groupValue: _selectedScale,
             onChanged: _handleScaleChange,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: _options.entries.map((entry) {
-                return ListTile(
-                  leading: Radio<double>(value: entry.value),
+                return RadioListTile<double>(
+                  value: entry.value,
                   title: Text(entry.key),
                   contentPadding: EdgeInsets.zero,
                 );
@@ -230,36 +227,34 @@ class __FontSizeSelectorModalState extends State<_FontSizeSelectorModal> {
   }
 }
 
-/// Theme Mode Selection Group (NON-DEPRECATED)
-class _ThemeModeRadioGroup extends StatelessWidget {
+class _ThemeModeSelectionGroup extends StatelessWidget {
   final ThemeMode currentThemeMode;
   final ValueChanged<ThemeMode?> onChanged;
 
-  const _ThemeModeRadioGroup({
+  const _ThemeModeSelectionGroup({
     required this.currentThemeMode,
     required this.onChanged,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Use RadioGroup for managing selection state
     return RadioGroup<ThemeMode>(
       groupValue: currentThemeMode,
       onChanged: onChanged,
       child: Column(
         children: [
-          ListTile(
-            leading: const Radio<ThemeMode>(value: ThemeMode.system),
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.system,
             title: Text("set_3a".tr()),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          ListTile(
-            leading: const Radio<ThemeMode>(value: ThemeMode.light),
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.light,
             title: Text("set_3b".tr()),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
-          ListTile(
-            leading: const Radio<ThemeMode>(value: ThemeMode.dark),
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.dark,
             title: Text("set_3c".tr()),
             contentPadding: const EdgeInsets.symmetric(horizontal: 16),
           ),
@@ -268,7 +263,6 @@ class _ThemeModeRadioGroup extends StatelessWidget {
     );
   }
 }
-
 
 // --- Main Refactored SettingsPage ---
 
@@ -286,12 +280,10 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    // Correctly call the two original asynchronous loading methods
     _loadAppVersion(); 
     _loadAutoRefreshSetting();
   }
 
-  // Reloaded implementation of original methods
   Future<void> _loadAppVersion() async {
     final info = await PackageInfo.fromPlatform();
     if (!mounted) return;
@@ -306,21 +298,17 @@ class _SettingsPageState extends State<SettingsPage> {
     });
   }
 
-  // Set Auto Refresh logic (extracted from the inline callback)
   Future<void> _setAutoRefresh(bool val) async {
     final prefs = await SharedPreferences.getInstance();
     setState(() => _autoRefresh = val);
     await prefs.setBool('auto_refresh_enabled', val);
   }
   
-  // Theme Mode Setter
   void _setThemeMode(ThemeMode? mode) {
     if (mode != null) {
       Provider.of<AppState>(context, listen: false).setThemeMode(mode);
     }
   }
-
-  // --- API/Update Check Logic (Kept as private methods in State for GraphQL access) ---
 
   void _showSnackbar(String message) {
     if (!context.mounted) return;
@@ -354,6 +342,9 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       );
 
+      // CRITICAL: Prevent crash if user navigates away before query finishes
+      if (!mounted) return;
+
       if (res.hasException) {
         _showSnackbar('Unable to check for updates.'.tr());
         return;
@@ -379,6 +370,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _showSnackbar('You’re using the latest version.'.tr());
       }
     } catch (_) {
+      if (!mounted) return; 
       _showSnackbar('Unable to check for updates.'.tr());
     }
   }
@@ -395,7 +387,8 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Text("key_318".tr()),
             onPressed: () {
               Navigator.pop(context);
-              launchUrl(Uri.parse(url));
+              // CRITICAL: Ensure update URL opens in the phone's native browser
+              launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
             },
           ),
         ],
@@ -432,8 +425,8 @@ class _SettingsPageState extends State<SettingsPage> {
               _DisabledTile(title: "set_2a".tr(args: [_appVersion])), 
               _TappableTile(title: "set_2b".tr(), onTap: _checkForUpdates),
               _TappableTile(title: "set_2c".tr(), onTap: () => context.push('/more/settings/contact-support')),
-              _TappableTile(title: "set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'))),
-              _TappableTile(title: "set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'))),
+              _TappableTile(title: "set_2d".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/terms_and_conditions'), mode: LaunchMode.externalApplication)),
+              _TappableTile(title: "set_2e".tr(), onTap: () => launchUrl(Uri.parse('https://jrcarrion-ctrl.github.io/CCF-Policies/privacy_policy'), mode: LaunchMode.externalApplication)),
             ],
           ),
 
@@ -441,7 +434,7 @@ class _SettingsPageState extends State<SettingsPage> {
           _SettingsCard(
             title: "set_3".tr(), 
             children: [
-              _ThemeModeRadioGroup(
+              _ThemeModeSelectionGroup(
                 currentThemeMode: themeMode,
                 onChanged: _setThemeMode,
               ),
@@ -468,7 +461,6 @@ class _SettingsPageState extends State<SettingsPage> {
           _SettingsCard(
             title: "set_6".tr(), 
             children: [
-              // Uses _autoRefresh and _setAutoRefresh (now correctly implemented)
               _SwitchTile(
                 title: "set_6a".tr(),
                 value: _autoRefresh,

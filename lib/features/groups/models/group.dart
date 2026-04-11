@@ -30,7 +30,7 @@ class Group {
       visibility: map['visibility'] as String? ?? 'public',
       createdAt: _parseDate(map['created_at']),
       onlyAdminsMessage: map['only_admins_message'] as bool? ?? false,
-      languages: (map['targeted_audiences'] as List?)?.cast<String>().toList() ?? const ['spanish'],
+      languages: (map['target_audiences'] as List?)?.cast<String>().toList() ?? const ['spanish'],
     );
   }
 

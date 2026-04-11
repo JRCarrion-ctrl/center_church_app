@@ -52,9 +52,7 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       final raw = s!['date'] as String;
       _selectedDate = DateTime.tryParse(raw) ?? DateTime.parse('${raw}T00:00:00Z');
     }
-    if (s?['target_audiences'] != null) {
-      _selectedAudiences = List<String>.from(s!['target_audiences']);
-    }
+    _selectedAudiences = (s?['target_audiences'] as List?)?.cast<String>().toList() ?? ['spanish'];
     
     // Initialize display controller for the date
     _dateController = TextEditingController(text: DateFormat.yMMMd().format(_selectedDate));
@@ -184,19 +182,22 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       'date':        dateStr,
       'youtube_url': _youtubeUrl.text.trim(),
       'notes_url':   _notesUrl.text.trim().isEmpty ? null : _notesUrl.text.trim(),
-      'audiences':   "{${_selectedAudiences.join(',')}}",
+      // 🚀 FIXED: Pass the Dart List directly, exactly like prayer_page.dart
+      'audiences':   _selectedAudiences, 
     };
 
+    // 🚀 FIXED: Changed $audiences: _text to $audiences: [String!]
     const mInsert = r'''
-      mutation InsertStudy($title: String!, $date: date!, $youtube_url: String!, $notes_url: String, $audiences: _text) {
+      mutation InsertStudy($title: String!, $date: date!, $youtube_url: String!, $notes_url: String, $audiences: [String!]) {
         insert_bible_studies_one(object: {
           title: $title, date: $date, youtube_url: $youtube_url, notes_url: $notes_url, target_audiences: $audiences
         }) { id }
       }
     ''';
 
+    // 🚀 FIXED: Changed $audiences: _text to $audiences: [String!]
     const mUpdate = r'''
-      mutation UpdateStudy($id: uuid!, $title: String!, $date: date!, $youtube_url: String!, $notes_url: String, $audiences: _text) {
+      mutation UpdateStudy($id: uuid!, $title: String!, $date: date!, $youtube_url: String!, $notes_url: String, $audiences: [String!]) {
         update_bible_studies_by_pk(
           pk_columns: { id: $id },
           _set: { title: $title, date: $date, youtube_url: $youtube_url, notes_url: $notes_url, target_audiences: $audiences }
@@ -218,7 +219,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(isNew ? "key_262".tr() : "key_262a".tr())),
       );
-    } catch (_) {
+    } catch (e) {
+      debugPrint("Save failed: $e");
       if (!mounted) return;
       ScaffoldMessenger.of(context)
           .showSnackBar(SnackBar(content: Text("key_263".tr())));

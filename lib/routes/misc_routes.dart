@@ -84,7 +84,7 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/family',
     builder: (context, state) {
-      final familyId = (state.extra as Map<String, dynamic>?)?['familyId'] as String?;
+      final familyId = state.uri.queryParameters['familyId'];
       return FamilyPage(familyId: familyId);
     },
   ),
@@ -150,12 +150,12 @@ final List<GoRoute> miscRoutes = [
     ),
   ),
   GoRoute(
-    path: '/more/study/notes_viewer',
-    builder: (context, state) {
-      final url = state.extra as String;
-      return NotesViewerPage(url: url);
-    },
-  ),
+  path: '/more/study/notes_viewer',
+  builder: (context, state) {
+    final String url = state.uri.queryParameters['url']!;
+    return NotesViewerPage(url: url);
+  },
+),
   GoRoute(
     path: '/nursery/child-profile',
     builder: (context, state) => NurseryChildProfileWrapper(childId: state.uri.queryParameters['childId']!)

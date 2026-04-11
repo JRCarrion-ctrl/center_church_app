@@ -58,6 +58,7 @@ class AppState extends ChangeNotifier {
   bool _showCountdown = true;
   bool _showGroupAnnouncements = true;
   bool _wifiOnlyMediaDownload = true;
+  bool _autoDownloadImages = true;
   bool get wifiOnlyMediaDownload => _wifiOnlyMediaDownload;
 
   // --- Profile & Groups ---
@@ -99,6 +100,7 @@ class AppState extends ChangeNotifier {
   String? get timezone => _timezone;
   bool get showCountdown => _showCountdown;
   bool get showGroupAnnouncements => _showGroupAnnouncements;
+  bool get autoDownloadImages => _autoDownloadImages;
   List<GroupModel> get userGroups => _userGroups;
   List<String> get visibleCalendarGroupIds => _visibleCalendarGroupIds;
   ValueNotifier<int> get authChangeNotifier => _authChangeNotifier;
@@ -427,6 +429,11 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('calendarGroupsInitialized', true);
     // no notifyListeners needed — this is a silent internal flag
+  }
+
+  void setAutoDownloadImages(bool value) {
+    _autoDownloadImages = value;
+    notifyListeners(); // Crucial to tell the UI to rebuild!
   }
 
   // --- OneSignal ---

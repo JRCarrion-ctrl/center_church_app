@@ -315,12 +315,28 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
                     Text(e.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
                     
                     // Show Group Name if applicable
-                    if (e.groupName != null)
+                    if (e.groupName != null && e.groupId != null)
                       Padding(
-                        padding: const EdgeInsets.only(top: 4.0),
-                        child: Text(
-                          e.groupName!,
-                          style: TextStyle(fontWeight: FontWeight.w600, color: Theme.of(context).colorScheme.primary, fontSize: 16),
+                        padding: const EdgeInsets.only(top: 8.0, bottom: 4.0),
+                        child: ActionChip(
+                          avatar: Icon(
+                            Icons.groups_2_outlined, 
+                            size: 18, 
+                            color: Theme.of(context).colorScheme.primary
+                          ),
+                          label: Text(
+                            e.groupName!,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold, 
+                              color: Theme.of(context).colorScheme.primary
+                            ),
+                          ),
+                          // Navigate directly to the group dashboard
+                          onPressed: () => context.push('/groups/${e.groupId}'),
+                          backgroundColor: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.3),
+                          side: BorderSide.none,
+                          shape: const StadiumBorder(),
+                          padding: const EdgeInsets.symmetric(horizontal: 4),
                         ),
                       ),
                       

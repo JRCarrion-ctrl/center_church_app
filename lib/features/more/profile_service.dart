@@ -38,20 +38,15 @@ const String qProfileBundle = r'''
       expires_at
       status
     }
-    event_attendance(where: { user_id: { _eq: $uid } }, order_by: { created_at: desc }) {
+    # ✨ FIXED: Removed created_at, now orders by the actual event_date
+    unified_event_rsvps(
+      where: { user_id: { _eq: $uid } }, 
+      order_by: { event: { event_date: desc } }
+    ) {
       id
       attending_count
-      created_at
-      events {
-        title
-        event_date
-      }
-    }
-    app_event_attendance(where: { user_id: { _eq: $uid } }, order_by: { created_at: desc }) {
-      id
-      attending_count
-      created_at
-      app_events {
+      event {
+        id
         title
         event_date
       }
@@ -69,8 +64,16 @@ const String qFamilyMembers = r'''
       status
       user_id
       is_child
-      child: child_profile { display_name qr_code_url }
-      user: profile { id display_name photo_url }
+      child: child_profile { 
+        id 
+        display_name 
+        qr_code_url 
+      }
+      user: profile { 
+        id 
+        display_name 
+        photo_url 
+      }
     }
   }
 ''';
@@ -165,12 +168,8 @@ class ProfileService {
     final myFamilyList = (data['my_family'] as List<dynamic>? ?? []);
     final familyId     = myFamilyList.isNotEmpty ? (myFamilyList.first['family_id'] as String?) : null;
 
-    final groupRSVPs = (data['event_attendance']     as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final appRSVPs   = (data['app_event_attendance'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
-    final eventRsvps = [
-      ...groupRSVPs.map((r) => {...r, 'source': 'group'}),
-      ...appRSVPs.map((r)   => {...r, 'source': 'app'}),
-    ];
+    // ✨ NEW: Directly cast the unified RSVPs. No more merging app vs group events!
+    final eventRsvps = (data['unified_event_rsvps'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
 
     return ProfileBundle(
       profile: profile,
@@ -187,7 +186,7 @@ class ProfileService {
       QueryOptions(
         document: gql(qFamilyMembers),
         variables: {'fid': familyId},
-        fetchPolicy: FetchPolicy.networkOnly,
+        fetchPolicy: FetchPolicy.noCache,
       ),
     );
     if (res.hasException) {
@@ -208,14 +207,10 @@ class ProfileService {
     if (res.hasException) throw res.exception!;
   }
 
-  /// Uploads [bytes] as the user's profile photo and updates the DB.
-  /// [extension] should include the dot e.g. ".jpg".
-  /// [contentType] e.g. "image/jpeg".
   Future<String> uploadAndSetProfilePhoto(
       String userId, Uint8List bytes, String extension, String contentType) async {
     _logger.d('[ProfileService] Starting photo upload for user $userId');
 
-    // Infer content type from extension if not supplied.
     final resolvedContentType = contentType.isNotEmpty
         ? contentType
         : _contentTypeFromExt(extension);

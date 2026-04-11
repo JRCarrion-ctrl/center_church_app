@@ -10,12 +10,14 @@ import 'package:omni_video_player/omni_video_player.dart';
 import 'package:flutter_link_previewer/flutter_link_previewer.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart'; // <-- Added Provider
 
 // Mobile-only imports, guarded at call sites with kIsWeb
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:open_filex/open_filex.dart';
 
+import '../../../app_state.dart'; // <-- Added AppState
 import '../media_cache_service.dart';
 import '../models/group_message.dart';
 
@@ -60,12 +62,20 @@ class _MessageContentViewState extends State<MessageContentView> {
   static const _placeholderTexts = {'[Image]', '[GIF]', '[File]'};
 
   // Only used on mobile — null on web
-  Future<dynamic>? _mediaFuture; // dynamic = File? on mobile, null on web
+  Future<dynamic>? _mediaFuture; 
 
   @override
   void initState() {
     super.initState();
-    if (!kIsWeb) _mediaFuture = _prepareAutoDownload();
+    if (!kIsWeb) {
+      // ✅ Read the AppState synchronously without listening to avoid rebuild loops in initState
+      final appState = context.read<AppState>();
+      
+      _mediaFuture = _prepareAutoDownload(
+        wifiOnly: appState.wifiOnlyMediaDownload,
+        autoDownloadImages: appState.autoDownloadImages,
+      );
+    }
   }
 
   void _startManualDownload(String fileUrl) {
@@ -76,13 +86,15 @@ class _MessageContentViewState extends State<MessageContentView> {
   }
 
   /// Mobile only: checks wifi/auto-download prefs before caching.
-  Future<dynamic> _prepareAutoDownload() async {
+  Future<dynamic> _prepareAutoDownload({
+    required bool wifiOnly,
+    required bool autoDownloadImages,
+  }) async {
     final fileUrl = widget.message.fileUrl;
     if (fileUrl == null) return null;
 
+    // Optional: If you want to move autoDownloadVideos to AppState later, do it just like the others!
     final prefs = await SharedPreferences.getInstance();
-    final wifiOnly = prefs.getBool('mediaWifiOnly') ?? true;
-    final autoDownloadImages = prefs.getBool('autoDownloadImages') ?? true;
     final autoDownloadVideos = prefs.getBool('autoDownloadVideos') ?? false;
 
     final canAutoDownload = (fileUrl.isImage && autoDownloadImages) ||

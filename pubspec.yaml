@@ -3,7 +3,7 @@ description: "This app was created for the purposes of the Center Church Frederi
 
 publish_to: 'none'
 
-version: 1.2.1+9
+version: 1.2.3+11
 
 environment:
   sdk: ^3.9.2

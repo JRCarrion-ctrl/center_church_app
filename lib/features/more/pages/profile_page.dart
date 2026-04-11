@@ -34,6 +34,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _displayName, _bio, _email, _photoUrl, _phone;
   bool?   _visible;
   bool    _isLoading = true;
+  bool    _showAllPrayers = false; // ✨ Controls prayer request visibility
 
   late ProfileService      _profileService;
   late PhotoUploadService  _photoUploadService;
@@ -70,11 +71,10 @@ class _ProfilePageState extends State<ProfilePage> {
       _photoUploadService = PhotoUploadService(client);
       _profileService     = ProfileService(client, _photoUploadService);
       _bootstrapped       = true;
-      _logger.i('Dependencies ready. Calling _loadAllData.');
       _loadAllData();
     } catch (e, st) {
       _logger.e('[gp] FAILED in didChangeDependencies', error: e, stackTrace: st);
-      if (mounted) _isLoading = false;
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -90,10 +90,16 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final bundle = await _profileService.fetchProfileBundle(userId);
+      
       List<Map<String, dynamic>> familyRows = [];
       if (bundle.familyId != null) {
-        familyRows = await _profileService.fetchFamilyMembers(bundle.familyId!);
+        try {
+          familyRows = await _profileService.fetchFamilyMembers(bundle.familyId!);
+        } catch (e) {
+          _logger.w('Family cache miss/error, but continuing profile load.', error: e);
+        }
       }
+      
       setState(() {
         _displayName   = bundle.profile?['display_name'] as String?;
         _bio           = bundle.profile?['bio']           as String?;
@@ -114,7 +120,6 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
-  /// Compresses image bytes on mobile; skips on web (no dart:io needed).
   Future<Uint8List> _compressBytes(Uint8List bytes) async {
     if (kIsWeb) return bytes;
     final compressed = await FlutterImageCompress.compressWithList(
@@ -128,7 +133,6 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _editPhoto() async {
-    _logger.i('Attempting to edit profile photo');
     final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
     if (picked == null) return;
 
@@ -163,7 +167,7 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _removePhoto() async {
-    final userId      = context.read<AppState>().profile?.id;
+    final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
     final previousUrl = _photoUrl;
     setState(() => _photoUrl = null);
@@ -208,8 +212,7 @@ class _ProfilePageState extends State<ProfilePage> {
             if (_photoUrl != null && _photoUrl!.isNotEmpty)
               ListTile(
                 leading: Icon(Icons.delete, color: Theme.of(context).colorScheme.error),
-                title: Text('Remove Photo',
-                    style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                title: Text('Remove Photo', style: TextStyle(color: Theme.of(context).colorScheme.error)),
                 onTap: () { Navigator.pop(ctx); _removePhoto(); },
               ),
             ListTile(
@@ -325,12 +328,313 @@ class _ProfilePageState extends State<ProfilePage> {
     return '(${digits.substring(0, 3)}) ${digits.substring(3, 6)}-${digits.substring(6)}';
   }
 
+  // --- UI BUILDERS ---
+
+  Widget _buildSectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+      child: Text(
+        title, 
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(String text) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Text(text, style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic)),
+    );
+  }
+
+  Widget _buildGroupsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("key_307a".tr()),
+        if (_groups.isEmpty)
+          _buildEmptyState("key_307b".tr())
+        else
+          SizedBox(
+            height: 120,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: _groups.length,
+              itemBuilder: (context, index) {
+                final group = _groups[index];
+                final g = group['group'] ?? {};
+                return Container(
+                  width: 220,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      // ✨ Make it clickable!
+                      onTap: () { if (g['id'] != null) context.push('/groups/${g['id']}'); },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.group, color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    g['name'] ?? 'Unnamed Group',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Theme.of(context).colorScheme.primaryContainer,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                group['role'] ?? 'Member',
+                                style: TextStyle(fontSize: 12, color: Theme.of(context).colorScheme.onPrimaryContainer),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildRsvpsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("key_307g".tr()),
+        if (_eventRsvps.isEmpty)
+          _buildEmptyState("key_307h".tr())
+        else
+          SizedBox(
+            height: 130,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              itemCount: _eventRsvps.length,
+              itemBuilder: (context, index) {
+                final rsvp = _eventRsvps[index];
+                final event = rsvp['event'] ?? {};
+                final eventId = event['id'];
+                
+                final date = event['event_date'];
+                final formatted = date != null
+                    ? DateFormat('MMM d, h:mm a').format(DateTime.parse(date).toLocal())
+                    : 'Unknown date';
+
+                return Container(
+                  width: 240,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  child: Card(
+                    elevation: 1,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(16),
+                      // ✨ Make it clickable, routing directly to the unified event page!
+                      onTap: () { if (eventId != null) context.push('/calendar/app-event/$eventId'); },
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.event_available, color: Theme.of(context).colorScheme.primary),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    event['title'] ?? 'Unnamed Event',
+                                    style: const TextStyle(fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Spacer(),
+                            Text(formatted, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13)),
+                            const SizedBox(height: 4),
+                            Text("key_309".tr(args: [rsvp['attending_count'].toString(), '']), style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildPrayerRequestsSection() {
+    // Cap the list to 3 items unless the user clicks "Show All"
+    final displayPrayers = _showAllPrayers ? _prayerRequests : _prayerRequests.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("key_307e".tr()),
+        if (_prayerRequests.isEmpty)
+          _buildEmptyState("key_307f".tr())
+        else ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+              ),
+              child: Column(
+                children: [
+                  ...displayPrayers.map((req) {
+                    return ListTile(
+                      leading: Icon(Icons.favorite, color: Theme.of(context).colorScheme.secondary),
+                      title: Text(req['request'] ?? '', maxLines: 2, overflow: TextOverflow.ellipsis),
+                      subtitle: Text('Status: ${req['status'] ?? 'Open'}', style: const TextStyle(fontSize: 12)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: () => _removePrayerRequest(req['id'] as String),
+                      ),
+                    );
+                  }),
+                  if (_prayerRequests.length > 3)
+                    InkWell(
+                      onTap: () => setState(() => _showAllPrayers = !_showAllPrayers),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        decoration: BoxDecoration(
+                          border: Border(top: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5))),
+                        ),
+                        child: Text(
+                          _showAllPrayers ? "Show Less" : "View all ${_prayerRequests.length} requests",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                    )
+                ],
+              ),
+            ),
+          ),
+        ]
+      ],
+    );
+  }
+
+  Widget _buildFamilySection() {
+    // 1. Get the currently logged-in user's ID
+    final currentUserId = context.read<AppState>().profile?.id;
+    
+    // 2. Filter out the current user from the list
+    final displayFamily = _family.where((member) => member['user_id'] != currentUserId).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildSectionHeader("key_307c".tr()),
+        if (displayFamily.isEmpty)
+          _buildEmptyState("key_307d".tr())
+        else
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Card(
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5)),
+              ),
+              clipBehavior: Clip.antiAlias, // Ensures the InkWell ripple stays inside rounded corners
+              child: Column(
+                children: displayFamily.map((member) {
+                  final isChild      = member['is_child'] == true;
+                  final childProfile = member['child'];
+                  final userProfile  = member['user'];
+                  
+                  final name         = childProfile?['display_name'] ?? userProfile?['display_name'] ?? 'Unnamed';
+                  final qrCode       = childProfile?['qr_code_url'];
+                  
+                  // Extract IDs for routing
+                  final targetUserId = member['user_id'];
+                  final childId      = childProfile?['id'];
+
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(color: Theme.of(context).colorScheme.secondaryContainer, shape: BoxShape.circle),
+                      child: Icon(isChild ? Icons.child_care : Icons.person, color: Theme.of(context).colorScheme.onSecondaryContainer, size: 20),
+                    ),
+                    title: Text(name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                    subtitle: Text(isChild ? 'Child' : 'Adult', style: const TextStyle(fontSize: 12)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (isChild && qrCode != null)
+                          IconButton(
+                            icon: const Icon(Icons.qr_code),
+                            onPressed: () => showDialog(
+                              context: context,
+                              builder: (_) => AlertDialog(content: CachedNetworkImage(imageUrl: qrCode)),
+                            ),
+                          ),
+                        // ✨ Visual indicator that the row is clickable
+                        const Icon(Icons.chevron_right, color: Colors.grey),
+                      ],
+                    ),
+                    // ✨ The Routing Logic!
+                    onTap: () {
+                      if (isChild) {
+                        if (childId != null) {
+                          context.push('/more/family/view_child?childId=$childId');
+                        } else {
+                          _showSnackbar(context, "Could not load child profile.");
+                        }
+                      } else {
+                        if (targetUserId != null) {
+                          context.push('/profile/$targetUserId');
+                        }
+                      }
+                    },
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ... (Header and Settings builders remain the same) ...
   Widget _buildProfileHeader() {
     final stateRead = context.read<AppState>();
     return Card(
-      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Theme.of(context).dividerColor.withValues(alpha: 0.5))),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -357,15 +661,10 @@ class _ProfilePageState extends State<ProfilePage> {
                 child: Text("key_305".tr()),
               ),
             ),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             _buildEditableTextRow(
               text: _displayName,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: Theme.of(context).colorScheme.onSurface,
-              ),
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurface),
               icon: Icons.edit_note,
               onEdit: () async {
                 await _editField(
@@ -381,7 +680,7 @@ class _ProfilePageState extends State<ProfilePage> {
             ),
             const SizedBox(height: 16),
             const Divider(height: 1),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
             if (_email != null)
               ListTile(
                 leading: Icon(Icons.email, color: Theme.of(context).colorScheme.secondary),
@@ -391,9 +690,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 contentPadding: EdgeInsets.zero,
               ),
             _buildEditableListTile(
-              title: (_phone != null && _phone!.isNotEmpty)
-                  ? _formatUSPhone(_phone!)
-                  : "key_305c_add".tr(),
+              title: (_phone != null && _phone!.isNotEmpty) ? _formatUSPhone(_phone!) : "key_305c_add".tr(),
               subtitle: "key_305c".tr(),
               icon: Icons.phone,
               titleColor: (_phone == null || _phone!.isEmpty) ? Colors.blue : null,
@@ -403,10 +700,7 @@ class _ProfilePageState extends State<ProfilePage> {
                   label: "key_305c".tr(),
                   initialValue: _phone ?? '',
                   keyboardType: TextInputType.phone,
-                  onSaved: (v) async {
-                    await _updateProfileField('phone', v);
-                    setState(() => _phone = v);
-                  },
+                  onSaved: (v) async { await _updateProfileField('phone', v); setState(() => _phone = v); },
                 );
               },
             ),
@@ -421,10 +715,7 @@ class _ProfilePageState extends State<ProfilePage> {
                 await _editField(
                   label: "key_305b".tr(),
                   initialValue: _bio ?? '',
-                  onSaved: (v) async {
-                    await _updateProfileField('bio', v);
-                    setState(() => _bio = v);
-                  },
+                  onSaved: (v) async { await _updateProfileField('bio', v); setState(() => _bio = v); },
                 );
               },
             ),
@@ -435,23 +726,13 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Widget _buildEditableListTile({
-    required String    title,
-    required String    subtitle,
-    required IconData  icon,
-    required VoidCallback onTap,
-    bool     isBio      = false,
-    Color?   titleColor,
-    Color?   iconColor,
+    required String title, required String subtitle, required IconData icon, required VoidCallback onTap,
+    bool isBio = false, Color? titleColor, Color? iconColor,
   }) {
     final effectiveIconColor = iconColor ?? Theme.of(context).colorScheme.secondary;
     return ListTile(
       leading: Icon(icon, color: effectiveIconColor),
-      title: Text(
-        title,
-        maxLines: isBio ? 3 : 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(color: titleColor),
-      ),
+      title: Text(title, maxLines: isBio ? 3 : 1, overflow: TextOverflow.ellipsis, style: TextStyle(color: titleColor)),
       subtitle: Text(subtitle),
       trailing: const Icon(Icons.edit, size: 20),
       onTap: onTap,
@@ -460,28 +741,15 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  Widget _buildEditableTextRow({
-    String?    text,
-    String?    title,
-    TextStyle? style,
-    IconData   icon  = Icons.edit,
-    required VoidCallback onEdit,
-  }) {
+  Widget _buildEditableTextRow({String? text, String? title, TextStyle? style, IconData icon = Icons.edit, required VoidCallback onEdit}) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Flexible(
           child: Column(
             children: [
-              if (title != null && text != null)
-                Text(title, style: Theme.of(context).textTheme.bodySmall),
-              Text(
-                text ?? '',
-                textAlign: TextAlign.center,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: style ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-              ),
+              if (title != null && text != null) Text(title, style: Theme.of(context).textTheme.bodySmall),
+              Text(text ?? '', textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: style ?? const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
             ],
           ),
         ),
@@ -493,118 +761,31 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget _buildSettings() {
     return Column(
       children: [
-        SwitchListTile(
-          title: Text("key_306".tr()),
-          value: _visible ?? true,
-          onChanged: _toggleVisibility,
-        ),
-        ListTile(
-          leading: const Icon(Icons.lock),
-          title: Text("key_307".tr()),
-          onTap: _changePassword,
-        ),
-        const Divider(),
+        SwitchListTile(title: Text("key_306".tr()), value: _visible ?? true, onChanged: _toggleVisibility),
+        ListTile(leading: const Icon(Icons.lock), title: Text("key_307".tr()), onTap: _changePassword),
       ],
-    );
-  }
-
-  Widget _buildGroupsSection() {
-    return SectionCard(
-      title: "key_307a".tr(),
-      emptyText: "key_307b".tr(),
-      children: _groups.map((group) {
-        final g = group['group'] ?? {};
-        return ListTile(
-          leading: const Icon(Icons.group),
-          title: Text(g['name'] ?? 'Unnamed Group'),
-          subtitle: Text(group['role'] ?? ''),
-          onTap: () { if (g['id'] != null) context.push('/groups/${g['id']}'); },
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildFamilySection() {
-    return SectionCard(
-      title: "key_307c".tr(),
-      emptyText: "key_307d".tr(),
-      children: _family.map((member) {
-        final isChild     = member['is_child'] == true;
-        final childProfile = member['child'];
-        final userProfile  = member['user'];
-        final name  = childProfile?['display_name'] ?? userProfile?['display_name'] ?? 'Unnamed';
-        final qrCode = childProfile?['qr_code_url'];
-        return ListTile(
-          leading: Icon(isChild ? Icons.child_care : Icons.person),
-          title: Text(name),
-          trailing: isChild && qrCode != null
-              ? IconButton(
-                  icon: const Icon(Icons.qr_code),
-                  onPressed: () => showDialog(
-                    context: context,
-                    builder: (_) => AlertDialog(content: CachedNetworkImage(imageUrl: qrCode)),
-                  ),
-                )
-              : null,
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildPrayerRequestsSection() {
-    return SectionCard(
-      title: "key_307e".tr(),
-      emptyText: "key_307f".tr(),
-      children: _prayerRequests.map((req) {
-        return ListTile(
-          leading: const Icon(Icons.favorite),
-          title: Text(req['request'] ?? ''),
-          subtitle: Text('Status: ${req['status'] ?? 'Open'}'),
-          trailing: IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: () => _removePrayerRequest(req['id'] as String),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildRsvpsSection() {
-    return SectionCard(
-      title: "key_307g".tr(),
-      emptyText: "key_307h".tr(),
-      children: _eventRsvps.map((e) {
-        final isAppEvent = e['source'] == 'app';
-        final event      = isAppEvent ? e['app_events'] : e['events'];
-        final title      = event?['title'] ?? 'Unnamed Event';
-        final date       = event?['event_date'];
-        final formatted  = date != null
-            ? DateFormat('MMM d, yyyy • h:mm a').format(DateTime.parse(date).toLocal())
-            : 'Unknown date';
-        return ListTile(
-          leading: Icon(isAppEvent ? Icons.public : Icons.group),
-          title: Text(title),
-          subtitle: Text("key_309".tr(args: [e['attending_count'].toString(), formatted])),
-        );
-      }).toList(),
     );
   }
 
   Widget _buildActionButtons() {
-    return Column(
-      children: [
-        const Divider(),
-        ElevatedButton(
-          onPressed: _logout,
-          style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-          child: Text("key_310".tr()),
-        ),
-        TextButton(
-          style: TextButton.styleFrom(foregroundColor: Colors.red),
-          onPressed: _deleteAccount,
-          child: Text("key_311".tr()),
-        ),
-      ],
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 32),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ElevatedButton(
+            onPressed: _logout,
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 12)),
+            child: Text("key_310".tr(), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          ),
+          const SizedBox(height: 8),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: _deleteAccount,
+            child: Text("key_311".tr()),
+          ),
+        ],
+      ),
     );
   }
 
@@ -613,75 +794,32 @@ class _ProfilePageState extends State<ProfilePage> {
     if (context.watch<AppState>().profile?.id == null) {
       return Scaffold(
         appBar: AppBar(title: Text("key_304".tr())),
-        body: Center(
-          child: ElevatedButton(
-            onPressed: () => context.go('/landing'),
-            child: Text("key_017".tr()),
-          ),
-        ),
+        body: Center(child: ElevatedButton(onPressed: () => context.go('/landing'), child: Text("key_017".tr()))),
       );
     }
     return Scaffold(
-      appBar: AppBar(
-        title: Text("key_304".tr()),
-        leading: BackButton(onPressed: () => Navigator.of(context).pop()),
-      ),
+      appBar: AppBar(title: Text("key_304".tr()), leading: BackButton(onPressed: () => Navigator.of(context).pop())),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
               onRefresh: _loadAllData,
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
                 physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.only(bottom: 40),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _buildProfileHeader(),
-                    const SizedBox(height: 16),
                     _buildSettings(),
                     _buildGroupsSection(),
-                    _buildFamilySection(),
-                    _buildPrayerRequestsSection(),
                     _buildRsvpsSection(),
+                    _buildPrayerRequestsSection(),
+                    _buildFamilySection(),
                     _buildActionButtons(),
                   ],
                 ),
               ),
             ),
-    );
-  }
-}
-
-class SectionCard extends StatelessWidget {
-  final String        title;
-  final String        emptyText;
-  final List<Widget>  children;
-
-  const SectionCard({
-    super.key,
-    required this.title,
-    required this.emptyText,
-    required this.children,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final content = children.isEmpty
-        ? [Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Text(emptyText, style: const TextStyle(color: Colors.grey)),
-          )]
-        : children;
-    return Card(
-      elevation: 0,
-      margin: const EdgeInsets.symmetric(vertical: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(10),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [Text(title, style: Theme.of(context).textTheme.titleMedium), ...content],
-        ),
-      ),
     );
   }
 }

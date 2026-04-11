@@ -173,7 +173,7 @@ class _GroupsPageState extends State<GroupsPage> {
 
                         final userId = context.read<AppState>().profile?.id;
                         
-                        // ✨ UPDATED MUTATION: Added targeted_audiences
+                        // ✨ UPDATED MUTATION: Added target_audiences
                         const mCreate = r'''
                           mutation CreateGroup($name: String!, $desc: String, $vis: String!, $uid: String!, $langs: [String!]!) {
                             insert_groups_one(
@@ -183,7 +183,7 @@ class _GroupsPageState extends State<GroupsPage> {
                                 visibility: $vis,
                                 temporary: false,
                                 archived: false,
-                                targeted_audiences: $langs,
+                                target_audiences: $langs,
                                 group_memberships: {
                                   data: [{
                                     user_id: $uid,

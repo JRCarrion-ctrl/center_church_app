@@ -5,7 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/core/time_service.dart';
 
-import '../group_service.dart'; // Make sure this points to where GroupInfoData is
+import '../group_service.dart'; 
 
 class GroupDashboardTab extends StatelessWidget {
   final GroupInfoData pageData;
@@ -194,9 +194,9 @@ class GroupDashboardTab extends StatelessWidget {
     final now = DateTime.now();
     final today = DateTime.utc(now.year, now.month, now.day);
     
-    // Filter to future events only using your existing logic
+    // Filter to future events (Safely checks 'event_date' or legacy 'date')
     final upcomingEvents = events.where((e) {
-      final dateStr = e['event_date'];
+      final dateStr = e['event_date'] ?? e['date']; 
       if (dateStr == null) return false;
       try {
         return DateTime.parse(dateStr).isAfter(today);
@@ -204,6 +204,13 @@ class GroupDashboardTab extends StatelessWidget {
         return false;
       }
     }).toList();
+
+    // Sort upcoming events so the soonest ones appear first in the scroll list
+    upcomingEvents.sort((a, b) {
+      final dateA = DateTime.tryParse(a['event_date'] ?? a['date'] ?? '') ?? now;
+      final dateB = DateTime.tryParse(b['event_date'] ?? b['date'] ?? '') ?? now;
+      return dateA.compareTo(dateB);
+    });
 
     if (upcomingEvents.isEmpty) {
       return Padding(
@@ -220,9 +227,11 @@ class GroupDashboardTab extends StatelessWidget {
         itemCount: upcomingEvents.length,
         itemBuilder: (context, index) {
           final event = upcomingEvents[index];
+          final eventId = event['id'];
+          
           DateTime? eventDate;
           try {
-            eventDate = DateTime.parse(event['event_date']);
+            eventDate = DateTime.parse(event['event_date'] ?? event['date']);
           } catch (_) {}
 
           return Container(
@@ -233,7 +242,15 @@ class GroupDashboardTab extends StatelessWidget {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
-                onTap: () => context.push('/groups/${pageData.group.id}/info/events'),
+                // ✨ UPDATED: Navigate to the unified App Event page, not the list!
+                onTap: () {
+                  if (eventId != null) {
+                    context.push('/calendar/app-event/$eventId');
+                  } else {
+                    // Fallback to the generic events list if ID is missing for some reason
+                    context.push('/groups/${pageData.group.id}/info/events');
+                  }
+                },
                 child: Padding(
                   padding: const EdgeInsets.all(12.0),
                   child: Column(

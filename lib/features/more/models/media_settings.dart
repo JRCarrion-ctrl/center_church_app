@@ -17,7 +17,6 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
   static const _imageKey = 'autoDownloadImages';
   static const _wifiKey = 'mediaWifiOnly';
 
-  bool _autoDownloadImages = true;
   bool _prefsLoaded = false;
   bool _clearingCache = false;
 
@@ -30,26 +29,34 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
   Future<void> _loadPreferences() async {
     final prefs = await SharedPreferences.getInstance();
     if (!mounted) return;
+    
     final appState = Provider.of<AppState>(context, listen: false);
+    
+    // Set both provider states based on local storage
+    appState.setWifiOnlyMediaDownload(prefs.getBool(_wifiKey) ?? true);
+    appState.setAutoDownloadImages(prefs.getBool(_imageKey) ?? true);
+    
+    // Trigger the UI build now that the global state is hydrated
     setState(() {
-      _autoDownloadImages = prefs.getBool(_imageKey) ?? true;
-      appState.setWifiOnlyMediaDownload(prefs.getBool(_wifiKey) ?? true);
       _prefsLoaded = true;
     });
   }
 
-  Future<void> _updatePreference(String key, bool value) async {
+  Future<void> _updateImagePreference(bool value) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
-    setState(() {
-      if (key == _imageKey) _autoDownloadImages = value;
-    });
+    await prefs.setBool(_imageKey, value);
+    if (mounted) {
+      // Tell the global state to update
+      Provider.of<AppState>(context, listen: false).setAutoDownloadImages(value);
+    }
   }
 
   Future<void> _updateWifiPreference(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_wifiKey, value);
-    if (mounted) Provider.of<AppState>(context, listen: false).setWifiOnlyMediaDownload(value);
+    if (mounted) {
+      Provider.of<AppState>(context, listen: false).setWifiOnlyMediaDownload(value);
+    }
   }
 
   Future<void> _clearCache() async {
@@ -65,55 +72,56 @@ class _MediaSettingsPageState extends State<MediaSettingsPage> {
       ),
     );
 
-    if (confirmed == true) {
-      setState(() => _clearingCache = true);
-      await MediaCacheService().clearCache();
-      if (!mounted) return;
-      setState(() => _clearingCache = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("key_222".tr())),
-      );
-    }
+    if (confirmed != true) return;
+
+    setState(() => _clearingCache = true);
+    
+    await MediaCacheService().clearCache();
+    
+    if (!mounted) return;
+    
+    setState(() => _clearingCache = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("key_222".tr())),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    // Watch the global state
     final appState = Provider.of<AppState>(context);
-
-    if (!_prefsLoaded) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
-    }
 
     return Scaffold(
       appBar: AppBar(title: Text("key_223".tr())),
-      body: ListView(
-        children: [
-          SwitchListTile(
-            title: Text("key_224".tr()),
-            value: _autoDownloadImages,
-            onChanged: _clearingCache ? null : (val) => _updatePreference(_imageKey, val),
-          ),
-          SwitchListTile(
-            title: Text("key_226".tr()),
-            subtitle: Text("key_227".tr()),
-            value: appState.wifiOnlyMediaDownload,
-            onChanged: _clearingCache ? null : _updateWifiPreference,
-          ),
-          ListTile(
-            title: Text("key_228".tr()),
-            trailing: _clearingCache
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.delete),
-            onTap: _clearingCache ? null : _clearCache,
-          ),
-        ],
-      ),
+      body: !_prefsLoaded
+          ? const Center(child: CircularProgressIndicator())
+          : ListView(
+              children: [
+                SwitchListTile(
+                  title: Text("key_224".tr()),
+                  // Now directly reading from the AppState!
+                  value: appState.autoDownloadImages,
+                  onChanged: _clearingCache ? null : _updateImagePreference,
+                ),
+                SwitchListTile(
+                  title: Text("key_226".tr()),
+                  subtitle: Text("key_227".tr()),
+                  value: appState.wifiOnlyMediaDownload,
+                  onChanged: _clearingCache ? null : _updateWifiPreference,
+                ),
+                ListTile(
+                  title: Text("key_228".tr()),
+                  trailing: _clearingCache
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.delete),
+                  onTap: _clearingCache ? null : _clearCache,
+                ),
+              ],
+            ),
     );
   }
 }
