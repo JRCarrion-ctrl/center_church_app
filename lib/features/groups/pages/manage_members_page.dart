@@ -98,10 +98,15 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       floatingActionButton: _isAdmin 
           ? FloatingActionButton(
               onPressed: () {
-                showModalBottomSheet(
+                showDialog(
                   context: context,
-                  isScrollControlled: true,
-                  builder: (ctx) => InviteUserModal(groupId: widget.groupId),
+                  builder: (ctx) => Dialog(
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 400),
+                      child: InviteUserModal(groupId: widget.groupId),
+                    ),
+                  ),
                 ).then((_) {
                   if (mounted) _refreshAllLists();
                 });

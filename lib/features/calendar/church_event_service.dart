@@ -16,7 +16,7 @@ class _ChurchEventQueries {
           event_date: { _gte: $from },
           visibility: { _eq: "public_app" },
           status: { _in: ["approved", "pending_approval"] },
-          target_audiences: { _contains: $langs }
+          target_audiences: { _contained_in: $langs }
         },
         order_by: { event_date: asc }
       ) {

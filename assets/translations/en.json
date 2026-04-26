@@ -618,5 +618,12 @@
   "Past Group Events": "Past Group Events",
   "View Past Events": "View Past Events",
   "Target Audience": "Target Audience",
-  "key_read_less": "Read Less"
+  "key_read_less": "Read Less",
+  "key_share": "Share Event",
+  "key_share_description": "Share this link for easy access to the event!",
+  "Group Invite": "Group Invite",
+  "You've been invited!": "You've been invited!",
+  "Click below to accept the invitation and join the group.": "Click below to accept the invitation and join the group.",
+  "Accept Invitation": "Accept Invitation",
+  "Cancel": "Cancel"
 }

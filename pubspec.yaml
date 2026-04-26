@@ -3,7 +3,7 @@ description: "This app was created for the purposes of the Center Church Frederi
 
 publish_to: 'none'
 
-version: 1.2.3+11
+version: 1.2.4+12
 
 environment:
   sdk: ^3.9.2
@@ -65,6 +65,7 @@ dependencies:
   media_kit: ^1.2.6
   flutter_web_auth_2: ^5.0.1
   openid_client: ^0.4.9+2
+  qr_flutter: ^4.1.0
   
 dev_dependencies:
   flutter_test:

@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
+import 'package:ccf_app/shared/widgets/generic_share_modal.dart';
 import '../church_event_service.dart';
 import '../models/church_event.dart';
 
@@ -219,6 +220,33 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
     Add2Calendar.addEvent2Cal(calendarEvent);
   }
 
+  void _showShareModal() {
+    // 1. Determine the correct path based on whether it's a group event or app event
+    final isGroupEvent = widget.event.groupId != null;
+    final basePath = isGroupEvent 
+        ? '/group-event/${widget.event.id}' 
+        : '/calendar/app-event/${widget.event.id}';
+    
+    // 2. Construct the full deep link
+    final shareUrl = 'https://ccfapp.com$basePath';
+
+    // 3. Trigger the modal
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 400),
+          child: GenericShareModal(
+            title: "key_share".tr(),
+            description: "key_share_description".tr(),
+            shareUrl: shareUrl,
+          ),
+        ),
+      ),
+    );
+  }
+
   String _formatEventTime(DateTime startUtc, DateTime? endUtc) {
     final start = startUtc.toLocal();
     final dateStr = DateFormat('EEEE, MMM d, yyyy').format(start);
@@ -257,6 +285,13 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
                   ? null
                   : IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/')),
               actions: [
+                // ✨ NEW: The Share Button
+                IconButton(
+                  icon: const Icon(Icons.ios_share), // or Icons.share depending on your preference
+                  tooltip: "key_share".tr(),
+                  onPressed: _showShareModal,
+                ),
+                // Existing Edit Button
                 if (_canEdit)
                   IconButton(
                     icon: const Icon(Icons.edit),
@@ -800,7 +835,12 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
 class ChurchEventDeepLinkWrapper extends StatefulWidget {
   final String eventId;
   final ChurchEvent? preloadedEvent;
-  const ChurchEventDeepLinkWrapper({super.key, required this.eventId, this.preloadedEvent});
+  
+  const ChurchEventDeepLinkWrapper({
+    super.key, 
+    required this.eventId, 
+    this.preloadedEvent
+  });
 
   @override
   State<ChurchEventDeepLinkWrapper> createState() => _ChurchEventDeepLinkWrapperState();
@@ -812,29 +852,85 @@ class _ChurchEventDeepLinkWrapperState extends State<ChurchEventDeepLinkWrapper>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (_eventFuture == null && widget.preloadedEvent == null) {
+    // Initialize the validation future only once
+    _eventFuture ??= _loadAndValidateEvent();
+  }
+
+  Future<ChurchEvent?> _loadAndValidateEvent() async {
+    final appState = context.read<AppState>();
+    final userId = appState.profile?.id;
+
+    // 1. Get the event (either from memory or from the network)
+    ChurchEvent? targetEvent = widget.preloadedEvent;
+
+    if (targetEvent == null) {
       final client = GraphQLProvider.of(context).value;
-      final userId = context.read<AppState>().profile?.id;
       final service = ChurchEventService(client, currentUserId: userId);
-      
-      _eventFuture = service.getEventById(widget.eventId);
+      targetEvent = await service.getEventById(widget.eventId);
     }
+
+    if (targetEvent == null) return null;
+
+    // 2. Security Check: If it's a group event, enforce membership
+    if (targetEvent.groupId != null) {
+      if (userId == null) {
+         _triggerRedirect("You must be logged in to view this event.");
+         return null;
+      }
+      
+      // Check their role in the group using your existing GroupService
+      final role = await appState.groupService.getMyGroupRole(
+        groupId: targetEvent.groupId!, 
+        userId: userId
+      );
+      
+      if (role == 'none') {
+         _triggerRedirect("You must be a member of this group to view its events.");
+         return null; // Return null to prevent the UI from rendering the details page
+      }
+    }
+
+    // 3. Validation passed! Return the event to be rendered.
+    return targetEvent;
+  }
+
+  void _triggerRedirect(String message) {
+    if (!mounted) return;
+    
+    // addPostFrameCallback ensures we don't trigger a navigation 
+    // event while the widget tree is currently building.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
+      context.go('/'); // Send them back to the home page
+    });
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.preloadedEvent != null) {
-      return ChurchEventDetailsPage(event: widget.preloadedEvent!);
-    }
     return FutureBuilder<ChurchEvent?>(
       future: _eventFuture,
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-           return Scaffold(appBar: AppBar(), body: const Center(child: CircularProgressIndicator()));
+           return Scaffold(
+             appBar: AppBar(), 
+             body: const Center(child: CircularProgressIndicator())
+           );
         }
+        
+        // If snapshot data is null, it means the event wasn't found OR 
+        // the security check failed and they are currently being redirected.
         if (snapshot.hasError || snapshot.data == null) {
-           return Scaffold(appBar: AppBar(title: Text("key_error".tr())), body: Center(child: Text("key_event_not_found".tr())));
+           return Scaffold(
+             appBar: AppBar(title: Text("key_012".tr())), 
+             body: Center(child: Text("key_001".tr()))
+           );
         }
+        
         return ChurchEventDetailsPage(event: snapshot.data!);
       },
     );

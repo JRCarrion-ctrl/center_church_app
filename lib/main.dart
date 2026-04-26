@@ -104,27 +104,41 @@ class _CCFAppBootState extends State<CCFAppBoot> {
   Future<void> _handleIncomingLinks() async {
     _appLinks = AppLinks();
 
-    // Live link handling
+    // Helper function to process URIs for both cold starts and live streams
+    void processUri(Uri uri) {
+      // 1. Password Reset (Custom Scheme: ccfapp://reset)
+      if (uri.host == 'reset') {
+        if (mounted) _router.go('/reset-password');
+        return;
+      }
+
+      // 2. Group Invites (Universal Link: https://ccfrederick.app/join/:token)
+      if (uri.pathSegments.isNotEmpty && uri.pathSegments.first == 'join') {
+        // uri.path will be something like "/join/your-token-uuid"
+        if (mounted) _router.go(uri.path);
+        return;
+      }
+
+      // 3. Group Invites (Custom Scheme fallback: ccfapp://join/:token)
+      if (uri.host == 'join' && uri.pathSegments.isNotEmpty) {
+        final token = uri.pathSegments.first;
+        if (mounted) _router.go('/join/$token');
+        return;
+      }
+    }
+
+    // Live link handling (App is already open in the background)
     _linkSub = _appLinks!.uriLinkStream.listen((Uri? uri) async {
       if (uri == null) return;
-
-      switch (uri.host) {
-        case 'reset':
-          if (mounted) _router.go('/reset-password');
-          break;
-        default:
-          break;
-      }
+      processUri(uri);
     }, onError: (err) {
       debugPrint('Deep link error: $err');
     });
 
-    // Cold start link
+    // Cold start link (App is launched entirely from the link)
     final initialUri = await _appLinks!.getInitialLink();
     if (initialUri != null) {
-      if (initialUri.host == 'reset') {
-        if (mounted) _router.go('/reset-password');
-      }
+      processUri(initialUri);
     }
   }
 

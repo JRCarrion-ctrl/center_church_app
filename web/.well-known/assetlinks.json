@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.jcarriondev.ccfapp",
+      "sha256_cert_fingerprints": [
+        "19:2D:8A:C4:A0:00:E7:1B:31:57:14:16:5A:C2:BF:7F:72:52:4B:05:DD:43:19:BF:45:60:9C:5C:AD:BA:18:2D"
+      ]
+    }
+  }
+]

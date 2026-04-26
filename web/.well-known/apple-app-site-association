@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "9DD73QC3QV.com.centrocristiano.ccfapp",
+        "paths": [
+          "/join/*",
+          "/calendar/*",
+          "/groups/*",
+          "/group-event/*"
+        ]
+      }
+    ]
+  }
+}

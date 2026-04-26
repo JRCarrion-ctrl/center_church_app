@@ -60,6 +60,19 @@
                 <data android:pathPrefix="/groups"/>
                 <data android:pathPrefix="/group-event"/>
             </intent-filter>
+
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                
+                <data android:scheme="https" />
+                
+                <data android:host="ccfapp.com" />
+                <data android:host="www.ccfapp.com" />
+                
+                <data android:pathPrefix="/join" />
+            </intent-filter>
         </activity>
 
         <meta-data

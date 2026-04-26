@@ -1,4 +1,5 @@
 // File: lib/routes/group_routes.dart
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../features/groups/pages/manage_members_page.dart';
 import '../features/groups/pages/manage_announcements_page.dart';
@@ -9,6 +10,7 @@ import '../features/groups/pages/group_settings_page.dart';
 import '../features/calendar/models/church_event.dart';
 import '../features/calendar/widgets/church_event_form_modal.dart';
 import '../features/calendar/pages/church_event_details_page.dart';
+import '../features/groups/pages/join_group_preview_screen.dart';
 
 final List<GoRoute> groupRoutes = [
   GoRoute(
@@ -77,6 +79,21 @@ final List<GoRoute> groupRoutes = [
         groupId: groupId,
         token: token,
       );
+    },
+  ),
+
+  GoRoute(
+    path: '/join/:token',
+    builder: (context, state) {
+      final token = state.pathParameters['token'];
+      
+      if (token == null || token.isEmpty) {
+        return const Scaffold(
+          body: Center(child: Text("Invalid invite link format.")),
+        );
+      }
+      
+      return JoinGroupPreviewScreen(token: token);
     },
   ),
 ];

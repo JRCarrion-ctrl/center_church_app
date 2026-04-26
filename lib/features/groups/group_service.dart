@@ -420,6 +420,83 @@ class GroupService {
         .toList();
   }
 
+  Future<String> generateInviteLink(String groupId) async {
+    // NOTE: This query assumes you have created a table called 'group_invite_links' 
+    // with columns: id (uuid), group_id (uuid), and expires_at (timestamptz).
+    // If you use a Hasura Action instead, update the query name accordingly.
+    const m = r'''
+      mutation GenerateLink($gid: uuid!, $expires: timestamptz!) {
+        insert_group_invite_links_one(object: {
+          group_id: $gid,
+          expires_at: $expires
+        }) {
+          id
+        }
+      }
+    ''';
+    
+    // Set the link to expire in 7 days
+    final expires = DateTime.now().add(const Duration(days: 7)).toUtc().toIso8601String();
+    
+    final res = await client.mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {'gid': groupId, 'expires': expires},
+      ),
+    );
+    
+    if (res.hasException) throw res.exception!;
+    
+    final tokenId = res.data?['insert_group_invite_links_one']?['id'];
+    
+    // Construct the deep link URL using your app's domain
+    return 'https://ccfapp.com/join/$tokenId';
+  }
+
+  Future<String> consumeInviteLink(String token) async {
+    log.i('🎟️ Attempting to consume invite token: $token');
+    
+    const m = r'''
+      mutation JoinByInvite($token: uuid!) {
+        join_group_by_invite(args: {invite_token: $token}) {
+          group_id
+        }
+      }
+    ''';
+
+    final res = await client.mutate(
+      MutationOptions(
+        document: gql(m),
+        variables: {'token': token},
+        fetchPolicy: FetchPolicy.noCache, 
+      ),
+    );
+
+    // LOG THE RAW EXCEPTION IF IT FAILS
+    if (res.hasException) {
+      log.e('❌ Hasura Mutation Exception Triggered!');
+      log.e('GraphQL Errors: ${res.exception?.graphqlErrors}');
+      log.e('Link Exception: ${res.exception?.linkException}');
+      
+      final errorMessage = res.exception?.graphqlErrors.firstOrNull?.message 
+          ?? 'Network error or invalid link.';
+      throw Exception(errorMessage);
+    }
+
+    log.d('✅ Hasura Response Data: ${res.data}');
+
+    final data = res.data?['join_group_by_invite'] as List?;
+    if (data == null || data.isEmpty) {
+      log.w('⚠️ Mutation succeeded but returned empty data. Did the UPSERT fail?');
+      throw Exception('Failed to join group. Please try again.');
+    }
+
+    final groupId = data[0]['group_id'] as String;
+    log.i('🎉 Successfully resolved to Group ID: $groupId');
+    
+    return groupId;
+  }
+
   Future<List<Map<String, dynamic>>> getGroupEvents(String groupId) async {
     await _assertGroupActive(groupId);
     const q = r'''
