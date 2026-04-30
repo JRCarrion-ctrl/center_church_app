@@ -20,7 +20,9 @@
 
         <activity
             android:name="net.openid.appauth.RedirectUriReceiverActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleInstance"
+            android:taskAffinity="">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -55,10 +57,11 @@
                 <action android:name="android.intent.action.VIEW"/>
                 <category android:name="android.intent.category.DEFAULT"/>
                 <category android:name="android.intent.category.BROWSABLE"/>
-                <data android:scheme="ccfapp" />
-                <data android:pathPrefix="/calendar"/>
-                <data android:pathPrefix="/groups"/>
-                <data android:pathPrefix="/group-event"/>
+                
+                <data android:scheme="ccfapp" android:host="app" android:pathPrefix="/calendar"/>
+                <data android:scheme="ccfapp" android:host="app" android:pathPrefix="/groups"/>
+                <data android:scheme="ccfapp" android:host="app" android:pathPrefix="/group-event"/>
+                <data android:scheme="ccfapp" android:host="app" android:pathPrefix="/more"/>
             </intent-filter>
 
             <intent-filter android:autoVerify="true">
@@ -67,11 +70,13 @@
                 <category android:name="android.intent.category.BROWSABLE" />
                 
                 <data android:scheme="https" />
-                
                 <data android:host="ccfapp.com" />
                 <data android:host="www.ccfapp.com" />
-                
                 <data android:pathPrefix="/join" />
+                <data android:pathPrefix="/calendar" />
+                <data android:pathPrefix="/group-event" />
+                <data android:pathPrefix="/groups" />
+                <data android:pathPrefix="/more" />
             </intent-filter>
         </activity>
 

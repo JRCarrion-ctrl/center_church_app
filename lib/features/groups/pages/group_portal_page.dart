@@ -76,7 +76,17 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
         
         if (snapshot.hasError) {
           return Scaffold(
-            appBar: AppBar(),
+            appBar: AppBar(
+              leading: BackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/groups'); // Fallback to the Groups tab
+                  }
+                },
+              ),
+            ),
             body: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -96,6 +106,15 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
           length: 2,
           child: Scaffold(
             appBar: AppBar(
+              leading: BackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/groups'); // Fallback to the Groups tab
+                  }
+                },
+              ),
               title: Text(pageData.group.name),
               bottom: TabBar(
                 indicatorSize: TabBarIndicatorSize.tab,

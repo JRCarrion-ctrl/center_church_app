@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/features/groups/group_service.dart';
+import 'package:ccf_app/app_state.dart';
 
 class JoinGroupPreviewScreen extends StatefulWidget {
   final String token;
@@ -16,6 +17,33 @@ class JoinGroupPreviewScreen extends StatefulWidget {
 class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
   bool _isProcessing = false;
   String? _errorMessage;
+  
+  // ✨ NEW: State variables for the preview
+  bool _isLoadingPreview = true;
+  String? _groupName;
+  String? _groupPhotoUrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadGroupPreview();
+  }
+
+  // ✨ NEW: Fetch the group details when the page opens
+  Future<void> _loadGroupPreview() async {
+    final svc = context.read<GroupService>();
+    final previewData = await svc.getGroupPreviewFromToken(widget.token);
+    
+    if (mounted) {
+      setState(() {
+        if (previewData != null) {
+          _groupName = previewData['name'];
+          _groupPhotoUrl = previewData['photo_url'];
+        }
+        _isLoadingPreview = false;
+      });
+    }
+  }
 
   Future<void> _handleJoin() async {
     setState(() {
@@ -25,7 +53,6 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
 
     try {
       final svc = context.read<GroupService>();
-
       final groupId = await svc.consumeInviteLink(widget.token);
 
       if (!mounted) return;
@@ -34,13 +61,22 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
         SnackBar(content: Text("Successfully joined the group!".tr())),
       );
 
-      context.go('/groups/$groupId');
+      context.replace('/groups/$groupId');
 
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _isProcessing = false;
-        _errorMessage = e.toString().replaceAll('Exception: ', '');
+        
+        final errorString = e.toString();
+        // Unmask Hasura errors
+        if (errorString.contains('database query error') || errorString.contains('postgres error')) {
+          _errorMessage = "There was an issue joining this group. Please try again."; 
+        } else if (errorString.contains('Unique constraint') || errorString.contains('duplicate key')) {
+          _errorMessage = "You are already a member of this group!".tr();
+        } else {
+          _errorMessage = errorString.replaceAll('Exception: ', '');
+        }
       });
     }
   }
@@ -49,6 +85,7 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final isAuthed = context.watch<AppState>().isAuthenticated;
 
     return Scaffold(
       appBar: AppBar(
@@ -58,34 +95,50 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(32.0),
-          // ConstrainedBox ensures the UI doesn't stretch too wide on your Web/Desktop builds
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
-            child: Column(
+            child: _isLoadingPreview 
+              ? const CircularProgressIndicator() // Show simple loader while fetching preview
+              : Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Icon Header
+                // ✨ UPDATED: Show Photo or Fallback Icon
                 Container(
-                  padding: const EdgeInsets.all(24),
+                  width: 120,
+                  height: 120,
                   decoration: BoxDecoration(
                     color: colorScheme.primaryContainer.withValues(alpha: 0.5),
                     shape: BoxShape.circle,
+                    image: _groupPhotoUrl != null
+                        ? DecorationImage(
+                            image: NetworkImage(_groupPhotoUrl!),
+                            fit: BoxFit.cover,
+                          )
+                        : null,
                   ),
-                  child: Icon(Icons.group_add, size: 64, color: colorScheme.primary),
+                  child: _groupPhotoUrl == null
+                      ? Icon(Icons.group, size: 64, color: colorScheme.primary)
+                      : null,
                 ),
                 const SizedBox(height: 32),
                 
-                // Welcome Text
+                // ✨ UPDATED: Personalized Welcome Text
                 Text(
-                  "You've been invited!".tr(),
+                  _groupName != null 
+                      ? "You've been invited to join\n$_groupName!" 
+                      : "You've been invited!".tr(),
                   style: textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 16),
+                
+                // Dynamic instructional text
                 Text(
-                  "Click below to accept the invitation and join the group.".tr(),
+                  isAuthed 
+                    ? "Click below to accept the invitation and join the group.".tr()
+                    : "Please log in or create an account to join this group.".tr(),
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 16, color: colorScheme.onSurfaceVariant),
                 ),
@@ -119,9 +172,11 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
                 // Action Buttons
                 SizedBox(
                   width: double.infinity,
-                  height: 56, // Slightly taller button for a premium feel
+                  height: 56, 
                   child: FilledButton(
-                    onPressed: _isProcessing ? null : _handleJoin,
+                    onPressed: _isProcessing 
+                        ? null 
+                        : (isAuthed ? _handleJoin : () => context.push('/auth')),
                     style: FilledButton.styleFrom(
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     ),
@@ -135,7 +190,7 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
                             ),
                           )
                         : Text(
-                            "Accept Invitation".tr(), 
+                            isAuthed ? "Accept Invitation".tr() : "Log In to Join".tr(), 
                             style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)
                           ),
                   ),
@@ -143,8 +198,7 @@ class _JoinGroupPreviewScreenState extends State<JoinGroupPreviewScreen> {
 
                 const SizedBox(height: 16),
                 TextButton(
-                  // Safely route them back to the groups directory if they change their mind
-                  onPressed: () => context.go('/groups'), 
+                  onPressed: () => context.go('/groups'),
                   child: Text("Cancel".tr()),
                 )
               ],

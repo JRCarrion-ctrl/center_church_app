@@ -497,6 +497,40 @@ class GroupService {
     return groupId;
   }
 
+  Future<Map<String, dynamic>?> getGroupPreviewFromToken(String token) async {
+    // We look up the invite link, and return the joined group's info
+    const q = r'''
+      query GetGroupPreview($token: uuid!) {
+        group_invite_links_by_pk(id: $token) {
+          group {
+            name
+            photo_url
+          }
+        }
+      }
+    ''';
+
+    try {
+      final res = await client.query(
+        QueryOptions(
+          document: gql(q),
+          variables: {'token': token},
+          fetchPolicy: FetchPolicy.networkOnly, // Always fetch fresh to ensure it's still valid
+        ),
+      );
+
+      if (res.hasException || res.data == null) {
+        return null;
+      }
+
+      // Return the nested group object
+      return res.data!['group_invite_links_by_pk']?['group'];
+    } catch (e) {
+      log.e('Failed to fetch group preview: $e');
+      return null;
+    }
+  }
+
   Future<List<Map<String, dynamic>>> getGroupEvents(String groupId) async {
     await _assertGroupActive(groupId);
     const q = r'''

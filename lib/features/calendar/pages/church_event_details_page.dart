@@ -283,7 +283,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
               pinned: true,
               leading: canPop
                   ? null
-                  : IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/')),
+                  : IconButton(icon: const Icon(Icons.close), onPressed: () => context.go('/calendar')),
               actions: [
                 // ✨ NEW: The Share Button
                 IconButton(
@@ -917,7 +917,17 @@ class _ChurchEventDeepLinkWrapperState extends State<ChurchEventDeepLinkWrapper>
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
            return Scaffold(
-             appBar: AppBar(), 
+             appBar: AppBar(
+              leading: BackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/calendar'); // Fallback to the Calendar tab
+                  }
+                },
+              ),
+             ), 
              body: const Center(child: CircularProgressIndicator())
            );
         }
@@ -926,7 +936,18 @@ class _ChurchEventDeepLinkWrapperState extends State<ChurchEventDeepLinkWrapper>
         // the security check failed and they are currently being redirected.
         if (snapshot.hasError || snapshot.data == null) {
            return Scaffold(
-             appBar: AppBar(title: Text("key_012".tr())), 
+             appBar: AppBar(
+              leading: BackButton(
+                onPressed: () {
+                  if (context.canPop()) {
+                    context.pop();
+                  } else {
+                    context.go('/calendar'); // Fallback to the Calendar tab
+                  }
+                },
+              ),
+              title: Text("key_012".tr())
+             ), 
              body: Center(child: Text("key_001".tr()))
            );
         }
