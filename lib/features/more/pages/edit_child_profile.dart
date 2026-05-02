@@ -9,8 +9,8 @@ import 'package:easy_localization/easy_localization.dart';
 import '../photo_upload_service.dart';
 
 class EditChildProfilePage extends StatefulWidget {
-  final Map<String, dynamic> child;
-  const EditChildProfilePage({super.key, required this.child});
+  final String childId; // Now only accepts the ID
+  const EditChildProfilePage({super.key, required this.childId});
 
   @override
   State<EditChildProfilePage> createState() => _EditChildProfilePageState();
@@ -18,20 +18,25 @@ class EditChildProfilePage extends StatefulWidget {
 
 class _EditChildProfilePageState extends State<EditChildProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  final _picker  = ImagePicker();
+  final _picker = ImagePicker();
 
   late TextEditingController _nameController;
   late TextEditingController _allergiesController;
   late TextEditingController _notesController;
   late TextEditingController _emergencyContactController;
-  late PhotoUploadService    _photoUploadService;
+  late PhotoUploadService _photoUploadService;
   DateTime? _birthday;
 
-  XFile?     _photoXFile;
+  XFile? _photoXFile;
   Uint8List? _photoBytes;
-  String?    _initialPhotoUrl;
-  bool       _saving = false;
-  String?    _cachedFamilyId;
+  String? _initialPhotoUrl;
+  bool _saving = false;
+  String? _cachedFamilyId;
+  
+  // New state variables for the initial load
+  bool _isLoadingData = true;
+  bool _dataFetched = false;
+  String? _fetchError;
 
   String _contentTypeFromExt(String ext) {
     switch (ext.toLowerCase()) {
@@ -47,17 +52,11 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   @override
   void initState() {
     super.initState();
-    _nameController           = TextEditingController(text: widget.child['display_name'] ?? '');
-    _allergiesController      = TextEditingController(text: widget.child['allergies'] ?? '');
-    _notesController          = TextEditingController(text: widget.child['notes'] ?? '');
-    _emergencyContactController = TextEditingController(text: widget.child['emergency_contact'] ?? '');
-    _initialPhotoUrl          = widget.child['photo_url'];
-    _cachedFamilyId           = widget.child['family_id']?.toString();
-
-    final birthdayString = widget.child['birthday'];
-    if (birthdayString != null) {
-      try { _birthday = DateTime.tryParse(birthdayString); } catch (_) {}
-    }
+    // Initialize controllers empty. They will be populated after the fetch.
+    _nameController = TextEditingController();
+    _allergiesController = TextEditingController();
+    _notesController = TextEditingController();
+    _emergencyContactController = TextEditingController();
   }
 
   @override
@@ -65,6 +64,77 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     super.didChangeDependencies();
     final client = GraphQLProvider.of(context).value;
     _photoUploadService = PhotoUploadService(client);
+    
+    // Fetch data once when dependencies are available
+    if (!_dataFetched) {
+      _fetchChildData(client);
+      _dataFetched = true;
+    }
+  }
+
+  Future<void> _fetchChildData(GraphQLClient client) async {
+    const query = r'''
+      query GetChild($id: uuid!) {
+        child_profiles_by_pk(id: $id) {
+          id
+          display_name
+          birthday
+          allergies
+          notes
+          emergency_contact
+          photo_url
+          family_members {
+            family_id
+          }
+        }
+      }
+    ''';
+
+    try {
+      final res = await client.query(QueryOptions(
+        document: gql(query),
+        variables: {'id': widget.childId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+
+      if (res.hasException) throw res.exception!;
+
+      final childData = res.data?['child_profiles_by_pk'];
+      if (childData == null) {
+        throw Exception('Child not found');
+      }
+
+      // Populate form data
+      if (mounted) {
+        setState(() {
+          _nameController.text = childData['display_name'] ?? '';
+          _allergiesController.text = childData['allergies'] ?? '';
+          _notesController.text = childData['notes'] ?? '';
+          _emergencyContactController.text = childData['emergency_contact'] ?? '';
+          _initialPhotoUrl = childData['photo_url'];
+
+          final birthdayString = childData['birthday'];
+          if (birthdayString != null) {
+            try { _birthday = DateTime.tryParse(birthdayString); } catch (_) {}
+          }
+
+          final familyMembers = childData['family_members'] as List?;
+          if (familyMembers != null && familyMembers.isNotEmpty) {
+            _cachedFamilyId = familyMembers.first['family_id']?.toString();
+          }
+
+          _isLoadingData = false;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching child data: $e');
+      if (mounted) {
+        setState(() {
+          _fetchError = e.toString();
+          _isLoadingData = false;
+        });
+      }
+    }
   }
 
   @override
@@ -83,42 +153,16 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     setState(() { _photoXFile = picked; _photoBytes = bytes; });
   }
 
-  Future<String?> _fetchFamilyId() async {
-    if (_cachedFamilyId != null) return _cachedFamilyId;
-    final client = GraphQLProvider.of(context).value;
-    const query = r'''
-      query GetChildFamilyId($child_id: uuid!) {
-        family_members(where: {child_profile_id: {_eq: $child_id}}, limit: 1) { family_id }
-      }
-    ''';
-    try {
-      final res = await client.query(QueryOptions(
-        document: gql(query),
-        variables: {'child_id': widget.child['id']},
-        fetchPolicy: FetchPolicy.networkOnly,
-      ));
-      if (res.hasException) throw res.exception!;
-      final rows = res.data?['family_members'] as List?;
-      if (rows != null && rows.isNotEmpty) {
-        _cachedFamilyId = rows.first['family_id'] as String?;
-      }
-    } catch (e) {
-      debugPrint('Error fetching family ID: $e');
-    }
-    return _cachedFamilyId;
-  }
-
   Future<String?> _uploadPhoto() async {
     if (_photoXFile == null || _photoBytes == null) return null;
     try {
-      final familyId = _cachedFamilyId ?? await _fetchFamilyId();
-      if (familyId == null || familyId.isEmpty) {
+      if (_cachedFamilyId == null || _cachedFamilyId!.isEmpty) {
         throw Exception('Family ID could not be found for this child.');
       }
-      final ext         = '.${_photoXFile!.name.split('.').last.toLowerCase()}';
+      final ext = '.${_photoXFile!.name.split('.').last.toLowerCase()}';
       final contentType = _contentTypeFromExt(_photoXFile!.name);
       final url = await _photoUploadService.uploadProfilePhoto(
-        _photoBytes!, familyId, ext, contentType,
+        _photoBytes!, _cachedFamilyId!, ext, contentType,
       );
       return url.isEmpty ? null : '$url?ts=${DateTime.now().millisecondsSinceEpoch}';
     } catch (e) {
@@ -164,13 +208,13 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
       final res = await client.mutate(MutationOptions(
         document: gql(mUpdate),
         variables: {
-          'id':                widget.child['id'],
-          'display_name':      _nameController.text.trim(),
-          'birthday':          birthday,
-          'allergies':         _allergiesController.text.trim().isEmpty ? null : _allergiesController.text.trim(),
-          'notes':             _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+          'id': widget.childId,
+          'display_name': _nameController.text.trim(),
+          'birthday': birthday,
+          'allergies': _allergiesController.text.trim().isEmpty ? null : _allergiesController.text.trim(),
+          'notes': _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
           'emergency_contact': _emergencyContactController.text.trim().isEmpty ? null : _emergencyContactController.text.trim(),
-          'photo_url':         photoUrl,
+          'photo_url': photoUrl,
         },
       ));
       if (res.hasException) throw res.exception!;
@@ -213,13 +257,13 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
     ''';
     try {
       final res = await client.mutate(
-        MutationOptions(document: gql(m), variables: {'child_id': widget.child['id']}),
+        MutationOptions(document: gql(m), variables: {'child_id': widget.childId}),
       );
       if (res.hasException) throw res.exception!;
-      final familyId = _cachedFamilyId ?? widget.child['family_id'] ?? await _fetchFamilyId();
+      
       if (!mounted) return;
-      if (familyId != null) {
-        context.go('/more/family?familyId=$familyId');
+      if (_cachedFamilyId != null) {
+        context.go('/more/family?familyId=$_cachedFamilyId');
       } else {
         context.go('/more');
       }
@@ -234,7 +278,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
 
   Future<void> _selectBirthday() async {
     final initial = _birthday ?? DateTime(DateTime.now().year - 9, 1, 1);
-    final picked  = await showDatePicker(
+    final picked = await showDatePicker(
       context: context,
       initialDate: initial,
       firstDate: DateTime(2000),
@@ -245,14 +289,6 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
 
   @override
   Widget build(BuildContext context) {
-    // Determine the avatar image provider without dart:io.
-    ImageProvider<Object>? avatarImage;
-    if (_photoBytes != null) {
-      avatarImage = MemoryImage(_photoBytes!);
-    } else if (_initialPhotoUrl != null && _initialPhotoUrl!.isNotEmpty) {
-      avatarImage = NetworkImage(_initialPhotoUrl!);
-    }
-
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -261,67 +297,88 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
         ),
         title: Text("key_271".tr()),
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Form(
-          key: _formKey,
-          child: ListView(
-            children: [
-              GestureDetector(
-                onTap: _pickPhoto,
-                child: CircleAvatar(
-                  radius: 40,
-                  backgroundImage: avatarImage,
-                  child: avatarImage == null ? const Icon(Icons.add_a_photo, size: 40) : null,
-                ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    if (_isLoadingData) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_fetchError != null) {
+      return Center(
+        child: Text('Failed to load profile:\n$_fetchError', textAlign: TextAlign.center),
+      );
+    }
+
+    ImageProvider<Object>? avatarImage;
+    if (_photoBytes != null) {
+      avatarImage = MemoryImage(_photoBytes!);
+    } else if (_initialPhotoUrl != null && _initialPhotoUrl!.isNotEmpty) {
+      avatarImage = NetworkImage(_initialPhotoUrl!);
+    }
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Form(
+        key: _formKey,
+        child: ListView(
+          children: [
+            GestureDetector(
+              onTap: _pickPhoto,
+              child: CircleAvatar(
+                radius: 40,
+                backgroundImage: avatarImage,
+                child: avatarImage == null ? const Icon(Icons.add_a_photo, size: 40) : null,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _nameController,
-                decoration: InputDecoration(labelText: "key_238a".tr()),
-                validator: (v) => v == null || v.isEmpty ? "key_238b".tr() : null,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _nameController,
+              decoration: InputDecoration(labelText: "key_238a".tr()),
+              validator: (v) => v == null || v.isEmpty ? "key_238b".tr() : null,
+            ),
+            const SizedBox(height: 12),
+            ListTile(
+              title: Text(
+                _birthday != null
+                    ? 'Birthday: ${_birthday!.toLocal().toString().split(' ')[0]}'
+                    : 'key_271a'.tr(),
               ),
-              const SizedBox(height: 12),
-              ListTile(
-                title: Text(
-                  _birthday != null
-                      ? 'Birthday: ${_birthday!.toLocal().toString().split(' ')[0]}'
-                      : 'key_271a'.tr(),
-                ),
-                trailing: const Icon(Icons.calendar_today),
-                onTap: _selectBirthday,
+              trailing: const Icon(Icons.calendar_today),
+              onTap: _selectBirthday,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _allergiesController,
+              decoration: InputDecoration(labelText: "key_238c".tr()),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _notesController,
+              decoration: InputDecoration(labelText: "key_238d".tr()),
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _emergencyContactController,
+              decoration: InputDecoration(labelText: "key_238e".tr()),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _saving ? null : _save,
+              child: _saving ? const CircularProgressIndicator() : Text("key_273".tr()),
+            ),
+            const SizedBox(height: 12),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
               ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _allergiesController,
-                decoration: InputDecoration(labelText: "key_238c".tr()),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _notesController,
-                decoration: InputDecoration(labelText: "key_238d".tr()),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _emergencyContactController,
-                decoration: InputDecoration(labelText: "key_238e".tr()),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: _saving ? null : _save,
-                child: _saving ? const CircularProgressIndicator() : Text("key_273".tr()),
-              ),
-              const SizedBox(height: 12),
-              ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                onPressed: _saving ? null : _confirmDelete,
-                child: Text("key_274".tr()),
-              ),
-            ],
-          ),
+              onPressed: _saving ? null : _confirmDelete,
+              child: Text("key_274".tr()),
+            ),
+          ],
         ),
       ),
     );
