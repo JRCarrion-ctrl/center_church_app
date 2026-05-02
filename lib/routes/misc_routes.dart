@@ -101,19 +101,18 @@ final List<GoRoute> miscRoutes = [
     },
   ),
   GoRoute(
-    path: '/more/family/edit_child',
-    name: 'edit_child_profile',
-    builder: (context, state) {
-      // If passing a complex map, extra is okay, but passing the ID and fetching it 
-      // inside the page is safer. For now, since your edit page expects a Map, 
-      // we'll keep using extra, but be aware it won't survive a web refresh.
-      final child = state.extra;
-      if (child is! Map<String, dynamic>) {
-        throw Exception('Missing or invalid child data for edit');
-      }
-      return EditChildProfilePage(child: child);
-    },
-  ),
+	  path: '/more/family/edit_child',
+	  name: 'edit_child_profile',
+	  builder: (context, state) {
+	    final childId = state.uri.queryParameters['childId'];
+    
+	    if (childId == null || childId.isEmpty) {
+	      throw Exception('Missing childId for edit');
+	    }
+    
+	    return EditChildProfilePage(childId: childId);
+	  },
+	),
   GoRoute(
     path: '/more/family/view_child',
     name: 'view_child_profile',
