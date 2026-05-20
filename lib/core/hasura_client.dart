@@ -107,7 +107,7 @@ GraphQLClient _clientFrom(Link transport) => GraphQLClient(
 
 /// ---------- Clients ---------------------------------------------------------
 
-Future<GraphQLClient> makeHasuraClient() async {
+Future<GraphQLClient> makeHasuraClient({String? activeRole}) async {
   await OidcAuth.refreshIfNeeded();
   final accessToken = await OidcAuth.readAccessToken();
 
@@ -126,7 +126,29 @@ Future<GraphQLClient> makeHasuraClient() async {
     },
   );
 
-  final httpLink = authLink.concat(HttpLink(kHasuraHttpUrl));
+  // Configure custom role handling headers if explicitly specified
+  final customHeaders = <String, String>{};
+  if (activeRole != null && activeRole.isNotEmpty) {
+    customHeaders['X-Hasura-Role'] = activeRole;
+  }
+
+  // Base HTTP Link combining authentication tokens
+  final baseHttpLink = authLink.concat(HttpLink(kHasuraHttpUrl));
+
+  // 🚀 FIXED: Append role override dynamically directly into the Request Context Link
+  final httpLink = Link.function((request, [forward]) {
+    if (activeRole != null && forward != null) {
+      final updatedRequest = request.updateContextEntry<HttpLinkHeaders>((prev) {
+        final prevHeaders = prev?.headers ?? const <String, String>{};
+        return HttpLinkHeaders(headers: {
+          ...prevHeaders,
+          'X-Hasura-Role': activeRole,
+        });
+      });
+      return forward(updatedRequest);
+    }
+    return forward != null ? forward(request) : const Stream.empty();
+  }).concat(baseHttpLink);
 
   final wsLink = WebSocketLink(
     kHasuraWsUrl,
@@ -136,7 +158,14 @@ Future<GraphQLClient> makeHasuraClient() async {
       initialPayload: () async {
         await OidcAuth.refreshIfNeeded();
         final t = await OidcAuth.readAccessToken();
-        return {'headers': {'Authorization': 'Bearer $t'}};
+        
+        final payloadHeaders = {'Authorization': 'Bearer $t'};
+        // 🚀 Send the exact database role down the WebSocket channel connection initialization payload
+        if (activeRole != null) {
+          payloadHeaders['X-Hasura-Role'] = activeRole;
+        }
+
+        return {'headers': payloadHeaders};
       },
     ),
   );
