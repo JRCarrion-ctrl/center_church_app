@@ -28,10 +28,12 @@ GoRouter createRouter(AppState appState) => GoRouter(
   ],
 
   redirect: (context, state) {
+    final bool isDeepLink = state.matchedLocation.startsWith('/join');
     final location = state.uri.toString();
 
     // 1. Never redirect these public routes
     if (location.startsWith('/auth') || location == '/landing') return null;
+    if (isDeepLink) return null;
 
     // 2. Define routes that STRICTLY require authentication
     final isInvite = location.startsWith('/invite/');
