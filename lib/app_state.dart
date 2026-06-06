@@ -237,12 +237,21 @@ class AppState extends ChangeNotifier {
       final access = await OidcAuth.readAccessToken();
       final idTok  = await OidcAuth.readIdToken();
 
+      // ✨ ADDED LOGS FOR DEV CONSOLE INSPECTION
+      _logger.d('--- Zitadel Token Inspection ---');
+      _logger.d('Raw Access Token: $access');
+      _logger.d('Raw ID Token: $idTok');
+
       if (access == null || access.isEmpty) {
         await _clearSessionData();
         return;
       }
 
       final claims = JwtDecoder.decode(access);
+      
+      // ✨ ADDED LOG FOR DECODED CLAIMS
+      _logger.i('Decoded Access Token Claims: $claims');
+
       final hasuraClaims = claims['hasura_claims'] as Map<String, dynamic>?;
 
       if (hasuraClaims == null) {
@@ -312,7 +321,9 @@ class AppState extends ChangeNotifier {
 
       _setProfile(prof);
       await _cacheProfile(prof);
-      await _setClient(tempClient);
+
+      final authorizedClient = await makeHasuraClient(activeRole: prof.role);
+      await _setClient(authorizedClient);
 
       await loadUserGroups();
       await updateOneSignalUser();

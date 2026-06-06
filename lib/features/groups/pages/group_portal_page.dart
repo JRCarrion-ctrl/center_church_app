@@ -123,28 +123,28 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                 indicatorWeight: 3,
                 tabs: const [
                   Tab(
-                    icon: Icon(Icons.space_dashboard_outlined), 
-                    text: "Home",
-                  ),
-                  Tab(
                     icon: Icon(Icons.chat_bubble_outline), 
                     text: "Chat",
+                  ),
+                  Tab(
+                    icon: Icon(Icons.space_dashboard_outlined), 
+                    text: "Home",
                   ),
                 ],
               ),
             ),
             body: TabBarView(
               children: [
+                GroupChatTab(
+                  groupId: widget.groupId,
+                  isAdmin: _isAdmin,
+                  onlyAdminsCanMessage: pageData.group.onlyAdminsMessage,
+                ),
                 GroupDashboardTab(
                   pageData: pageData,
                   isAdmin: _isAdmin,
                   isOwner: _isOwner,
                   onRefresh: _refreshData,
-                ),
-                GroupChatTab(
-                  groupId: widget.groupId,
-                  isAdmin: _isAdmin,
-                  onlyAdminsCanMessage: pageData.group.onlyAdminsMessage,
                 ),
               ],
             ),
