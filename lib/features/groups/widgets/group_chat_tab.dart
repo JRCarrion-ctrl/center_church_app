@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'dart:typed_data';
+import 'package:flutter/services.dart';
 
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/core/time_service.dart';
@@ -254,6 +254,16 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       items: [
         PopupMenuItem(
+          value: 'copy',
+          child: Row(
+            children: [
+              const Icon(Icons.copy, color: Colors.grey),
+              const SizedBox(width: 12),
+              Text("key_165a".tr()),
+            ],
+          ),
+        ),
+        PopupMenuItem(
           value: 'react',
           child: Row(
             children: [
@@ -291,7 +301,22 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     ).then((value) async {
       if (value == null) return;
 
-      if (value == 'react') {
+      if (value == 'copy') {
+        final content = message.content.trim();
+        const placeholders = {'[Image]', '[GIF]', '[File]'};
+        final textToCopy = (content.isNotEmpty && !placeholders.contains(content))
+            ? content
+            : (message.fileUrl ?? content);
+
+        if (textToCopy.isNotEmpty) {
+          await Clipboard.setData(ClipboardData(text: textToCopy));
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Copied to clipboard"), duration: Duration(seconds: 1)),
+            );
+          }
+        }
+      } else if (value == 'react') {
         await Future.delayed(const Duration(milliseconds: 100));
         if (mounted) _showFloatingReactionPicker(context, message, tapPosition);
       } else if (value == 'delete') {

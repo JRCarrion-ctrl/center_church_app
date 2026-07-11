@@ -2,6 +2,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/church_event.dart';
+import 'models/church_event_attachment.dart';
 
 class _ChurchEventQueries {
   // ----------------------------------------
@@ -215,6 +216,40 @@ class _ChurchEventQueries {
           photo_url
         }
       }
+    }
+  ''';
+
+  // ----------------------------------------
+  // 5. ATTACHMENTS
+  // ----------------------------------------
+
+  static const fetchEventAttachments = r'''
+    query EventAttachments($eventId: uuid!) {
+      event_attachments(where: {event_id: {_eq: $eventId}}, order_by: {created_at: desc}) {
+        id
+        event_id
+        file_name
+        file_url
+        content_type
+        file_size_bytes
+        uploaded_by
+        created_at
+      }
+    }
+  ''';
+
+  static const addEventAttachment = r'''
+    mutation AddEventAttachment($eventId: uuid!, $groupId: uuid, $fileName: String!, $fileUrl: String!, $contentType: String!, $fileSizeBytes: Int, $uploadedBy: String!) {
+      insert_event_attachments_one(object: {
+        event_id: $eventId, group_id: $groupId, file_name: $fileName, file_url: $fileUrl,
+        content_type: $contentType, file_size_bytes: $fileSizeBytes, uploaded_by: $uploadedBy
+      }) { id }
+    }
+  ''';
+
+  static const deleteEventAttachment = r'''
+    mutation DeleteEventAttachment($id: uuid!) {
+      delete_event_attachments_by_pk(id: $id) { id }
     }
   ''';
 }
@@ -503,5 +538,49 @@ class ChurchEventService {
     ));
     if (res.hasException) throw res.exception!;
     return (res.data?['unified_event_rsvps'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  // --- ATTACHMENTS LOGIC ---
+
+  Future<List<ChurchEventAttachment>> fetchEventAttachments(String eventId) async {
+    final res = await _gql.query(QueryOptions(
+      document: gql(_ChurchEventQueries.fetchEventAttachments),
+      variables: {'eventId': eventId},
+      fetchPolicy: FetchPolicy.networkOnly,
+    ));
+    if (res.hasException) throw res.exception!;
+    final rows = res.data?['event_attachments'] as List? ?? [];
+    return rows.map((r) => ChurchEventAttachment.fromJson(r)).toList();
+  }
+
+  Future<void> addEventAttachment({
+    required String eventId,
+    required String fileName,
+    required String fileUrl,
+    required String contentType,
+    int? fileSizeBytes,
+    String? groupId,
+  }) async {
+    final res = await _gql.mutate(MutationOptions(
+      document: gql(_ChurchEventQueries.addEventAttachment),
+      variables: {
+        'eventId': eventId,
+        'groupId': groupId,
+        'fileName': fileName,
+        'fileUrl': fileUrl,
+        'contentType': contentType,
+        'fileSizeBytes': fileSizeBytes,
+        'uploadedBy': _currentUserId,
+      },
+    ));
+    if (res.hasException) throw Exception('Error saving attachment: ${res.exception}');
+  }
+
+  Future<void> deleteEventAttachment(String id) async {
+    final res = await _gql.mutate(MutationOptions(
+      document: gql(_ChurchEventQueries.deleteEventAttachment),
+      variables: {'id': id},
+    ));
+    if (res.hasException) throw Exception('Error deleting attachment: ${res.exception}');
   }
 }

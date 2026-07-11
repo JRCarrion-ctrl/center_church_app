@@ -112,7 +112,10 @@ class _MessageContentViewState extends State<MessageContentView> {
 
   @override
   Widget build(BuildContext context) {
-    final fileUrl = widget.message.fileUrl;
+    final rawFileUrl = widget.message.fileUrl;
+    final fileUrl = (rawFileUrl != null && rawFileUrl.trim().isNotEmpty)
+        ? rawFileUrl
+        : null;
     return fileUrl != null
         ? _buildFileView(fileUrl)
         : _buildTextAndLinkView();

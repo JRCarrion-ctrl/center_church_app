@@ -1,5 +1,6 @@
 // File: lib/features/home/announcements_section.dart
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -179,6 +180,17 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     }
   }
 
+  void _copyAnnouncementToClipboard(BuildContext context, Map<String, dynamic> a) {
+    final title = (a['title'] ?? '') as String;
+    final body = (a['body'] ?? '') as String;
+    final text = [title, body].where((s) => s.isNotEmpty).join('\n\n');
+
+    Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Copied to clipboard")), // "Copied to clipboard"
+    );
+  }
+
   void _showAnnouncementDialog(
     BuildContext context, 
     Map<String, dynamic> a, 
@@ -189,79 +201,97 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
     final groupName = a['group']?['name'] as String?;
     final groupId = a['group_id'] as String?;
     final colorScheme = Theme.of(context).colorScheme;
+    
+    // Get screen size to prevent the dialog from taking up the entire vertical space
+    final screenHeight = MediaQuery.of(context).size.height;
 
     showDialog(
       context: context,
       builder: (dialogContext) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         contentPadding: EdgeInsets.zero,
+        clipBehavior: Clip.antiAlias, // Ensures the image doesn't bleed over the rounded corners
         content: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 500),
+          constraints: BoxConstraints(
+            maxWidth: 500,
+            maxHeight: screenHeight * 0.8, // Constrain dialog height to 80% of the screen
+          ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.min, // Shrink-wrap if the content is small
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // HEADER IMAGE IN DIALOG
-              if (hasImage)
-                ClipRRect(
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    height: 200,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: 200,
-                      color: colorScheme.surfaceContainerHighest,
-                      child: const Center(child: CircularProgressIndicator.adaptive()),
-                    ),
-                    errorWidget: (context, url, error) => const SizedBox.shrink(),
-                  ),
-                ),
-              
-              Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // ✅ SHOW GROUP NAME IN DIALOG
-                    if (groupName != null && groupId != null) ...[
-                      ActionChip(
-                        avatar: Icon(Icons.groups_2_outlined, size: 16, color: colorScheme.primary),
-                        label: Text(
-                          groupName,
-                          style: TextStyle(
-                            color: colorScheme.primary,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 12,
+              // Flexible + SingleChildScrollView ensures the content scrolls 
+              // while keeping the actions (Close button) pinned to the bottom.
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // HEADER IMAGE IN DIALOG
+                      if (hasImage)
+                        CachedNetworkImage(
+                          imageUrl: imageUrl,
+                          fit: BoxFit.contain, // Shows the whole image without cropping
+                          placeholder: (context, url) => Container(
+                            height: 200,
+                            color: colorScheme.surfaceContainerHighest,
+                            child: const Center(child: CircularProgressIndicator.adaptive()),
                           ),
+                          errorWidget: (context, url, error) => const SizedBox.shrink(),
                         ),
-                        backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
-                        side: BorderSide.none,
-                        onPressed: () {
-                          Navigator.of(dialogContext).pop(); // Close dialog first
-                          context.push('/groups/$groupId'); // Navigate to group
-                        },
-                      ),
-                      const SizedBox(height: 8),
-                    ],
+                      
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // SHOW GROUP NAME IN DIALOG
+                            if (groupName != null && groupId != null) ...[
+                              ActionChip(
+                                avatar: Icon(Icons.groups_2_outlined, size: 16, color: colorScheme.primary),
+                                label: Text(
+                                  groupName,
+                                  style: TextStyle(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                backgroundColor: colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                                side: BorderSide.none,
+                                onPressed: () {
+                                  Navigator.of(dialogContext).pop(); // Close dialog first
+                                  context.push('/groups/$groupId'); // Navigate to group
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
 
-                    Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
-                    const SizedBox(height: 8),
-                    Text(
-                      _formatDate(a['published_at'] as String),
-                      style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
-                    ),
-                    const SizedBox(height: 16),
-                    SingleChildScrollView(
-                      child: Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
-                    ),
-                  ],
+                            Text((a['title'] ?? '') as String, style: textTheme.titleLarge),
+                            const SizedBox(height: 8),
+                            Text(
+                              _formatDate(a['published_at'] as String),
+                              style: textTheme.labelSmall?.copyWith(color: colorScheme.outline),
+                            ),
+                            const SizedBox(height: 16),
+                            // The nested SingleChildScrollView is removed; the parent handles scrolling
+                            Text((a['body'] ?? '') as String, style: textTheme.bodyLarge),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () => _copyAnnouncementToClipboard(dialogContext, a),
+            icon: const Icon(Icons.copy_outlined, size: 18),
+            label: Text("key_165a".tr()), // "Copy"
+          ),
           TextButton(
             onPressed: () => Navigator.of(dialogContext).pop(),
             child: Text("key_178".tr()), // Close

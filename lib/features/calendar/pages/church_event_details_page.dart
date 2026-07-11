@@ -8,12 +8,15 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:go_router/go_router.dart';
 import 'package:flutter_linkify/flutter_linkify.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
 import 'package:ccf_app/shared/widgets/generic_share_modal.dart';
 import '../church_event_service.dart';
+import '../church_event_attachment_upload_service.dart';
 import '../models/church_event.dart';
+import '../models/church_event_attachment.dart';
 
 class ChurchEventDetailsPage extends StatefulWidget {
   final ChurchEvent event;
@@ -25,6 +28,7 @@ class ChurchEventDetailsPage extends StatefulWidget {
 
 class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with SingleTickerProviderStateMixin {
   late ChurchEventService _eventService;
+  late ChurchEventAttachmentUploadService _attachmentUploadService;
   late TabController _tabController;
   bool _svcReady = false;
 
@@ -37,10 +41,14 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
   bool _loadingSlots = true;
   Map<String, int> _mySlots = {};
 
+  List<ChurchEventAttachment> _attachments = [];
+  bool _loadingAttachments = true;
+  bool _uploadingAttachment = false;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
   }
 
   @override
@@ -50,6 +58,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
       _eventService = ChurchEventService(client, currentUserId: userId);
+      _attachmentUploadService = ChurchEventAttachmentUploadService(client);
       _svcReady = true;
 
       _checkRole();
@@ -89,6 +98,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
     await Future.wait([
       _loadRSVPs(),
       _loadSlots(),
+      _loadAttachments(),
     ]);
   }
 
@@ -130,6 +140,17 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
         });
       }
     } catch (_) {}
+  }
+
+  Future<void> _loadAttachments() async {
+    try {
+      final data = await _eventService.fetchEventAttachments(widget.event.id);
+      if (mounted) setState(() => _attachments = data);
+    } catch (e) {
+      debugPrint("Error loading attachments: $e");
+    } finally {
+      if (mounted) setState(() => _loadingAttachments = false);
+    }
   }
 
   // --- SLOT ACTIONS ---
@@ -192,6 +213,105 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+
+  // --- ATTACHMENT ACTIONS ---
+
+  static const Map<String, String> _extensionToContentType = {
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'heic': 'image/heic',
+    'txt': 'text/plain',
+    'csv': 'text/csv',
+  };
+
+  String _guessContentType(String filename) {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
+    return _extensionToContentType[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> _pickAndUploadAttachment() async {
+    final result = await FilePicker.platform.pickFiles(withData: true);
+    if (result == null || result.files.isEmpty) return;
+
+    final picked = result.files.single;
+    final bytes = picked.bytes;
+    if (bytes == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Couldn't read that file, please try again")),
+        );
+      }
+      return;
+    }
+
+    setState(() => _uploadingAttachment = true);
+    try {
+      final contentType = _guessContentType(picked.name);
+      final finalUrl = await _attachmentUploadService.uploadEventAttachment(
+        eventId: widget.event.id,
+        bytes: bytes,
+        originalFileName: picked.name,
+        contentType: contentType,
+      );
+
+      await _eventService.addEventAttachment(
+        eventId: widget.event.id,
+        fileName: picked.name,
+        fileUrl: finalUrl,
+        contentType: contentType,
+        fileSizeBytes: picked.size,
+        groupId: widget.event.groupId,
+      );
+
+      await _loadAttachments();
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("File attached")));
+    } catch (e) {
+      debugPrint("Error uploading attachment: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Upload failed, please try again")));
+    } finally {
+      if (mounted) setState(() => _uploadingAttachment = false);
+    }
+  }
+
+  Future<void> _confirmDeleteAttachment(ChurchEventAttachment attachment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Remove file?"),
+        content: Text('Remove "${attachment.fileName}" from this event?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text("Cancel")),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Remove", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _eventService.deleteEventAttachment(attachment.id);
+      await _loadAttachments();
+    } catch (e) {
+      debugPrint("Error deleting attachment: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't remove file")));
+    }
+  }
+
+  Future<void> _openAttachment(ChurchEventAttachment attachment) async {
+    final uri = Uri.tryParse(attachment.fileUrl);
+    if (uri == null) return;
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
   // --- UI HELPERS ---
@@ -456,6 +576,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
                   tabs: [
                     Tab(text: "key_031a".tr()), 
                     const Tab(text: "Sign-ups"),
+                    const Tab(text: "Files"),
                   ],
                 ),
               ),
@@ -467,6 +588,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
           children: [
             _buildRsvpSection(hasRSVP, currentUserId),
             _buildSignUpSection(hasRSVP),
+            _buildAttachmentsSection(),
           ],
         ),
       ),
@@ -809,6 +931,94 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
         ),
         child: Text('+$count', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.onSurfaceVariant)),
       ),
+    );
+  }
+
+  // --- ATTACHMENTS TAB ---
+
+  IconData _iconForAttachment(ChurchEventAttachment a) {
+    if (a.isImage) return Icons.image_outlined;
+    if (a.isPdf) return Icons.picture_as_pdf_outlined;
+    switch (a.extension) {
+      case 'doc':
+      case 'docx':
+        return Icons.description_outlined;
+      case 'xls':
+      case 'xlsx':
+        return Icons.table_chart_outlined;
+      case 'ppt':
+      case 'pptx':
+        return Icons.slideshow_outlined;
+      default:
+        return Icons.insert_drive_file_outlined;
+    }
+  }
+
+  String _formatFileSize(int? bytes) {
+    if (bytes == null) return '';
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(0)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
+  Widget _buildAttachmentsSection() {
+    return Stack(
+      children: [
+        if (_loadingAttachments)
+          const Center(child: CircularProgressIndicator())
+        else if (_attachments.isEmpty)
+          Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.attach_file, size: 48, color: Colors.grey[300]),
+                const SizedBox(height: 16),
+                Text("No files yet.", style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          )
+        else
+          ListView.builder(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+            itemCount: _attachments.length,
+            itemBuilder: (context, index) {
+              final a = _attachments[index];
+              return Card(
+                elevation: 0,
+                color: Colors.white,
+                margin: const EdgeInsets.only(bottom: 12),
+                shape: RoundedRectangleBorder(
+                  side: BorderSide(color: Colors.grey.shade200, width: 1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: ListTile(
+                  onTap: () => _openAttachment(a),
+                  leading: Icon(_iconForAttachment(a), color: Theme.of(context).colorScheme.primary),
+                  title: Text(a.fileName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  subtitle: a.fileSizeBytes != null ? Text(_formatFileSize(a.fileSizeBytes)) : null,
+                  trailing: _canEdit
+                      ? IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _confirmDeleteAttachment(a),
+                        )
+                      : const Icon(Icons.open_in_new, size: 18, color: Colors.grey),
+                ),
+              );
+            },
+          ),
+        if (_canEdit)
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: FloatingActionButton.extended(
+              onPressed: _uploadingAttachment ? null : _pickAndUploadAttachment,
+              icon: _uploadingAttachment
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                  : const Icon(Icons.add),
+              label: Text(_uploadingAttachment ? "Uploading..." : "Add File"),
+            ),
+          ),
+      ],
     );
   }
 }
