@@ -101,9 +101,13 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
         }
 
         final pageData = snapshot.data!;
+        // Sub-groups only get a Chat tab — no Home tab, so there's no way to
+        // create a sub-group within a sub-group (nesting is intentionally
+        // unsupported since sub-groups have no parent/child column of their own).
+        final isSubGroup = pageData.group.parentGroupId != null;
 
         return DefaultTabController(
-          length: 2,
+          length: isSubGroup ? 1 : 2,
           child: Scaffold(
             appBar: AppBar(
               leading: BackButton(
@@ -116,22 +120,35 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                 },
               ),
               title: Text(pageData.group.name),
-              bottom: TabBar(
-                indicatorSize: TabBarIndicatorSize.tab,
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor: Colors.grey,
-                indicatorWeight: 3,
-                tabs: const [
-                  Tab(
-                    icon: Icon(Icons.chat_bubble_outline), 
-                    text: "Chat",
-                  ),
-                  Tab(
-                    icon: Icon(Icons.space_dashboard_outlined), 
-                    text: "Home",
-                  ),
-                ],
-              ),
+              // Sub-groups have no Home tab (that's where the Members button
+              // normally lives), so give admins a direct way to manage members.
+              actions: isSubGroup
+                  ? [
+                      IconButton(
+                        icon: const Icon(Icons.people_outline),
+                        tooltip: "Members",
+                        onPressed: () => context.push('/groups/${widget.groupId}/info/members'),
+                      ),
+                    ]
+                  : null,
+              bottom: isSubGroup
+                  ? null
+                  : TabBar(
+                      indicatorSize: TabBarIndicatorSize.tab,
+                      labelColor: Theme.of(context).colorScheme.primary,
+                      unselectedLabelColor: Colors.grey,
+                      indicatorWeight: 3,
+                      tabs: const [
+                        Tab(
+                          icon: Icon(Icons.chat_bubble_outline),
+                          text: "Chat",
+                        ),
+                        Tab(
+                          icon: Icon(Icons.space_dashboard_outlined),
+                          text: "Home",
+                        ),
+                      ],
+                    ),
             ),
             body: TabBarView(
               children: [
@@ -140,12 +157,13 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                   isAdmin: _isAdmin,
                   onlyAdminsCanMessage: pageData.group.onlyAdminsMessage,
                 ),
-                GroupDashboardTab(
-                  pageData: pageData,
-                  isAdmin: _isAdmin,
-                  isOwner: _isOwner,
-                  onRefresh: _refreshData,
-                ),
+                if (!isSubGroup)
+                  GroupDashboardTab(
+                    pageData: pageData,
+                    isAdmin: _isAdmin,
+                    isOwner: _isOwner,
+                    onRefresh: _refreshData,
+                  ),
               ],
             ),
           ),

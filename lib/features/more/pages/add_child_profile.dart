@@ -1,12 +1,12 @@
 // File: lib/features/more/pages/add_child_profile.dart
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import 'package:easy_localization/easy_localization.dart';
+import '../../../core/media/avatar_image_picker.dart';
 import '../photo_upload_service.dart';
 import 'package:ccf_app/app_state.dart';
 import 'package:go_router/go_router.dart';
@@ -40,9 +40,9 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
     }
   }
 
-  // Picked photo stored as bytes so it works on web and mobile.
-  XFile?     _photoXFile;
+  // Picked (and cropped) photo stored as bytes so it works on web and mobile.
   Uint8List? _photoBytes;
+  String?    _photoExtension;
 
   @override
   void didChangeDependencies() {
@@ -61,19 +61,18 @@ class _AddChildProfilePageState extends State<AddChildProfilePage> {
   }
 
   Future<void> _pickPhoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked = await pickAndCropAvatarImage(context);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
     setState(() {
-      _photoXFile = picked;
-      _photoBytes = bytes;
+      _photoBytes     = picked.bytes;
+      _photoExtension = picked.extension;
     });
   }
 
   Future<String?> _uploadPhoto() async {
-    if (_photoXFile == null || _photoBytes == null) return null;
+    if (_photoBytes == null || _photoExtension == null) return null;
     try {
-      final ext         = '.${_photoXFile!.name.split('.').last.toLowerCase()}';
+      final ext         = '.$_photoExtension';
       final contentType = _contentTypeFromExt(ext);
       return await _photoUploadService.uploadProfilePhoto(
         _photoBytes!, widget.familyId, ext, contentType,

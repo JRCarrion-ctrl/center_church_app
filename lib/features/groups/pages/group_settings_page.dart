@@ -1,7 +1,6 @@
 // File: lib/features/groups/pages/group_settings_page.dart
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
@@ -10,6 +9,7 @@ import 'package:go_router/go_router.dart'; // ADDED: For routing after delete
 
 import '../../../app_state.dart'; // ADDED: For role checking
 import '../../../core/graph_provider.dart';
+import '../../../core/media/avatar_image_picker.dart';
 import '../group_service.dart';
 import '../models/group.dart';
 import '../chat_storage_service.dart';
@@ -72,13 +72,12 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
 
   Future<void> _pickAndUploadImage() async {
     final messenger = ScaffoldMessenger.of(context);
-    final picked    = await ImagePicker().pickImage(source: ImageSource.gallery);
+    final picked    = await pickAndCropAvatarImage(context);
     if (picked == null) return;
 
     setState(() => _isUploading = true);
     try {
-      final raw        = await picked.readAsBytes();
-      final compressed = await _compressBytes(raw);
+      final compressed = await _compressBytes(picked.bytes);
       final finalUrl = await _chatStorageService.uploadFile(
         compressed,
         '${widget.group.id}.jpg',
@@ -100,10 +99,15 @@ class _GroupSettingsPageState extends State<GroupSettingsPage> {
 
     setState(() => _isSaving = true);
     try {
+      final parentGroupId = widget.group.parentGroupId;
+      final description = parentGroupId != null
+          ? _groupService.encodeSubgroupDescription(parentGroupId, _descController.text.trim())
+          : _descController.text.trim();
+
       await _groupService.updateGroup(
         groupId: widget.group.id,
         name: _nameController.text.trim(),
-        description: _descController.text.trim(),
+        description: description,
         photoUrl: _tempPhotoUrl,
       );
       

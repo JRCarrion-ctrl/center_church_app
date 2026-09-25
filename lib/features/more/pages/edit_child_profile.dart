@@ -1,11 +1,11 @@
 // File: lib/features/more/pages/edit_child_profile.dart
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
 
+import '../../../core/media/avatar_image_picker.dart';
 import '../photo_upload_service.dart';
 
 class EditChildProfilePage extends StatefulWidget {
@@ -18,7 +18,6 @@ class EditChildProfilePage extends StatefulWidget {
 
 class _EditChildProfilePageState extends State<EditChildProfilePage> {
   final _formKey = GlobalKey<FormState>();
-  final _picker = ImagePicker();
 
   late TextEditingController _nameController;
   late TextEditingController _allergiesController;
@@ -27,8 +26,8 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   late PhotoUploadService _photoUploadService;
   DateTime? _birthday;
 
-  XFile? _photoXFile;
   Uint8List? _photoBytes;
+  String? _photoExtension;
   String? _initialPhotoUrl;
   bool _saving = false;
   String? _cachedFamilyId;
@@ -147,20 +146,19 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
   }
 
   Future<void> _pickPhoto() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    final picked = await pickAndCropAvatarImage(context);
     if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    setState(() { _photoXFile = picked; _photoBytes = bytes; });
+    setState(() { _photoBytes = picked.bytes; _photoExtension = picked.extension; });
   }
 
   Future<String?> _uploadPhoto() async {
-    if (_photoXFile == null || _photoBytes == null) return null;
+    if (_photoBytes == null || _photoExtension == null) return null;
     try {
       if (_cachedFamilyId == null || _cachedFamilyId!.isEmpty) {
         throw Exception('Family ID could not be found for this child.');
       }
-      final ext = '.${_photoXFile!.name.split('.').last.toLowerCase()}';
-      final contentType = _contentTypeFromExt(_photoXFile!.name);
+      final ext = '.$_photoExtension';
+      final contentType = _contentTypeFromExt(ext);
       final url = await _photoUploadService.uploadProfilePhoto(
         _photoBytes!, _cachedFamilyId!, ext, contentType,
       );
@@ -182,7 +180,7 @@ class _EditChildProfilePageState extends State<EditChildProfilePage> {
 
     try {
       String? photoUrl = _initialPhotoUrl;
-      if (_photoXFile != null) {
+      if (_photoBytes != null) {
         final uploaded = await _uploadPhoto();
         if (uploaded != null) photoUrl = uploaded;
       }

@@ -29,32 +29,26 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   late GroupService _groups;
   bool _inited = false;
   bool _isAdmin = false;
-  bool _isInit = false;
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_isInit) {
-      _isInit = true;
-      _checkAdminRole();
-    }
     if (_inited) return;
     _inited = true;
     final client = GraphProvider.of(context);
     _groups = GroupService(client);
-    
+
     // Initialize all futures
     _futureMembers = _groups.getGroupMembers(widget.groupId);
-    
-    // Incoming requests (users asking to join)
-    _futurePending = _isAdmin
-        ? _groups.getGroupJoinRequests(widget.groupId)
-        : Future.value([]); 
-        
-    // Outgoing invitations (users invited by an admin)
-    _futureInvitations = _isAdmin
-        ? _groups.getPendingMembers(widget.groupId)
-        : Future.value([]);
+
+    // Admin status is resolved asynchronously (it's a network call), so the
+    // pending/invitations futures — which are admin-only — are populated once
+    // that resolves, in _checkAdminRole, rather than here where _isAdmin would
+    // still be its unresolved initial value.
+    _futurePending = Future.value(const []);
+    _futureInvitations = Future.value(const []);
+
+    _checkAdminRole();
   }
 
   Future<void> _checkAdminRole() async {
@@ -66,6 +60,10 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       if (mounted) {
         setState(() {
           _isAdmin = const {'leader', 'supervisor', 'owner', 'admin'}.contains(role) || appState.userRole.name == 'owner';
+          if (_isAdmin) {
+            _futurePending = _groups.getGroupJoinRequests(widget.groupId);
+            _futureInvitations = _groups.getPendingMembers(widget.groupId);
+          }
         });
       }
     }
@@ -227,6 +225,7 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
   Widget _buildMemberTile(Map<String, dynamic> member, String? myUserId) {
     final isCurrentUser = (myUserId != null && myUserId == member['user_id']);
     final photoUrl = member['photo_url'] as String?;
+    final canManage = _isAdmin && !isCurrentUser;
 
     return ListTile(
       leading: CircleAvatar(
@@ -240,89 +239,104 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
       title: Text(member['display_name'] + (isCurrentUser ? ' (You)' : '')),
       subtitle: Text(member['role']),
       onTap: () => context.push('/profile/${member['user_id']}'),
-      onLongPress: () async {
-        if (!_isAdmin || isCurrentUser) return;
-
-        final myRole = await _groups.getMyGroupRole(
-          groupId: widget.groupId,
-          userId: myUserId,
-        );
-
-        final targetRole = member['role'] as String;
-        final targetId = member['user_id'] as String;
-
-        final roleHierarchy = {
-          'member': 1,
-          'admin': 2,
-          'leader': 3,
-          'supervisor': 4,
-          'owner': 5,
-        };
-
-        final myLevel = roleHierarchy[myRole] ?? 0;
-        final targetLevel = roleHierarchy[targetRole] ?? 0;
-
-        if (myLevel <= targetLevel || myLevel < 2) return;
-
-        final actions = <PopupMenuEntry<String>>[];
-        actions.add(PopupMenuItem(value: 'remove', child: Text("key_147".tr())));
-
-        if (myRole == 'leader' || myRole == 'supervisor' || myRole == 'owner' || myRole == 'admin') {
-          if (targetRole == 'member') {
-            actions.add(PopupMenuItem(value: 'promote', child: Text("key_148".tr())));
-          } else if (targetRole == 'admin' && myRole != 'admin') { 
-             actions.add(PopupMenuItem(value: 'demote', child: Text("key_149".tr())));
-          }
-        }
-        
-        if (actions.isEmpty) return;
-
-        if (!mounted) return;
-        final selected = await showMenu<String>(
-          context: context,
-          position: RelativeRect.fill,
-          items: actions,
-        );
-
-        if (!mounted || selected == null) return;
-
-        try {
-          final messenger = ScaffoldMessenger.of(context);
-          if (selected == 'remove') {
-            final confirm = await showDialog<bool>(
-              context: context,
-              builder: (ctx) => AlertDialog(
-                title: Text("key_150".tr()),
-                content: Text('Are you sure you want to remove ${member['display_name']}?'),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_152".tr())),
-                  TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_153".tr())),
-                ],
-              ),
-            );
-            if (confirm == true) {
-              await _groups.removeMember(widget.groupId, targetId);
-              if (!mounted) return;
-              await _refreshAllLists();
-              messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} removed')));
-            }
-          } else if (selected == 'promote') {
-            await _groups.setMemberRole(widget.groupId, targetId, 'admin');
-            if (!mounted) return;
-            await _refreshAllLists();
-            messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} promoted to admin')));
-          } else if (selected == 'demote') {
-            await _groups.setMemberRole(widget.groupId, targetId, 'member');
-            if (!mounted) return;
-            await _refreshAllLists();
-            messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} demoted to member')));
-          }
-        } catch (e) {
-          if (!mounted) return;
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
-        }
-      },
+      // A visible action button, not just a long-press — the long-press gesture
+      // for managing a member's role/removal was easy to miss entirely.
+      trailing: canManage
+          ? IconButton(
+              icon: const Icon(Icons.more_vert),
+              tooltip: 'Manage member',
+              onPressed: () => _showMemberActions(member, myUserId),
+            )
+          : null,
+      onLongPress: canManage ? () => _showMemberActions(member, myUserId) : null,
     );
+  }
+
+  Future<void> _showMemberActions(Map<String, dynamic> member, String? myUserId) async {
+    final myRole = await _groups.getMyGroupRole(
+      groupId: widget.groupId,
+      userId: myUserId,
+    );
+
+    final targetRole = member['role'] as String;
+    final targetId = member['user_id'] as String;
+
+    final roleHierarchy = {
+      'member': 1,
+      'admin': 2,
+      'leader': 3,
+      'supervisor': 4,
+      'owner': 5,
+    };
+
+    final myLevel = roleHierarchy[myRole] ?? 0;
+    final targetLevel = roleHierarchy[targetRole] ?? 0;
+
+    if (!mounted) return;
+    if (myLevel <= targetLevel || myLevel < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("You don't have permission to manage this member.")),
+      );
+      return;
+    }
+
+    final actions = <PopupMenuEntry<String>>[];
+    actions.add(PopupMenuItem(value: 'remove', child: Text("key_147".tr())));
+
+    if (myRole == 'leader' || myRole == 'supervisor' || myRole == 'owner' || myRole == 'admin') {
+      if (targetRole == 'member') {
+        actions.add(PopupMenuItem(value: 'promote', child: Text("key_148".tr())));
+      } else if (targetRole == 'admin' && myRole != 'admin') {
+         actions.add(PopupMenuItem(value: 'demote', child: Text("key_149".tr())));
+      }
+    }
+
+    if (actions.isEmpty) return;
+
+    if (!mounted) return;
+    final selected = await showMenu<String>(
+      context: context,
+      position: RelativeRect.fill,
+      items: actions,
+    );
+
+    if (!mounted || selected == null) return;
+
+    try {
+      final messenger = ScaffoldMessenger.of(context);
+      if (selected == 'remove') {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text("key_150".tr()),
+            content: Text('Are you sure you want to remove ${member['display_name']}?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text("key_152".tr())),
+              TextButton(onPressed: () => Navigator.pop(ctx, true), child: Text("key_153".tr())),
+            ],
+          ),
+        );
+        if (confirm == true) {
+          await _groups.removeMember(widget.groupId, targetId);
+          if (!mounted) return;
+          await _refreshAllLists();
+          messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} removed')));
+        }
+      } else if (selected == 'promote') {
+        await _groups.setMemberRole(widget.groupId, targetId, 'admin');
+        if (!mounted) return;
+        await _refreshAllLists();
+        messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} promoted to admin')));
+      } else if (selected == 'demote') {
+        await _groups.setMemberRole(widget.groupId, targetId, 'member');
+        if (!mounted) return;
+        await _refreshAllLists();
+        messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} demoted to member')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Action failed: $e')));
+    }
   }
 
   Widget _buildPendingTile(Map<String, dynamic> member) {

@@ -1,7 +1,10 @@
 // lib/core/media/image_picker_field.dart
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:image_cropper/image_cropper.dart';
+import 'dart:io' as io show Platform;
 
 class ImagePickerField extends StatefulWidget {
   final String? initialUrl;
@@ -26,6 +29,10 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
   String?    _extension;
   bool       _removed = false;
 
+  // image_cropper only supports Android, iOS and Web — skip cropping (use the
+  // picked image as-is) on desktop platforms where it isn't implemented.
+  bool get _cropSupported => kIsWeb || io.Platform.isAndroid || io.Platform.isIOS;
+
   Future<void> _pick() async {
     final picked = await ImagePicker().pickImage(
       source: ImageSource.gallery,
@@ -33,11 +40,46 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
     );
     if (picked == null) return;
 
-    final bytes     = await picked.readAsBytes();
-    final extension = picked.name.contains('.')
+    Uint8List bytes = await picked.readAsBytes();
+    String extension = picked.name.contains('.')
         ? picked.name.split('.').last.toLowerCase()
         : 'jpg';
 
+    if (_cropSupported && mounted) {
+      final cropped = await ImageCropper().cropImage(
+        sourcePath: picked.path,
+        compressFormat: ImageCompressFormat.jpg,
+        compressQuality: 90,
+        uiSettings: [
+          AndroidUiSettings(
+            toolbarTitle: 'Crop Image',
+            initAspectRatio: CropAspectRatioPreset.ratio16x9,
+            lockAspectRatio: false,
+          ),
+          IOSUiSettings(
+            title: 'Crop Image',
+            aspectRatioPresets: const [
+              CropAspectRatioPreset.original,
+              CropAspectRatioPreset.square,
+              CropAspectRatioPreset.ratio4x3,
+              CropAspectRatioPreset.ratio16x9,
+            ],
+            aspectRatioLockEnabled: false,
+          ),
+          WebUiSettings(
+            context: context,
+            presentStyle: WebPresentStyle.dialog,
+            initialAspectRatio: 16 / 9,
+          ),
+        ],
+      );
+      // User cancelled the crop step — treat like cancelling the whole pick.
+      if (cropped == null) return;
+      bytes = await cropped.readAsBytes();
+      extension = 'jpg';
+    }
+
+    if (!mounted) return;
     setState(() {
       _bytes     = bytes;
       _extension = extension;

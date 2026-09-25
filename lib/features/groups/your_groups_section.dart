@@ -59,10 +59,12 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
     // 🚀 FIXED: Removed the double await since _service() is synchronous now
     final groups = await _service().getUserGroups(userId);
     
-    // Defensive filter: hide archived if requested
-    final visible = widget.excludeArchived
-        ? groups.where((g) => (g.archived) == false).toList()
-        : groups;
+    // Defensive filter: hide archived if requested. Sub-groups are always excluded
+    // here — they're only discoverable via their parent group's own Home tab.
+    final visible = groups
+        .where((g) => g.parentGroupId == null)
+        .where((g) => !widget.excludeArchived || g.archived == false)
+        .toList();
 
     // Stable sort by name
     visible.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));

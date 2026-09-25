@@ -1,7 +1,10 @@
+import 'group.dart' show decodeSubgroupDescription;
+
 class GroupModel {
   final String id;
   final String name;
   final String? description;
+  final String? parentGroupId;
   final String? photoUrl;
   final String visibility;
   final bool archived;
@@ -13,6 +16,7 @@ class GroupModel {
     required this.id,
     required this.name,
     this.description,
+    this.parentGroupId,
     this.photoUrl,
     this.visibility = 'public',
     this.archived = false,
@@ -23,11 +27,13 @@ class GroupModel {
 
   factory GroupModel.fromMap(Map<String, dynamic> m) {
     final bool muted = (m['is_muted'] as bool?) ?? false;
+    final (parentGroupId, description) = decodeSubgroupDescription(m['description'] as String?);
 
      return GroupModel(
         id: m['id'] as String,
         name: m['name'] as String,
-        description: m['description'] as String?,
+        description: description,
+        parentGroupId: parentGroupId,
         photoUrl: m['photo_url'] as String?,
         visibility: (m['visibility'] as String?) ?? 'public',
         archived: (m['archived'] as bool?) ?? false,

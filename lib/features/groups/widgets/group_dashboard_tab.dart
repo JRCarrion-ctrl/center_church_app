@@ -3,9 +3,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:provider/provider.dart';
 import 'package:ccf_app/core/time_service.dart';
+import 'package:ccf_app/app_state.dart';
 
-import '../group_service.dart'; 
+import '../group_service.dart';
+import '../models/group_model.dart';
 
 class GroupDashboardTab extends StatelessWidget {
   final GroupInfoData pageData;
@@ -30,12 +33,18 @@ class GroupDashboardTab extends StatelessWidget {
         children: [
           // 1. HEADER (Group Description & Quick Actions)
           _buildHeader(context),
-          
+
           const SizedBox(height: 24),
 
-          // 2. ANNOUNCEMENTS (Horizontal Scroll)
+          // 2. SUB-GROUPS (up front — this is a navigation surface, not just info)
+          _buildSubGroupsHeader(context),
+          _buildSubGroupsList(context, pageData.subGroups),
+
+          const SizedBox(height: 24),
+
+          // 3. ANNOUNCEMENTS (Horizontal Scroll)
           _buildSectionHeader(
-            context, 
+            context,
             title: "key_112c".tr(), // Announcements
             onSeeAll: () => context.push('/groups/${pageData.group.id}/info/announcements'),
           ),
@@ -43,9 +52,9 @@ class GroupDashboardTab extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // 3. EVENTS (Horizontal Scroll)
+          // 4. EVENTS (Horizontal Scroll)
           _buildSectionHeader(
-            context, 
+            context,
             title: "key_112b".tr(), // Events
             onSeeAll: () => context.push('/groups/${pageData.group.id}/info/events'),
           ),
@@ -53,9 +62,9 @@ class GroupDashboardTab extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // 4. MEDIA RESOURCES (Horizontal Image Row)
+          // 5. MEDIA RESOURCES (Horizontal Image Row)
           _buildSectionHeader(
-            context, 
+            context,
             title: "key_112d".tr(), // Media
             onSeeAll: () => context.push('/groups/${pageData.group.id}/info/media'),
           ),
@@ -63,6 +72,179 @@ class GroupDashboardTab extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  // --- SUB-GROUPS SECTION HEADER (with admin-only create button) ---
+  Widget _buildSubGroupsHeader(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text("Sub-groups", style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+          if (isAdmin)
+            TextButton.icon(
+              onPressed: () => _showCreateSubGroupDialog(context),
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text("Create"),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // --- SUB-GROUPS VERTICAL LIST (wider cards: name + description, easy to scan) ---
+  Widget _buildSubGroupsList(BuildContext context, List<GroupModel> subGroups) {
+    if (subGroups.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+        child: Text(
+          "No sub-groups yet.",
+          style: TextStyle(color: Colors.grey[600], fontStyle: FontStyle.italic),
+        ),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      child: Column(
+        children: subGroups.map((subGroup) {
+          return Card(
+            margin: const EdgeInsets.only(bottom: 8),
+            elevation: 0,
+            color: Theme.of(context).colorScheme.surfaceContainerHighest,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(14),
+              onTap: () => context.push('/groups/${subGroup.id}'),
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundImage: (subGroup.photoUrl?.isNotEmpty ?? false)
+                          ? CachedNetworkImageProvider(subGroup.photoUrl!)
+                          : null,
+                      child: (subGroup.photoUrl == null || subGroup.photoUrl!.isEmpty)
+                          ? const Icon(Icons.groups_outlined, size: 22)
+                          : null,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            subGroup.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
+                          if (subGroup.description?.isNotEmpty == true) ...[
+                            const SizedBox(height: 2),
+                            Text(
+                              subGroup.description!,
+                              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                              overflow: TextOverflow.ellipsis,
+                              maxLines: 1,
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    Icon(Icons.chevron_right, color: Colors.grey[500]),
+                  ],
+                ),
+              ),
+            ),
+          );
+        }).toList(),
+      ),
+    );
+  }
+
+  // --- CREATE SUB-GROUP DIALOG ---
+  Future<void> _showCreateSubGroupDialog(BuildContext context) async {
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+    final groupService = context.read<GroupService>();
+    final userId = context.read<AppState>().profile?.id;
+
+    if (userId == null) return;
+
+    bool creating = false;
+
+    final created = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text("Create Sub-group"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                enabled: !creating,
+                decoration: const InputDecoration(labelText: "Name"),
+                autofocus: true,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: descController,
+                enabled: !creating,
+                decoration: const InputDecoration(labelText: "Description (optional)"),
+                maxLines: 2,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: creating ? null : () => Navigator.pop(ctx, false),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: creating
+                  ? null
+                  : () async {
+                      final name = nameController.text.trim();
+                      if (name.length < 3) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text("Name must be at least 3 characters.")),
+                        );
+                        return;
+                      }
+                      setLocal(() => creating = true);
+                      try {
+                        await groupService.createSubGroup(
+                          parentGroupId: pageData.group.id,
+                          name: name,
+                          description: descController.text.trim(),
+                          creatorUserId: userId,
+                        );
+                        if (ctx.mounted) Navigator.pop(ctx, true);
+                      } catch (e) {
+                        debugPrint('createSubGroup failed: $e');
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(content: Text('Failed to create sub-group: $e')),
+                          );
+                          setLocal(() => creating = false);
+                        }
+                      }
+                    },
+              child: creating
+                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Text("Create"),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (created == true) {
+      await onRefresh();
+    }
   }
 
   // --- SECTION HEADER HELPER ---

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:logger/logger.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -14,6 +13,7 @@ import 'package:ccf_app/features/auth/oidc_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../app_state.dart';
+import '../../../core/media/avatar_image_picker.dart';
 import '../photo_upload_service.dart';
 import '../profile_service.dart';
 
@@ -133,19 +133,18 @@ class _ProfilePageState extends State<ProfilePage> {
   }
 
   Future<void> _editPhoto() async {
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 75);
+    final picked = await pickAndCropAvatarImage(context);
     if (picked == null) return;
 
-    final raw        = await picked.readAsBytes();
-    final compressed = await _compressBytes(raw);
+    final compressed = await _compressBytes(picked.bytes);
     if (!mounted) return;
 
     final userId = context.read<AppState>().profile?.id;
     if (userId == null) return;
 
     try {
-      final ext         = '.${picked.name.split('.').last.toLowerCase()}';
-      final contentType = _contentTypeFromExt(picked.name);
+      final ext         = '.${picked.extension}';
+      final contentType = _contentTypeFromExt(ext);
 
       final newUrl = await _profileService.uploadAndSetProfilePhoto(
         userId, compressed, ext, contentType,
