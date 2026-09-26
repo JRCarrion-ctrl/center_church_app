@@ -90,21 +90,33 @@ class GroupService {
 
   Future<GroupInfoData> getGroupInfoData(String groupId) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
-    final subgroupPattern = '${subgroupTagPrefix(groupId)}%';
 
     const consolidatedQuery = r'''
-      query GetGroupInfoData($groupId: uuid!, $now: timestamptz!, $subgroupPattern: String!) {
-        # 1. Fetch Group Data
+      query GetGroupInfoData($groupId: uuid!, $now: timestamptz!) {
         groups_by_pk(id: $groupId) {
           id
           name
           description
+          parent_group_id
           photo_url
           visibility
           created_at
           archived
           only_admins_message
           target_audiences
+          
+          # 1. NEW: Fetch Subgroups directly through the Hasura relationship
+          subgroups(where: { archived: { _eq: false } }, order_by: { created_at: asc }) {
+            id
+            name
+            description
+            photo_url
+            visibility
+            archived
+            temporary
+            created_at
+          }
+          
           group_memberships(limit: 5, order_by: {profile: {display_name: asc}}) {
             user_id
             role
@@ -132,7 +144,7 @@ class GroupService {
           }
         }
 
-        # 2. Fetch Events completely independently at the top level!
+        # Fetch Events completely independently at the top level
         events(
           where: {
             group_id: { _eq: $groupId },
@@ -147,23 +159,6 @@ class GroupService {
           event_date
           location
         }
-
-        # 3. Fetch Sub-groups: groups whose description carries this group's subgroup tag.
-        # There's no FK for a parent/child relationship, so this is a sibling top-level
-        # field rather than a nested one, matching the `events` pattern above.
-        sub_groups: groups(
-          where: { description: { _like: $subgroupPattern }, archived: { _eq: false } }
-          order_by: { created_at: asc }
-        ) {
-          id
-          name
-          description
-          photo_url
-          visibility
-          archived
-          temporary
-          created_at
-        }
       }
     ''';
 
@@ -172,7 +167,6 @@ class GroupService {
       variables: {
         'groupId': groupId,
         'now': nowIso,
-        'subgroupPattern': subgroupPattern,
       },
       fetchPolicy: FetchPolicy.networkOnly,
     ));
@@ -188,14 +182,13 @@ class GroupService {
       throw Exception('Group not found');
     }
 
-    final subGroupRows = (result.data?['sub_groups'] as List<dynamic>? ?? []);
+    final subGroupRows = (groupData['subgroups'] as List<dynamic>? ?? []);
 
     return GroupInfoData(
       group: Group.fromMap(groupData),
       memberships: List<Map<String, dynamic>>.from(groupData['group_memberships'] ?? []),
       announcements: List<Map<String, dynamic>>.from(groupData['group_announcements'] ?? []),
       media: List<Map<String, dynamic>>.from(groupData['group_messages'] ?? []),
-      // ✨ We now map events from the top-level result instead of inside groupData
       events: List<Map<String, dynamic>>.from(result.data?['events'] ?? []),
       subGroups: subGroupRows
           .map((e) => GroupModel.fromMap(Map<String, dynamic>.from(e)))
@@ -348,9 +341,9 @@ class GroupService {
 
   Future<List<GroupModel>> getSubGroups(String parentGroupId) async {
     const q = r'''
-      query SubGroups($pattern: String!) {
+      query SubGroups($parentId: uuid!) {
         groups(
-          where: { description: { _like: $pattern }, archived: { _eq: false } }
+          where: { parent_group_id: { _eq: $parentId }, archived: { _eq: false } }
           order_by: { created_at: asc }
         ) {
           id
@@ -367,7 +360,7 @@ class GroupService {
     final res = await client.query(
       QueryOptions(
         document: gql(q),
-        variables: {'pattern': '${subgroupTagPrefix(parentGroupId)}%'},
+        variables: {'parentId': parentGroupId},
         fetchPolicy: FetchPolicy.networkOnly,
       ),
     );
@@ -383,34 +376,49 @@ class GroupService {
     required String name,
     String? description,
     required String creatorUserId,
+    required String visibility,
   }) async {
     await _assertGroupActive(parentGroupId);
 
-    // Fetch the parent's real audience languages so the sub-group inherits them
-    // (getGroupInfoData/getGroupById don't select target_audiences, so callers must
-    // not assume pageData.group.languages reflects the true value).
+    // Fetch parent languages AND all current admins/owners
     const qParent = r'''
-      query ParentAudiences($id: uuid!) {
-        groups_by_pk(id: $id) { target_audiences }
+      query ParentData($id: uuid!) {
+        groups_by_pk(id: $id) { 
+          target_audiences 
+          group_memberships(
+            where: { role: { _in: ["admin", "leader", "supervisor", "owner"] }, status: { _eq: "approved" } }
+          ) {
+            user_id
+            role
+          }
+        }
       }
     ''';
+    
     final parentRes = await client.query(
       QueryOptions(document: gql(qParent), variables: {'id': parentGroupId}),
     );
     if (parentRes.hasException) throw parentRes.exception!;
-    final languages = (parentRes.data?['groups_by_pk']?['target_audiences'] as List?)
-            ?.cast<String>()
-            .toList() ??
-        const ['spanish'];
+    
+    final parentData = parentRes.data?['groups_by_pk'];
+    final languages = (parentData?['target_audiences'] as List?)?.cast<String>().toList() ?? const ['spanish'];
+    final parentAdmins = (parentData?['group_memberships'] as List?) ?? [];
 
-    // Deliberately mirrors groups_page.dart's `CreateGroup` mutation shape
-    // (same operation name, variable names/types, and field order) rather than
-    // a differently-shaped one: this Hasura instance appears to enforce an
-    // operation allow-list, and an otherwise-identical mutation with a new
-    // operation name/shape was rejected with "field 'insert_groups_one' not
-    // found in type: 'mutation_root'" even though the field itself is allowed.
+    // Build the initial membership array, ensuring the creator is always included as owner
+    final memberships = <Map<String, dynamic>>{
+      {'user_id': creatorUserId, 'role': 'owner', 'status': 'approved'},
+    };
+    
+    for (var admin in parentAdmins) {
+      memberships.add({
+        'user_id': admin['user_id'],
+        'role': 'admin', // Map parent leaders to subgroup admins
+        'status': 'approved',
+      });
+    }
+
     const m = r'''
-      mutation CreateGroup($name: String!, $desc: String, $vis: String!, $uid: String!, $langs: [String!]!) {
+      mutation CreateGroup($name: String!, $desc: String, $vis: String!, $langs: [String!]!, $parentId: uuid!, $members: [group_memberships_insert_input!]!) {
         insert_groups_one(
           object: {
             name: $name,
@@ -419,35 +427,32 @@ class GroupService {
             temporary: false,
             archived: false,
             target_audiences: $langs,
+            parent_group_id: $parentId,
             group_memberships: {
-              data: [{
-                user_id: $uid,
-                role: "owner",
-                status: "approved",
-                joined_at: "now()"
-              }]
+              data: $members
             }
           }
         ) { id }
       }
     ''';
+    
     final res = await client.mutate(
       MutationOptions(
         document: gql(m),
         variables: {
           'name': name,
-          'desc': encodeSubgroupDescription(parentGroupId, description),
-          'vis': 'invite_only',
-          'uid': creatorUserId,
+          'desc': description,
+          'vis': visibility,
           'langs': languages,
+          'parentId': parentGroupId,
+          'members': memberships.toList(),
         },
         fetchPolicy: FetchPolicy.noCache,
       ),
     );
+    
     if (res.hasException) throw res.exception!;
-    final id = res.data?['insert_groups_one']?['id'] as String?;
-    if (id == null) throw Exception('Failed to create sub-group');
-    return id;
+    return res.data!['insert_groups_one']['id'] as String;
   }
 
   Future<List<GroupModel>> getJoinableGroups(List<String> languages) async {
@@ -1097,6 +1102,29 @@ class GroupService {
     ''';
     final res = await client.mutate(
       MutationOptions(document: gql(m), variables: {'gid': groupId, 'uid': userId}),
+    );
+    if (res.hasException) throw res.exception!;
+  }
+
+  Future<void> addMemberDirectly(String subgroupId, String userId, {String role = 'member'}) async {
+    const m = r'''
+      mutation AddDirect($gid: uuid!, $uid: String!, $role: String!) {
+        insert_group_memberships_one(
+          object: { 
+            group_id: $gid, 
+            user_id: $uid, 
+            role: $role, 
+            status: "approved" 
+          },
+          on_conflict: { constraint: group_memberships_group_id_user_id_key, update_columns: [status, role] }
+        ) { user_id }
+      }
+    ''';
+    final res = await client.mutate(
+      MutationOptions(
+        document: gql(m), 
+        variables: {'gid': subgroupId, 'uid': userId, 'role': role}
+      ),
     );
     if (res.hasException) throw res.exception!;
   }

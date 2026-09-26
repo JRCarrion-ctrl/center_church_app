@@ -1,4 +1,6 @@
 // File: lib/features/groups/pages/manage_members_page.dart
+import 'package:ccf_app/features/groups/models/group_model.dart';
+import 'package:ccf_app/features/groups/widgets/assign_subgroup_modal.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
@@ -283,6 +285,10 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
     final actions = <PopupMenuEntry<String>>[];
     actions.add(PopupMenuItem(value: 'remove', child: Text("key_147".tr())));
 
+    if (_isAdmin) {
+      actions.add(const PopupMenuItem(value: 'add_to_subgroup', child: Text("Assign to Subgroup")));
+    }
+
     if (myRole == 'leader' || myRole == 'supervisor' || myRole == 'owner' || myRole == 'admin') {
       if (targetRole == 'member') {
         actions.add(PopupMenuItem(value: 'promote', child: Text("key_148".tr())));
@@ -332,6 +338,19 @@ class _ManageMembersPageState extends State<ManageMembersPage> {
         if (!mounted) return;
         await _refreshAllLists();
         messenger.showSnackBar(SnackBar(content: Text('${member['display_name']} demoted to member')));
+      } else if (selected == 'add_to_subgroup') {
+        final assignedGroupName = await showDialog<String>(
+          context: context,
+          builder: (ctx) => AssignSubgroupModal(
+            parentGroupId: widget.groupId,
+            targetUserId: targetId,
+            targetUserName: member['display_name'] ?? 'User',
+          ),
+        );
+
+        if (assignedGroupName != null && mounted) {
+          messenger.showSnackBar(SnackBar(content: Text('Added to $assignedGroupName')));
+        }
       }
     } catch (e) {
       if (!mounted) return;

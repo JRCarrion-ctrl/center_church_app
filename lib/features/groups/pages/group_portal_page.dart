@@ -129,6 +129,46 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                         tooltip: "Members",
                         onPressed: () => context.push('/groups/${widget.groupId}/info/members'),
                       ),
+                      if (_isAdmin)
+                        PopupMenuButton<String>(
+                          onSelected: (value) async {
+                            if (value == 'delete') {
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (ctx) => AlertDialog(
+                                  title: const Text('Delete Subgroup'),
+                                  content: const Text('Are you sure? This will archive the subgroup.'),
+                                  actions: [
+                                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(ctx, true), 
+                                      child: const Text('Delete', style: TextStyle(color: Colors.red))
+                                    ),
+                                  ],
+                                ),
+                              );
+                              
+                              if (confirm == true && mounted) {
+                                try {
+                                  await _groupService.deleteGroup(widget.groupId);
+                                  if (mounted) context.pop(); // Return to the parent group
+                                } catch (e) {
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Failed to delete: $e'))
+                                    );
+                                  }
+                                }
+                              }
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete Subgroup', style: TextStyle(color: Colors.red)),
+                            ),
+                          ],
+                        ),
                     ]
                   : null,
               bottom: isSubGroup

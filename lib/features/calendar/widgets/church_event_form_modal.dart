@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../models/church_event.dart';
 import '../church_event_service.dart';
@@ -58,6 +59,8 @@ class _ChurchEventFormModalState extends State<ChurchEventFormModal> {
   List<String> _selectedAudiences = ['english', 'spanish'];
   bool _isRecurring = false;
   DateTime? _recurUntil;
+
+  final List<PlatformFile> _stagedFiles = [];
 
   // ✨ THE MAGIC TOGGLE: Request Public Feature
   bool _requestPublicFeature = false;
@@ -181,6 +184,19 @@ class _ChurchEventFormModalState extends State<ChurchEventFormModal> {
     if (time != null && mounted) setState(() => _endTime = time);
   }
 
+  Future<void> _pickStagedFiles() async {
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+    if (result != null && mounted) {
+      setState(() {
+        _stagedFiles.addAll(result.files.where((f) => f.bytes != null));
+      });
+    }
+  }
+
+  void _removeStagedFile(int index) {
+    setState(() => _stagedFiles.removeAt(index));
+  }
+
   Future<void> _save() async {
     final effectiveGroupId = widget.existing?.groupId ?? widget.prefilledGroupId;
     final isGroupEvent = effectiveGroupId != null;
@@ -255,7 +271,20 @@ class _ChurchEventFormModalState extends State<ChurchEventFormModal> {
         // and allow the 'owner' role to save it as 'approved'.
       );
 
-      await _service.saveEvent(event, slots: slots);
+      final savedEventId = await _service.saveEvent(event, slots: slots);
+
+      if (_stagedFiles.isNotEmpty) {
+        for (var file in _stagedFiles) {
+          await _service.uploadAndAttachFile(
+            eventId: savedEventId,
+            bytes: file.bytes!,
+            fileName: file.name,
+            fileSizeBytes: file.size,
+            groupId: effectiveGroupId,
+          );
+        }
+      }
+
       if (mounted) Navigator.of(context).pop();
     } catch (e) {
       debugPrint('Save Error: $e');
@@ -586,6 +615,46 @@ class _ChurchEventFormModalState extends State<ChurchEventFormModal> {
                       ),
                       IconButton(icon: Icon(Icons.remove_circle, color: colorScheme.error), onPressed: () => _removeSlot(index)),
                     ],
+                  ),
+                );
+              }),
+              const SizedBox(height: 32),
+
+              // --- Attachments ---
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Attachments', style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                      Text('PDFs, documents, or spreadsheets', style: textTheme.bodySmall?.copyWith(color: colorScheme.outline)),
+                    ],
+                  ),
+                  IconButton.filledTonal(onPressed: _pickStagedFiles, icon: const Icon(Icons.attach_file), tooltip: 'Add File'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (_stagedFiles.isEmpty)
+                Container(
+                  width: double.infinity, padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), border: Border.all(color: colorScheme.outlineVariant)),
+                  child: Text('No files attached.', textAlign: TextAlign.center, style: TextStyle(color: colorScheme.outline)),
+                ),
+              ...List.generate(_stagedFiles.length, (index) {
+                final file = _stagedFiles[index];
+                return Card(
+                  elevation: 0,
+                  color: colorScheme.surfaceContainerLow,
+                  margin: const EdgeInsets.only(bottom: 8),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: ListTile(
+                    leading: Icon(Icons.insert_drive_file_outlined, color: colorScheme.primary),
+                    title: Text(file.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    trailing: IconButton(
+                      icon: Icon(Icons.remove_circle, color: colorScheme.error),
+                      onPressed: () => _removeStagedFile(index),
+                    ),
                   ),
                 );
               }),

@@ -37,8 +37,32 @@ class GroupDashboardTab extends StatelessWidget {
           const SizedBox(height: 24),
 
           // 2. SUB-GROUPS (up front — this is a navigation surface, not just info)
-          _buildSubGroupsHeader(context),
-          _buildSubGroupsList(context, pageData.subGroups),
+          Builder(
+            builder: (context) {
+              // Pull the cached groups the user is a member of directly from AppState
+              final myUserGroups = context.read<AppState>().userGroups;
+              final myJoinedGroupIds = myUserGroups.map((g) => g.id).toSet();
+              
+              // Admins see everything. Members only see subgroups their ID is attached to.
+              final visibleSubGroups = isAdmin 
+                ? pageData.subGroups 
+                : pageData.subGroups.where((sg) => myJoinedGroupIds.contains(sg.id)).toList();
+
+              // Hide completely for regular members if they aren't in any of these subgroups
+              if (visibleSubGroups.isEmpty && !isAdmin) {
+                return const SizedBox.shrink(); 
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildSubGroupsHeader(context),
+                  _buildSubGroupsList(context, visibleSubGroups),
+                  const SizedBox(height: 24),
+                ],
+              );
+            }
+          ),
 
           const SizedBox(height: 24),
 
@@ -221,6 +245,7 @@ class GroupDashboardTab extends StatelessWidget {
                           name: name,
                           description: descController.text.trim(),
                           creatorUserId: userId,
+                          visibility: 'invite_only',
                         );
                         if (ctx.mounted) Navigator.pop(ctx, true);
                       } catch (e) {

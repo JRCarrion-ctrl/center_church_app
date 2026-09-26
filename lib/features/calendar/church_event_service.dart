@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/church_event.dart';
 import 'models/church_event_attachment.dart';
+import 'church_event_attachment_upload_service.dart';
 
 class _ChurchEventQueries {
   // ----------------------------------------
@@ -257,8 +258,63 @@ class _ChurchEventQueries {
 class ChurchEventService {
   final GraphQLClient _gql;
   final String? _currentUserId;
+  
+  // ✨ Fix: Inline lazy initialization guarantees it is never used before being set.
+  late final ChurchEventAttachmentUploadService _uploadService = 
+      ChurchEventAttachmentUploadService(_gql);
 
-  ChurchEventService(this._gql, {String? currentUserId}) : _currentUserId = currentUserId;
+  // Restore the original, simple constructor
+  ChurchEventService(this._gql, {String? currentUserId}) 
+      : _currentUserId = currentUserId;
+
+  static const Map<String, String> _extensionToContentType = {
+    'pdf': 'application/pdf',
+    'doc': 'application/msword',
+    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls': 'application/vnd.ms-excel',
+    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'ppt': 'application/vnd.ms-powerpoint',
+    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'heic': 'image/heic',
+    'txt': 'text/plain',
+    'csv': 'text/csv',
+  };
+
+  String _guessContentType(String filename) {
+    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
+    return _extensionToContentType[ext] ?? 'application/octet-stream';
+  }
+
+  Future<void> uploadAndAttachFile({
+    required String eventId,
+    required Uint8List bytes,
+    required String fileName,
+    int? fileSizeBytes,
+    String? groupId,
+  }) async {
+    final contentType = _guessContentType(fileName);
+    
+    // 1. Upload to S3
+    final finalUrl = await _uploadService.uploadEventAttachment(
+      eventId: eventId,
+      bytes: bytes,
+      originalFileName: fileName,
+      contentType: contentType,
+    );
+
+    // 2. Save metadata to Database
+    await addEventAttachment(
+      eventId: eventId,
+      fileName: fileName,
+      fileUrl: finalUrl,
+      contentType: contentType,
+      fileSizeBytes: fileSizeBytes,
+      groupId: groupId,
+    );
+  }
 
   DateTime get _startOfRecentHistory {
     final now = DateTime.now().toUtc();
@@ -373,7 +429,7 @@ class ChurchEventService {
   }
 
   // --- UNIFIED SAVE METHOD ---
-  Future<void> saveEvent(ChurchEvent event, {List<ChurchEventSlot> slots = const []}) async {
+  Future<String> saveEvent(ChurchEvent event, {List<ChurchEventSlot> slots = const []}) async {
     final isNew = event.id.isEmpty;
     String finalEventId = event.id;
     
@@ -439,6 +495,7 @@ class ChurchEventService {
         ));
       }
     }
+    return finalEventId;
   }
 
   Future<void> approveEvent(String eventId) async {

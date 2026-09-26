@@ -14,7 +14,6 @@ import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/shared/user_roles.dart';
 import 'package:ccf_app/shared/widgets/generic_share_modal.dart';
 import '../church_event_service.dart';
-import '../church_event_attachment_upload_service.dart';
 import '../models/church_event.dart';
 import '../models/church_event_attachment.dart';
 
@@ -28,7 +27,6 @@ class ChurchEventDetailsPage extends StatefulWidget {
 
 class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with SingleTickerProviderStateMixin {
   late ChurchEventService _eventService;
-  late ChurchEventAttachmentUploadService _attachmentUploadService;
   late TabController _tabController;
   bool _svcReady = false;
 
@@ -58,7 +56,6 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
       final client = GraphQLProvider.of(context).value;
       final userId = context.read<AppState>().profile?.id;
       _eventService = ChurchEventService(client, currentUserId: userId);
-      _attachmentUploadService = ChurchEventAttachmentUploadService(client);
       _svcReady = true;
 
       _checkRole();
@@ -217,57 +214,23 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
 
   // --- ATTACHMENT ACTIONS ---
 
-  static const Map<String, String> _extensionToContentType = {
-    'pdf': 'application/pdf',
-    'doc': 'application/msword',
-    'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'xls': 'application/vnd.ms-excel',
-    'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'ppt': 'application/vnd.ms-powerpoint',
-    'pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-    'png': 'image/png',
-    'jpg': 'image/jpeg',
-    'jpeg': 'image/jpeg',
-    'heic': 'image/heic',
-    'txt': 'text/plain',
-    'csv': 'text/csv',
-  };
-
-  String _guessContentType(String filename) {
-    final ext = filename.contains('.') ? filename.split('.').last.toLowerCase() : '';
-    return _extensionToContentType[ext] ?? 'application/octet-stream';
-  }
-
   Future<void> _pickAndUploadAttachment() async {
     final result = await FilePicker.platform.pickFiles(withData: true);
     if (result == null || result.files.isEmpty) return;
 
     final picked = result.files.single;
-    final bytes = picked.bytes;
-    if (bytes == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Couldn't read that file, please try again")),
-        );
-      }
+    if (picked.bytes == null) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't read file")));
       return;
     }
 
     setState(() => _uploadingAttachment = true);
     try {
-      final contentType = _guessContentType(picked.name);
-      final finalUrl = await _attachmentUploadService.uploadEventAttachment(
+      // Calling our new unified orchestrator in the service layer
+      await _eventService.uploadAndAttachFile(
         eventId: widget.event.id,
-        bytes: bytes,
-        originalFileName: picked.name,
-        contentType: contentType,
-      );
-
-      await _eventService.addEventAttachment(
-        eventId: widget.event.id,
+        bytes: picked.bytes!,
         fileName: picked.name,
-        fileUrl: finalUrl,
-        contentType: contentType,
         fileSizeBytes: picked.size,
         groupId: widget.event.groupId,
       );

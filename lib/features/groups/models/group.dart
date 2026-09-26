@@ -1,20 +1,5 @@
 // file: lib/features/groups/models/group.dart
 
-// Sub-groups have no dedicated parent/child column in the `groups` table, so the
-// link is encoded as a hidden tag prefix in the `description` column and decoded
-// here on read. `GroupService.encodeSubgroupDescription` is the sole writer.
-final RegExp _subgroupTagPattern = RegExp(r'^\[\[subgroup_of:([0-9a-fA-F-]+)\]\]\n?');
-
-/// Splits a raw `description` column value into (parentGroupId, visibleText).
-(String?, String?) decodeSubgroupDescription(String? rawDescription) {
-  if (rawDescription == null) return (null, null);
-  final match = _subgroupTagPattern.firstMatch(rawDescription);
-  if (match == null) return (null, rawDescription);
-  final parentId = match.group(1);
-  final visible = rawDescription.substring(match.end);
-  return (parentId, visible.isEmpty ? null : visible);
-}
-
 class Group {
   final String id;
   final String name;
@@ -39,12 +24,12 @@ class Group {
   });
 
   factory Group.fromMap(Map<String, dynamic> map) {
-    final (parentGroupId, description) = decodeSubgroupDescription(map['description'] as String?);
     return Group(
       id: map['id'] as String? ?? '',
       name: map['name'] as String? ?? '',
-      description: description,
-      parentGroupId: parentGroupId,
+      // ✨ Read both properties directly from their actual columns now
+      description: map['description'] as String?,
+      parentGroupId: map['parent_group_id'] as String?, 
       photoUrl: map['photo_url'] as String?,
       visibility: map['visibility'] as String? ?? 'public',
       createdAt: _parseDate(map['created_at']),
