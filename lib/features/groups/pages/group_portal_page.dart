@@ -151,9 +151,11 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                               if (confirm == true && mounted) {
                                 try {
                                   await _groupService.deleteGroup(widget.groupId);
+                                  if (!context.mounted) return;
                                   if (mounted) context.pop(); // Return to the parent group
                                 } catch (e) {
                                   if (mounted) {
+                                    if (!context.mounted) return;
                                     ScaffoldMessenger.of(context).showSnackBar(
                                       SnackBar(content: Text('Failed to delete: $e'))
                                     );
