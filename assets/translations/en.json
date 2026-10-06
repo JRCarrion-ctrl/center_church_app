@@ -626,5 +626,11 @@
   "You've been invited!": "You've been invited!",
   "Click below to accept the invitation and join the group.": "Click below to accept the invitation and join the group.",
   "Accept Invitation": "Accept Invitation",
-  "Cancel": "Cancel"
+  "Cancel": "Cancel",
+  "blog_list_title": "Pastor's Blog",
+  "blog_quick_link_subtitle": "Read the latest notes and insights",
+  "blog_detail_title": "Blog Post",
+  "blog_comments_header": "Comments",
+  "blog_add_comment_hint": "Add a comment or question...",
+  "blog_metrics_subtitle": "By {name} • {date} • {comments} Comments • {likes} Likes"
 }

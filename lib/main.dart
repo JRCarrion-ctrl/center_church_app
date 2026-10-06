@@ -7,6 +7,7 @@ import 'package:ccf_app/core/hasura_client.dart';
 import 'package:ccf_app/core/theme.dart';
 import 'package:ccf_app/features/splash/splash_screen.dart';
 import 'package:easy_localization/easy_localization.dart';
+import 'package:ccf_app/network_asset_loader.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
@@ -42,9 +43,13 @@ void main() async {
   runApp(
     EasyLocalization(
       supportedLocales: const [Locale('en'), Locale('es')],
-      path: 'assets/translations',
+      path: 'assets/translations', // Used by the fallback
       fallbackLocale: const Locale('en'),
-      child: const CCFAppBoot(),
+      // Inject the custom loader here:
+      assetLoader: const NetworkAssetLoader(
+        remoteBaseUrl: 'https://localization.ccfapp.com',
+      ),
+      child: const CCFAppBoot(), // Your root widget
     ),
   );
 }

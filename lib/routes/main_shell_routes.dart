@@ -7,6 +7,8 @@ import '../features/features.dart';
 import '../features/home/manage_app_announcements_page.dart';
 import '../transitions/slide.dart';
 import '../app_state.dart';
+import '../features/home/blog/blog_list_page.dart';
+import '../features/home/blog/blog_details_page.dart';
 
 final ShellRoute mainShellRoute = ShellRoute(
   builder: (context, state, child) => MainApp(child: child),
@@ -74,6 +76,19 @@ final ShellRoute mainShellRoute = ShellRoute(
     GoRoute(
       path: '/manage-app-announcements',
       builder: (context, state) => const ManageAppAnnouncementsPage(),
+    ),
+    GoRoute(
+      path: '/blogs',
+      name: 'blogs',
+      builder: (context, state) => const BlogListPage(),
+    ),
+    GoRoute(
+      path: '/blog/:id',
+      name: 'blog_detail',
+      builder: (context, state) {
+        final blogId = state.pathParameters['id']!;
+        return BlogDetailPage(blogId: blogId); // Only pass the ID
+      },
     ),
   ],
 );

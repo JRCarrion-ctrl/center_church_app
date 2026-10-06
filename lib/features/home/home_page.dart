@@ -8,6 +8,7 @@ import 'package:ccf_app/features/home/livestream_preview.dart';
 import 'package:ccf_app/features/home/church_info_card.dart';
 import 'package:ccf_app/features/home/quick_links_footer.dart';
 import 'package:ccf_app/features/home/incident_report_button.dart';
+import 'package:ccf_app/features/home/latest_blog_quick_link.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -68,6 +69,15 @@ class HomePage extends StatelessWidget {
                 SliverPadding(
                   padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
                   sliver: SliverToBoxAdapter(child: _buildConstrainedChild(const ChurchInfoCard())),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: spacing)),
+
+                // --- LATEST BLOG PREVIEW ---
+                SliverPadding(
+                  padding: const EdgeInsets.symmetric(horizontal: horizontalPadding),
+                  sliver: SliverToBoxAdapter(
+                    child: _buildConstrainedChild(const LatestBlogQuickLink()), // Navigate to BlogListPage on tap
+                  ),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: spacing)),
 

@@ -627,5 +627,11 @@
   "You've been invited!": "¡Te Han Invitado!",
   "Click below to accept the invitation and join the group.": "Haz clic abajo para aceptar la invitación y unirte al grupo.",
   "Accept Invitation": "Aceptar Invitación",
-  "Cancel": "Cancelar"
+  "Cancel": "Cancelar",
+  "blog_list_title": "Blog del Pastor",
+  "blog_quick_link_subtitle": "Lee las últimas notas y reflexiones",
+  "blog_detail_title": "Publicación del Blog",
+  "blog_comments_header": "Comentarios",
+  "blog_add_comment_hint": "Añade un comentario o pregunta...",
+  "blog_metrics_subtitle": "Por {name} • {date} • {comments} Comentarios • {likes} Likes"
 }
