@@ -1,6 +1,6 @@
 // File: lib/features/home/manage_app_announcements_page.dart
 import 'dart:ui'; // ✨ Required for ImageFilter
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'models/app_announcement_form_modal.dart';
 import 'package:easy_localization/easy_localization.dart';

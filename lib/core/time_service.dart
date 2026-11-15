@@ -1,5 +1,5 @@
 import 'package:intl/intl.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class TimeService {
   /// Format a UTC DateTime into a readable local time string.

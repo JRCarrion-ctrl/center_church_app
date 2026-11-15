@@ -1,7 +1,7 @@
 // File: lib/features/groups/pages/manage_announcements_page.dart
 import 'dart:ui';
 
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:ccf_app/core/time_service.dart';

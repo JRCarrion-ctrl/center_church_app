@@ -1,6 +1,6 @@
 // lib/widgets/secondary_button.dart
 import 'dart:ui';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class SecondaryButton extends StatelessWidget {
   final String title;

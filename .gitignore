@@ -11,6 +11,12 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+.env
+.agents/
+.config/
+.devcontainer/
+.github/
+.vscode/
 
 # IntelliJ related
 *.iml

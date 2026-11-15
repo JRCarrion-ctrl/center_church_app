@@ -1,5 +1,5 @@
 // lib/widgets/primary_button.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 class PrimaryButton extends StatelessWidget {
   final String title;

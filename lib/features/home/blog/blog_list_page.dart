@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -54,7 +54,7 @@ class _BlogListPageState extends State<BlogListPage> {
 
   Future<void> _handleUpload() async {
     // 1. Pick the PDF file
-    final result = await FilePicker.platform.pickFiles(
+    final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf'],
       withData: true, // Required to get the bytes
@@ -68,6 +68,7 @@ class _BlogListPageState extends State<BlogListPage> {
     
     // Prompt the user for a title
     final titleController = TextEditingController(text: file.name.replaceAll('.pdf', ''));
+    if (!mounted) return; // Ensure the widget is still mounted before showing the dialog
     final title = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -94,6 +95,7 @@ class _BlogListPageState extends State<BlogListPage> {
     setState(() => _isUploading = true);
 
     try {
+      if (!mounted) return; // Ensure the widget is still mounted before proceeding
       final appState = context.read<AppState>();
       
       // 2. Upload to S3 using your service

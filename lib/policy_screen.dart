@@ -1,7 +1,7 @@
 // file: lib/features/policy/policy_screen.dart
 
 import 'dart:ui'; // Required for the glassmorphic blur
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/foundation.dart';

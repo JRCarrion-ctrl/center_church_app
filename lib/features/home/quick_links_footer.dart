@@ -1,6 +1,6 @@
 // File: lib/features/home/quick_links_footer.dart
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart';
+import 'package:cupertino_ui/cupertino_ui.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -194,7 +194,7 @@ class _SecondaryLinks extends StatelessWidget {
     );
   }
 
-  Color _brandColor(IconData icon, Color fallback) {
+  Color _brandColor(FaIconData icon, Color fallback) {
     if (icon == FontAwesomeIcons.facebook) {
       return const Color(0xFF1877F2);
     }
@@ -209,7 +209,7 @@ class _SecondaryLinks extends StatelessWidget {
 }
 
 class _CircleIconButton extends StatelessWidget {
-  final IconData icon;
+  final FaIconData icon;
   final Color bgColor;
   final Color iconColor;
   final VoidCallback onTap;
@@ -237,7 +237,7 @@ class _CircleIconButton extends StatelessWidget {
             width: 0.5,
           ),
         ),
-        child: Icon(
+        child: FaIcon(
           icon,
           size: 20,
           color: iconColor,
@@ -277,7 +277,7 @@ class _CafeButton extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(
+            FaIcon(
               FontAwesomeIcons.mugSaucer,
               size: 18,
               color: iconColor,
@@ -300,7 +300,7 @@ class _CafeButton extends StatelessWidget {
 class LinkData {
   final String label;
   final String url;
-  final IconData icon;
+  final FaIconData icon;
 
   const LinkData({
     required this.label,

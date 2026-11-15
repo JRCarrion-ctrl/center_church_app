@@ -1,7 +1,7 @@
 // File: lib/features/home/models/app_announcement_form_modal.dart
 import 'dart:typed_data';
 import 'package:ccf_app/features/calendar/event_photo_storage_service.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';

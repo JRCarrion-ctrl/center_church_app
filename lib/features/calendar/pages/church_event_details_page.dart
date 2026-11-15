@@ -1,5 +1,5 @@
 // filename: lib/features/calendar/pages/church_event_details_page.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:add_2_calendar/add_2_calendar.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -215,10 +215,11 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
   // --- ATTACHMENT ACTIONS ---
 
   Future<void> _pickAndUploadAttachment() async {
-    final result = await FilePicker.platform.pickFiles(withData: true);
-    if (result == null || result.files.isEmpty) return;
+    final result = await FilePicker.pickFiles(withData: true); 
 
-    final picked = result.files.single;
+    if (result == null || result.files.isEmpty) return; // or files.isEmpty for direct lists
+
+    final picked = result.files.first; // or files.single if using the list directly
     if (picked.bytes == null) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Couldn't read file")));
       return;
@@ -226,7 +227,6 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
 
     setState(() => _uploadingAttachment = true);
     try {
-      // Calling our new unified orchestrator in the service layer
       await _eventService.uploadAndAttachFile(
         eventId: widget.event.id,
         bytes: picked.bytes!,
@@ -244,7 +244,6 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
       if (mounted) setState(() => _uploadingAttachment = false);
     }
   }
-
   Future<void> _confirmDeleteAttachment(ChurchEventAttachment attachment) async {
     final confirmed = await showDialog<bool>(
       context: context,

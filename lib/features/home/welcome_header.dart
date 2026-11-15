@@ -1,6 +1,6 @@
 // File: lib/features/home/welcome_header.dart
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:ccf_app/features/media/media_service.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';

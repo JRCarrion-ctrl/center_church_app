@@ -1,5 +1,5 @@
 // File: lib/features/nursery/pages/child_profile_page.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 

@@ -1,7 +1,7 @@
 // File: lib/features/groups/widgets/input_row.dart
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -167,7 +167,7 @@ class _InputRowState extends State<InputRow> {
               title: Text("key_169".tr()),
               onTap: () async {
                 Navigator.pop(context);
-                final result = await FilePicker.platform.pickFiles(
+                final result = await FilePicker.pickFiles(
                   allowMultiple: true,
                   withData: true, // Required on web; harmless on mobile.
                 );

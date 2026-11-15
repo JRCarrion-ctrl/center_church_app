@@ -1,5 +1,5 @@
 // File: lib/features/home/livestream_preview.dart
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 
 import 'package:ccf_app/features/media/media_service.dart';
@@ -163,7 +163,7 @@ class _LivestreamPreviewState extends State<LivestreamPreview> {
                             error: Icons.warning,
                             playbackSpeedButton: Icons.speed,
                           ),
-                          overlays: VideoPlayerOverlayTheme().copyWith(
+                          backdrop: VideoPlayerBackdropTheme().copyWith(
                             backgroundColor: Colors.white,
                             alpha: 25,
                           ),

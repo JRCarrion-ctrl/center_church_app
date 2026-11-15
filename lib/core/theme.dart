@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // --- Organic & Modern Palette ---
 const Color kWhite = Color(0xFFFFFFFF);

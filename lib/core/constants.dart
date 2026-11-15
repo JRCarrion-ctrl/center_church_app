@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 // lib/core/constants.dart
 /// Base URL for website links
 const String kChurchWebsite = 'https://www.centrocristianofrederick.com/';

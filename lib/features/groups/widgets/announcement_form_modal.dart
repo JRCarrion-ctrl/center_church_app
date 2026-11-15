@@ -1,6 +1,6 @@
 // File: lib/features/groups/widgets/announcement_form_modal.dart
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'dart:ui';

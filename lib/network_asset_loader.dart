@@ -3,6 +3,9 @@ import 'dart:ui';
 import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:dio/dio.dart';
+import 'package:logger/logger.dart';
+
+final logger = Logger();
 
 class NetworkAssetLoader extends AssetLoader {
   final String remoteBaseUrl;
@@ -24,7 +27,7 @@ class NetworkAssetLoader extends AssetLoader {
     final url = '$cleanBaseUrl/$fileName';
 
     try {
-      print('🌐 [EasyLocalization] Attempting to fetch remote file: $url');
+      logger.i('🌐 [EasyLocalization] Attempting to fetch remote file: $url');
       
       final response = await Dio().get(
         url,
@@ -39,7 +42,7 @@ class NetworkAssetLoader extends AssetLoader {
       );
 
       if (response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300) {
-        print('✅ [EasyLocalization] Successfully loaded remote $fileName');
+        logger.i('✅ [EasyLocalization] Successfully fetched remote file: $url');
         if (response.data is Map<String, dynamic>) {
           return response.data;
         } else if (response.data is String) {
@@ -47,16 +50,16 @@ class NetworkAssetLoader extends AssetLoader {
         }
       }
     } catch (e) {
-      print('⚠️ [EasyLocalization] Remote fetch failed. Falling back to local. Reason: $e');
+      logger.e('⚠️ [EasyLocalization] Remote fetch failed for $fileName: $e');
     }
 
     // Fallback to local bundled files
     try {
       final localJson = await rootBundle.loadString('$localFallbackPath/$fileName');
-      print('📁 [EasyLocalization] Loaded local fallback for $fileName');
+      logger.i('📁 [EasyLocalization] Loaded local fallback for $fileName');
       return json.decode(localJson);
     } catch (e) {
-      print('❌ [EasyLocalization] Failed to load local fallback: $e');
+      logger.e('❌ [EasyLocalization] Failed to load local fallback for $fileName: $e');
       return {};
     }
   }

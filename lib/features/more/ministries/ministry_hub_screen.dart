@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 
 // 1. Define how a Ministry Card should look and act
 class MinistryConfig {

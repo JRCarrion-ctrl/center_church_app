@@ -1,6 +1,6 @@
 // File: lib/features/calendar/widgets/church_event_form_modal.dart
 import 'dart:typed_data';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
@@ -185,7 +185,7 @@ class _ChurchEventFormModalState extends State<ChurchEventFormModal> {
   }
 
   Future<void> _pickStagedFiles() async {
-    final result = await FilePicker.platform.pickFiles(allowMultiple: true, withData: true);
+    final result = await FilePicker.pickFiles(allowMultiple: true, withData: true);
     if (result != null && mounted) {
       setState(() {
         _stagedFiles.addAll(result.files.where((f) => f.bytes != null));

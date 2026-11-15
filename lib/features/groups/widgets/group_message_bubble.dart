@@ -1,6 +1,6 @@
 // File: lib/features/groups/widgets/group_message_bubble.dart
 import 'dart:ui';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import '../models/group_message.dart';
 

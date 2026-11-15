@@ -1,7 +1,7 @@
 // file: lib/app_state.dart
 
 import 'dart:async';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:flutter/foundation.dart'; // ✨ ADDED: Needed for kIsWeb
 import 'package:logger/logger.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';

@@ -1,6 +1,6 @@
 // File: lib/features/groups/pages/manage_members_page.dart
 import 'package:ccf_app/features/groups/widgets/assign_subgroup_modal.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:easy_localization/easy_localization.dart';

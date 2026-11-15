@@ -9,17 +9,16 @@ list(APPEND FLUTTER_PLUGIN_LIST
   file_selector_windows
   flutter_inappwebview_windows
   flutter_secure_storage_windows
-  media_kit_libs_windows_video
-  media_kit_video
   permission_handler_windows
-  share_plus
   syncfusion_pdfviewer_windows
   url_launcher_windows
+  share_plus
   volume_controller
   window_to_front
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST
+  jni
 )
 
 set(PLUGIN_BUNDLED_LIBRARIES)

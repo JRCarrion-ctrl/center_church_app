@@ -1,6 +1,6 @@
 // File: lib/features/more/pages/edit_bible_study_page.dart
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart';
+import 'package:material_ui/material_ui.dart';
 import 'package:graphql_flutter/graphql_flutter.dart' as graphql;
 import 'package:easy_localization/easy_localization.dart';
 
@@ -97,7 +97,8 @@ class _EditBibleStudyPageState extends State<EditBibleStudyPage> {
       return;
     }
 
-    final picked = await FilePicker.platform.pickFiles(
+    // Updated: Removed '.platform' to use the new static method approach
+    final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['docx', 'pdf'],
       withData: true,
