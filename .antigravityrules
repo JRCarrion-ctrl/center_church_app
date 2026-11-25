@@ -1,0 +1,1 @@
+ENV: Windows. Always use 'cmd /c' for all shell executions to ensure the process terminates cleanly and sends an EOF signal. Avoid interactive shells.

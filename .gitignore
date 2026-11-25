@@ -17,6 +17,9 @@ migrate_working_dir/
 .devcontainer/
 .github/
 .vscode/
+config.yaml
+metadata/
+ops/env.prod
 
 # IntelliJ related
 *.iml
@@ -49,3 +52,24 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Hardening backups & ephemeral staging outputs
+backups/
+*.dump
+.env.*
+staging/.tmp-metadata/
+staging/results-*.json
+metadata_*/
+migrations/
+ops/
+patches/
+proposed/
+seeds/
+staging/
+GIVING_DESIGN.md
+HASURA_PROPOSED_CHANGES.md
+PATCH_PLAN.md
+PRODUCTION_RUNBOOK.md
+REVIEW_NOTES.md
+AUDIT_REPORT.md
+infra/
