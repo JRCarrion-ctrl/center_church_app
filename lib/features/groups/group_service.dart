@@ -291,6 +291,18 @@ class GroupService {
             ) {
               created_at
             }
+            # Newest message, for the chat-list preview.
+            last_message: group_messages(
+              order_by: { created_at: desc }
+              where: {deleted: {_eq: false}}
+              limit: 1
+            ) {
+              content
+              type
+              sender_id
+              created_at
+              profile { display_name }
+            }
           }
         }
       }
@@ -330,9 +342,17 @@ class GroupService {
 
           final isMuted = (e['is_muted'] as bool?) ?? false;
 
+          final lastList = e['group']['last_message'] as List<dynamic>? ?? const [];
+          final last = lastList.isEmpty ? null : lastList.first as Map<String, dynamic>;
+
           return GroupModel.fromMap({
             ...groupMap,
             'unreadCount': unreadCount,
+            'last_message_text': last?['content'],
+            'last_message_type': last?['type'],
+            'last_message_sender_id': last?['sender_id'],
+            'last_message_sender': last?['profile']?['display_name'],
+            'last_message_at': last?['created_at'],
             'is_muted': isMuted,
           });
         })

@@ -31,6 +31,11 @@ set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE}")
 
 # Use Unicode for all projects.
 add_definitions(-DUNICODE -D_UNICODE)
+# flutter_inappwebview_windows still uses <experimental/coroutine>, which newer
+# MSVC toolsets reject unless this deprecation check is silenced.
+add_definitions(-D_SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+# Serialize PDB writes so parallel cl.exe jobs don't collide (error C1041).
+add_compile_options(/FS)
 
 # Compilation settings that should be applied to most targets.
 #

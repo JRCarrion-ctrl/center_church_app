@@ -220,6 +220,14 @@ class _ChurchEventQueries {
     }
   ''';
 
+  // Separate from the event queries so an older Hasura setup without the
+  // column only loses this flag, not the whole event.
+  static const fetchRsvpEnabled = r'''
+    query EventRsvpEnabled($id: uuid!) {
+      events_by_pk(id: $id) { id rsvp_enabled }
+    }
+  ''';
+
   // ----------------------------------------
   // 5. ATTACHMENTS
   // ----------------------------------------
@@ -595,6 +603,22 @@ class ChurchEventService {
     ));
     if (res.hasException) throw res.exception!;
     return (res.data?['unified_event_rsvps'] as List<dynamic>? ?? []).cast<Map<String, dynamic>>();
+  }
+
+  /// Whether the event takes RSVPs. Events made before the switch existed,
+  /// or any lookup failure, count as yes (the old behavior).
+  Future<bool> fetchRsvpEnabled(String eventId) async {
+    try {
+      final res = await _gql.query(QueryOptions(
+        document: gql(_ChurchEventQueries.fetchRsvpEnabled),
+        variables: {'id': eventId},
+        fetchPolicy: FetchPolicy.networkOnly,
+      ));
+      if (res.hasException) return true;
+      return res.data?['events_by_pk']?['rsvp_enabled'] as bool? ?? true;
+    } catch (_) {
+      return true;
+    }
   }
 
   // --- ATTACHMENTS LOGIC ---

@@ -23,6 +23,8 @@ import '../features/more/pages/qr_checkin_scanner.dart';
 import '../features/more/pages/nursery_staff_page.dart';
 import '../features/more/pages/child_staff_profile.dart';
 import 'package:ccf_app/features/more/pages/role_management_page.dart';
+import 'package:ccf_app/features/event_setup/event_setup_access.dart';
+import 'package:ccf_app/features/event_setup/pages/approval_permissions_page.dart';
 
 // ✨ NEW UNIFIED IMPORTS
 import '../features/calendar/models/church_event.dart';
@@ -33,6 +35,20 @@ final List<GoRoute> miscRoutes = [
   GoRoute(
     path: '/more/role-management',
     builder: (_, state) => const RoleManagementPage(),
+  ),
+  // Event Setup is now a bottom-nav tab (main_shell_routes.dart). Old links
+  // (e.g. earlier push notifications) still land in the right place.
+  GoRoute(
+    path: EventSetupAccess.legacyRoute,
+    redirect: (_, _) => EventSetupAccess.route,
+    routes: [
+      GoRoute(path: 'permissions', redirect: (_, _) => EventSetupAccess.permissionsRoute),
+    ],
+  ),
+  // Owner-only; full screen, outside the tab shell. Guard in app_router.dart.
+  GoRoute(
+    path: EventSetupAccess.permissionsRoute,
+    builder: (_, _) => const ApprovalPermissionsPage(),
   ),
   GoRoute(
     path: '/give',

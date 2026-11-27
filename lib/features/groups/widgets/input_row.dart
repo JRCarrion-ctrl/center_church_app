@@ -2,6 +2,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:file_picker/file_picker.dart';
 import 'package:image_picker/image_picker.dart';
@@ -98,15 +99,34 @@ class InputRow extends StatefulWidget {
   State<InputRow> createState() => _InputRowState();
 }
 
+/// Desktop and web have a hardware keyboard: Enter sends, Shift+Enter adds a
+/// new line. On phones the keyboard's return key adds a line and the send
+/// button sends.
+bool get _enterSends =>
+    kIsWeb ||
+    defaultTargetPlatform == TargetPlatform.windows ||
+    defaultTargetPlatform == TargetPlatform.macOS ||
+    defaultTargetPlatform == TargetPlatform.linux;
+
 class _InputRowState extends State<InputRow> {
   final List<_AttachedFile> _selectedFiles = [];
-  final FocusNode _focusNode = FocusNode();
+  late final FocusNode _focusNode = FocusNode(onKeyEvent: _onKeyEvent);
   bool _canSend = false;
+  bool _sending = false;
 
   @override
   void initState() {
     super.initState();
     widget.controller.addListener(_handleInputChange);
+  }
+
+  KeyEventResult _onKeyEvent(FocusNode node, KeyEvent event) {
+    if (!_enterSends || event is! KeyDownEvent) return KeyEventResult.ignored;
+    final isEnter = event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.numpadEnter;
+    if (!isEnter || HardwareKeyboard.instance.isShiftPressed) return KeyEventResult.ignored;
+    _handleSend();
+    return KeyEventResult.handled;
   }
 
   void _handleInputChange() {
@@ -135,12 +155,13 @@ class _InputRowState extends State<InputRow> {
   Future<void> _showAttachmentOptions() async {
     showModalBottomSheet(
       context: context,
+      showDragHandle: true,
       builder: (_) => SafeArea(
         child: Wrap(
           children: [
             if (!kIsWeb) // Camera not available on web
               ListTile(
-                leading: const Icon(Icons.photo_camera),
+                leading: const Icon(Icons.photo_camera_outlined),
                 title: Text("key_167".tr()),
                 onTap: () async {
                   Navigator.pop(context);
@@ -152,7 +173,7 @@ class _InputRowState extends State<InputRow> {
                 },
               ),
             ListTile(
-              leading: const Icon(Icons.photo_library),
+              leading: const Icon(Icons.photo_library_outlined),
               title: Text("key_168".tr()),
               onTap: () async {
                 Navigator.pop(context);
@@ -163,7 +184,7 @@ class _InputRowState extends State<InputRow> {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.insert_drive_file),
+              leading: const Icon(Icons.insert_drive_file_outlined),
               title: Text("key_169".tr()),
               onTap: () async {
                 Navigator.pop(context);
@@ -191,45 +212,84 @@ class _InputRowState extends State<InputRow> {
     );
   }
 
+  Future<void> _openGifPicker() async {
+    final url = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => const _KlipyGifPicker(),
+    );
+    if (url == null || !mounted) return;
+    try {
+      await widget.onGifPicked(url);
+    } catch (e, st) {
+      _logger.e('[InputRow] gif send failed', error: e, stackTrace: st);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('chat_send_failed'.tr())));
+      }
+    }
+    _focusNode.requestFocus();
+  }
+
   bool _isGifUrl(String text) =>
       text.toLowerCase().endsWith('.gif') && text.startsWith('http');
 
+  /// Clears the box right away so the next message can be typed, then sends.
+  /// On failure the text and attachments are put back.
   Future<void> _handleSend() async {
+    if (_sending) return;
     final text = widget.controller.text.trim();
+    final files = List<_AttachedFile>.from(_selectedFiles);
+    if (text.isEmpty && files.isEmpty) return;
+
     _logger.i('[InputRow] handleSend text="${text.replaceAll('\n', ' ')}" '
-        'files=${_selectedFiles.length} isGif=${_isGifUrl(text)}');
+        'files=${files.length} isGif=${_isGifUrl(text)}');
+
+    setState(() {
+      _sending = true;
+      _selectedFiles.clear();
+    });
+    _focusNode.requestFocus();
 
     try {
-      for (final f in _selectedFiles) {
+      for (final f in files) {
         _logger.i('[InputRow] onFilePicked: ${f.filename}');
         await widget.onFilePicked(f.bytes, f.filename);
       }
 
       if (_isGifUrl(text)) {
+        widget.controller.clear();
         await widget.onGifPicked(text);
       } else if (text.isNotEmpty) {
-        await widget.onSend();
+        // onSend reads the controller synchronously before its first await,
+        // so the box can be cleared as soon as the call has started.
+        final sending = widget.onSend();
+        widget.controller.clear();
+        await sending;
       }
-
-      widget.controller.clear();
-      setState(() {
-        _selectedFiles.clear();
-        _canSend = false;
-      });
     } catch (e, st) {
       _logger.e('[InputRow] send failed', error: e, stackTrace: st);
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Failed to send')));
+        if (widget.controller.text.isEmpty) widget.controller.text = text;
+        setState(() => _selectedFiles.insertAll(0, files));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('chat_send_failed'.tr())));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+        _handleInputChange();
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark         = Theme.of(context).brightness == Brightness.dark;
-    final containerColor = isDark ? const Color(0xFF2C2C30) : const Color(0xFFF5F5FA);
-    final borderColor    = isDark ? const Color(0xFF46464B) : const Color(0xFFDCDCE6);
+    final colorScheme = Theme.of(context).colorScheme;
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    // Solid field with a visible edge (the light theme's outlineVariant is a
+    // near-invisible white, so it isn't used here).
+    final fieldColor = dark ? colorScheme.surfaceContainerHigh : colorScheme.surfaceContainerLowest;
+    final borderColor = colorScheme.onSurface.withValues(alpha: dark ? 0.12 : 0.14);
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -237,44 +297,48 @@ class _InputRowState extends State<InputRow> {
       children: [
         if (_selectedFiles.isNotEmpty)
           Container(
-            height: 70,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+            height: 76,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: _selectedFiles.length,
-              separatorBuilder: (_, _) => const SizedBox(width: 8),
+              separatorBuilder: (_, _) => const SizedBox(width: 10),
               itemBuilder: (context, index) {
                 final f = _selectedFiles[index];
                 return Stack(
                   clipBehavior: Clip.none,
                   children: [
                     Container(
-                      width: 60,
-                      height: 60,
+                      width: 62,
+                      height: 62,
                       decoration: BoxDecoration(
-                        color: isDark ? Colors.grey[800] : Colors.grey[200],
-                        borderRadius: BorderRadius.circular(8),
+                        color: fieldColor,
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(color: borderColor),
                       ),
                       child: ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(14),
                         child: f.isImage
                             ? Image.memory(f.bytes, fit: BoxFit.cover)
-                            : const Center(child: Icon(Icons.insert_drive_file, size: 24)),
+                            : Icon(Icons.insert_drive_file_outlined, size: 24, color: colorScheme.onSurfaceVariant),
                       ),
                     ),
                     Positioned(
                       top: -6,
                       right: -6,
-                      child: GestureDetector(
-                        onTap: () => setState(() {
-                          _selectedFiles.removeAt(index);
-                          _handleInputChange();
-                        }),
-                        child: Container(
-                          decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
-                          padding: const EdgeInsets.all(2),
-                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                      child: Semantics(
+                        button: true,
+                        label: 'chat_remove_attachment'.tr(),
+                        child: GestureDetector(
+                          onTap: () => setState(() {
+                            _selectedFiles.removeAt(index);
+                            _handleInputChange();
+                          }),
+                          child: Container(
+                            decoration: BoxDecoration(color: colorScheme.error, shape: BoxShape.circle),
+                            padding: const EdgeInsets.all(3),
+                            child: Icon(Icons.close, size: 14, color: colorScheme.onError),
+                          ),
                         ),
                       ),
                     ),
@@ -284,47 +348,89 @@ class _InputRowState extends State<InputRow> {
             ),
           ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              IconButton.filledTonal(
-                icon: const Icon(Icons.attach_file),
-                tooltip: 'Attach',
-                onPressed: _showAttachmentOptions,
-              ),
-              const SizedBox(width: 6),
+              // --- Message pill: attach, text, GIF ---
               Expanded(
-                child: AnimatedSize(
-                  duration: const Duration(milliseconds: 200),
+                child: GestureDetector(
+                  // Tapping anywhere on the pill focuses the field.
+                  onTap: _focusNode.requestFocus,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    constraints: const BoxConstraints(minHeight: 50),
                     decoration: BoxDecoration(
-                      color: containerColor,
-                      borderRadius: BorderRadius.circular(24),
+                      color: fieldColor,
+                      borderRadius: BorderRadius.circular(26),
                       border: Border.all(color: borderColor),
                     ),
-                    child: TextField(
-                      focusNode: _focusNode,
-                      controller: widget.controller,
-                      minLines: 1,
-                      maxLines: 5,
-                      style: TextStyle(color: isDark ? Colors.white : Colors.black),
-                      textCapitalization: TextCapitalization.sentences,
-                      decoration: const InputDecoration(
-                        hintText: 'Type a message...',
-                        border: InputBorder.none,
-                      ),
-                      onSubmitted: (_) => _handleSend(),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.add_circle_outline, color: colorScheme.onSurfaceVariant),
+                          tooltip: 'chat_attach'.tr(),
+                          onPressed: _showAttachmentOptions,
+                        ),
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: TextField(
+                              focusNode: _focusNode,
+                              controller: widget.controller,
+                              minLines: 1,
+                              maxLines: 6,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.newline,
+                              textCapitalization: TextCapitalization.sentences,
+                              style: TextStyle(color: colorScheme.onSurface, fontSize: 16),
+                              decoration: InputDecoration(
+                                hintText: (_enterSends ? 'chat_input_hint_desktop' : 'chat_input_hint').tr(),
+                                hintStyle: TextStyle(color: colorScheme.onSurfaceVariant),
+                                hintMaxLines: 1,
+                                border: InputBorder.none,
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(vertical: 13),
+                              ),
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.gif_box_outlined, color: colorScheme.onSurfaceVariant),
+                          tooltip: 'chat_gif'.tr(),
+                          onPressed: _openGifPicker,
+                        ),
+                      ],
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              IconButton.filled(
-                icon: const Icon(Icons.send_rounded),
-                tooltip: 'Send',
-                onPressed: _canSend ? _handleSend : null,
+              const SizedBox(width: 8),
+              // --- Send ---
+              AnimatedScale(
+                scale: _canSend ? 1 : 0.9,
+                duration: const Duration(milliseconds: 150),
+                child: SizedBox(
+                  width: 50,
+                  height: 50,
+                  child: IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: colorScheme.primary,
+                      foregroundColor: colorScheme.onPrimary,
+                      disabledBackgroundColor: colorScheme.onSurface.withValues(alpha: 0.12),
+                      disabledForegroundColor: colorScheme.onSurface.withValues(alpha: 0.38),
+                    ),
+                    icon: _sending
+                        ? SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: colorScheme.onPrimary),
+                          )
+                        : const Icon(Icons.arrow_upward_rounded),
+                    tooltip: 'chat_send'.tr(),
+                    onPressed: (_canSend && !_sending) ? _handleSend : null,
+                  ),
+                ),
               ),
             ],
           ),
@@ -370,7 +476,7 @@ class _KlipyGifPickerState extends State<_KlipyGifPicker> {
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              labelText: 'Search GIFs',
+              labelText: 'chat_search_gifs'.tr(),
               suffixIcon: IconButton(icon: const Icon(Icons.search), onPressed: _search),
             ),
             onSubmitted: (_) => _search(),

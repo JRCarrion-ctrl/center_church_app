@@ -1,5 +1,6 @@
 // File: lib/features/prayer/prayer_page.dart
 import 'package:material_ui/material_ui.dart';
+import 'package:ccf_app/shared/page_refresh.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:graphql_flutter/graphql_flutter.dart';
@@ -7,6 +8,8 @@ import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/routes/router_observer.dart';
 import 'package:ccf_app/app_state.dart';
+import 'package:ccf_app/shared/widgets/app_surface.dart';
+import 'package:ccf_app/shared/widgets/glass.dart';
 
 class PrayerPage extends StatefulWidget {
   const PrayerPage({super.key});
@@ -15,7 +18,7 @@ class PrayerPage extends StatefulWidget {
   State<PrayerPage> createState() => _PrayerPageState();
 }
 
-class _PrayerPageState extends State<PrayerPage> with RouteAware {
+class _PrayerPageState extends State<PrayerPage> with RouteAware, AutoRefresh<PrayerPage> {
   List<Map<String, dynamic>> _prayerRequests = [];
   String _userRole = 'anonymous';
   bool _loading = true;
@@ -65,6 +68,9 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
   void didPopNext() {
     _loadPrayerRequests();
   }
+
+  @override
+  Future<void> onAutoRefresh() => _loadPrayerRequests();
 
   Future<void> _loadRoleAndRequests() async {
     if (!mounted) return;
@@ -330,17 +336,13 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    final isDark = theme.brightness == Brightness.dark;
 
     // --- LOGGED OUT STATE ---
     if (currentUserId == null) {
       return Scaffold(
         body: Stack(
           children: [
-            Positioned.fill(child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover)),
-            Positioned.fill(
-              child: Container(color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75)),
-            ),
+            Positioned.fill(child: ColoredBox(color: appBackgroundColor(context))),
             Center(
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -352,13 +354,13 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                     Text(
                       "key_338".tr(),
                       textAlign: TextAlign.center,
-                      style: textTheme.titleMedium?.copyWith(color: colorScheme.secondary),
+                      style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       "key_338a".tr(),
                       textAlign: TextAlign.center,
-                      style: const TextStyle(color: Colors.grey),
+                      style: TextStyle(color: colorScheme.onSurfaceVariant),
                     ),
                     const SizedBox(height: 24),
                     FilledButton.icon(
@@ -379,10 +381,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     // --- AUTHENTICATED STATE ---
     return Scaffold(
       floatingActionButton: FloatingActionButton.extended(
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
-        shape: const StadiumBorder(),
-        elevation: 4,
         onPressed: _showPrayerRequestForm,
         tooltip: "key_342a".tr(),
         icon: const Icon(Icons.add_comment_outlined),
@@ -390,14 +388,26 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
       ),
       body: Stack(
         children: [
-          Positioned.fill(
-            child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
-          ),
-          Positioned.fill(
-            child: Container(color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75)),
-          ),
+          Positioned.fill(child: ColoredBox(color: appBackgroundColor(context))),
           SafeArea(
-            child: _loading
+            child: Column(
+              children: [
+                // Same photo header as the Groups and Calendar tabs.
+                Center(
+                  child: ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 632),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: PhotoHeader(
+                        title: 'prayer_title'.tr(),
+                        subtitle: 'prayer_subtitle'.tr(),
+                        height: 120,
+                      ),
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: _loading
                 ? Center(child: CircularProgressIndicator(color: colorScheme.primary))
                 : _prayerRequests.isEmpty
                     ? Center(
@@ -411,13 +421,13 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                               Text(
                                 "key_341".tr(),
                                 textAlign: TextAlign.center,
-                                style: textTheme.titleMedium?.copyWith(color: isDark ? Colors.white : Colors.black),
+                                style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 "key_429".tr(),
                                 textAlign: TextAlign.center,
-                                style: const TextStyle(color: Colors.grey),
+                                style: TextStyle(color: colorScheme.onSurfaceVariant),
                               )
                             ],
                           ),
@@ -435,6 +445,9 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
                           },
                         ),
                       ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -446,7 +459,6 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
-    final isDark = theme.brightness == Brightness.dark;
 
     final prayerUserId = item['user_id'] as String?;
     final isPrayerOwner = prayerUserId != null && prayerUserId == currentUserId;
@@ -506,18 +518,7 @@ class _PrayerPageState extends State<PrayerPage> with RouteAware {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 600),
           child: Container(
-            decoration: BoxDecoration(
-              color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.85),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.05),
-                  blurRadius: 15,
-                  offset: const Offset(0, 8),
-                )
-              ],
-            ),
+            decoration: appCardDecoration(context),
             child: ListTile(
               contentPadding: const EdgeInsets.all(16),
               leading: Icon(

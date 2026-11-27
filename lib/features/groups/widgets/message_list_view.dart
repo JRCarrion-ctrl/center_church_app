@@ -275,10 +275,29 @@ class _MessageListViewState extends State<MessageListView> {
     }
 
     if (_displayList.isEmpty && !_isLoading) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final textTheme = Theme.of(context).textTheme;
       return Center(
-        child: Text(
-          'Be the first to say something!'.tr(),
-          style: Theme.of(context).textTheme.bodyMedium,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.forum_outlined, size: 48, color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6)),
+              const SizedBox(height: 12),
+              Text(
+                'chat_empty_title'.tr(),
+                textAlign: TextAlign.center,
+                style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'chat_empty_subtitle'.tr(),
+                textAlign: TextAlign.center,
+                style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -303,7 +322,7 @@ class _MessageListViewState extends State<MessageListView> {
         child: ListView.builder(
           controller: widget.scrollController,
           physics: scrollPhysics,
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+          padding: const EdgeInsets.symmetric(horizontal: 4.0, vertical: 8.0),
           reverse: true,
           itemCount: _displayList.length + (_hasMore ? 1 : 0),
           itemBuilder: (context, index) {
@@ -317,12 +336,24 @@ class _MessageListViewState extends State<MessageListView> {
             final item = _displayList[index];
 
             if (item is String) {
+              final colorScheme = Theme.of(context).colorScheme;
               return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 16.0),
-                child: Text(
-                  item,
-                  textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.labelSmall?.copyWith(fontWeight: FontWeight.bold),
+                padding: const EdgeInsets.symmetric(vertical: 14.0),
+                child: Center(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.85),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      item,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ),
                 ),
               );
             }
@@ -330,32 +361,25 @@ class _MessageListViewState extends State<MessageListView> {
             if (item is GroupMessage) {
               final message = item;
               final isMe = message.senderId == widget.userId;
-              
-              bool showName = false;
-              
-              if (!isMe) {
-                final isTopMessage = index + 1 >= _displayList.length;
 
-                if (isTopMessage) {
-                  showName = true; 
-                } else {
-                  final previousItem = _displayList[index + 1];
-                  
-                  if (previousItem is String) {
-                    showName = true; 
-                  } else if (previousItem is GroupMessage) {
-                    if (previousItem.senderId != message.senderId) {
-                      showName = true;
-                    }
-                  }
-                }
+              // The list is reversed: index + 1 is the older neighbor,
+              // index - 1 the newer one. A date header breaks a run.
+              bool sameSender(int i) {
+                if (i < 0 || i >= _displayList.length) return false;
+                final other = _displayList[i];
+                return other is GroupMessage && other.senderId == message.senderId;
               }
+
+              final showName = !sameSender(index + 1);
+              final isLastInRun = !sameSender(index - 1);
+
 
               return GroupMessageBubble(
                 message: message,
                 isMe: isMe,
                 
                 showSenderName: showName,
+                isLastInRun: isLastInRun,
                 senderName: message.senderName ?? "Unknown", 
                 
                 onLongPress: (msg, pos) => widget.onLongPress(msg, pos),

@@ -1,11 +1,12 @@
 // File: lib/features/groups/joinable_groups_section.dart
-import 'dart:async';
+//
+// "Groups you can join": same row shape as the chat list (photo, name,
+// short description) with a Join button, so the Groups tab reads as one list.
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import 'package:ccf_app/app_state.dart';
-import 'package:ccf_app/features/groups/group_service.dart';
 import 'package:ccf_app/features/groups/models/group_model.dart';
 import 'package:ccf_app/features/groups/pages/group_join_page.dart';
 
@@ -31,14 +32,10 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
 
   void refresh() => _loadFilteredGroups();
 
-  Future<GroupService> _service() async {
-    final appState = context.read<AppState>();
-    // Assumes AppState has a readily available GroupService instance
-    return appState.groupService; 
-  }
-
   Future<void> _loadFilteredGroups() async {
-    setState(() => _loading = true);
+    if (!mounted) return;
+    // Keep showing the old list while refreshing.
+    setState(() => _loading = allGroups.isEmpty);
 
     final appState = context.read<AppState>();
     final userId = appState.profile?.id;
@@ -51,24 +48,23 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
       return;
     }
 
-    final svc = await _service();
+    try {
+      final svc = appState.groupService;
+      final joinable = await svc.getJoinableGroups(appState.databaseServiceFilter);
+      final myGroups = await svc.getUserGroups(userId);
+      final myRequests = await svc.getMyPendingGroupRequests(userId);
+      if (!mounted) return;
 
-    final joinable = await svc.getJoinableGroups(appState.databaseServiceFilter);
-    
-    final myGroups = await svc.getUserGroups(userId);
-    final myRequests = await svc.getMyPendingGroupRequests(userId);
+      final joinedIds = myGroups.map((g) => g.id).toSet();
+      final requestedIds = myRequests.toSet();
 
-    final joinedIds = myGroups.map((g) => g.id).toSet();
-    final requestedIds = myRequests.toSet();
-
-    // Filter out groups I am already in OR have already requested to join
-    allGroups = joinable.where((g) => 
-      !joinedIds.contains(g.id) && !requestedIds.contains(g.id)
-    ).toList();
-
-    // Optional stable sort by name
-    allGroups.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
-
+      // Hide groups I'm already in or have already asked to join.
+      allGroups = joinable.where((g) => !joinedIds.contains(g.id) && !requestedIds.contains(g.id)).toList()
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    } catch (e) {
+      debugPrint('Error fetching joinable groups: $e');
+    }
+    if (!mounted) return;
     _applyFilter();
     setState(() => _loading = false);
   }
@@ -78,8 +74,16 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
     setState(() {
       filteredGroups = q.isEmpty
           ? List<GroupModel>.from(allGroups)
-          : allGroups.where((g) => g.name.toLowerCase().contains(q)).toList();
+          : allGroups
+              .where((g) => g.name.toLowerCase().contains(q) || (g.description ?? '').toLowerCase().contains(q))
+              .toList();
     });
+  }
+
+  Future<void> _open(GroupModel group) async {
+    // true once they joined or asked to join.
+    final joined = await showGroupJoinModal(context, group.id);
+    if (joined == true) widget.onGroupJoined?.call();
   }
 
   @override
@@ -90,103 +94,148 @@ class JoinableGroupsSectionState extends State<JoinableGroupsSection> {
         child: Center(child: CircularProgressIndicator()),
       );
     }
-    
-    // === NEW LOGIC: Hide section if no joinable groups AND no active search query ===
-    if (allGroups.isEmpty && _query.isEmpty) {
-      // If there are no groups to show and the user isn't searching, hide the entire section.
-      return const SizedBox.shrink();
-    }
-    
-    // If loading is complete and either groups exist or the user is searching, display the section.
+    // Nothing to join and not searching: hide the whole section.
+    if (allGroups.isEmpty && _query.isEmpty) return const SizedBox.shrink();
+
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text("key_059d".tr(), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 12),
-        TextField(
-          decoration: InputDecoration(
-            hintText: "key_063".tr(),
-            prefixIcon: const Icon(Icons.search),
-            border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
-          ),
-          onChanged: (val) {
-            _query = val;
-            _applyFilter();
-          },
-        ),
-        const SizedBox(height: 16),
-        // If groups exist, render the content (either filtered list or "no results" message)
-        if (filteredGroups.isEmpty)
-          Text("key_064".tr())
-        else
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: filteredGroups.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              childAspectRatio: 0.9,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemBuilder: (context, index) {
-              final group = filteredGroups[index];
-              final textColor = Theme.of(context).colorScheme.onSurface;
-              return GestureDetector(
-                onTap: () async {
-                  // Await the modal returning true (meaning they joined/requested)
-                  final joined = await showGroupJoinModal(context, group.id);
-                  if (joined == true) {
-                    widget.onGroupJoined?.call(); // <-- TRIGGER REFRESH
-                  }
-                },
-                child: Hero(
-                  tag: 'group-${group.id}',
-                  child: Card(
-                    elevation: 3,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        children: [
-                          CircleAvatar(
-                            radius: 30,
-                            backgroundImage: (group.photoUrl != null && group.photoUrl!.isNotEmpty)
-                                ? NetworkImage(group.photoUrl!)
-                                : null,
-                            backgroundColor: Theme.of(context).colorScheme.primaryContainer,
-                            child: (group.photoUrl == null || group.photoUrl!.isEmpty)
-                                ? const Icon(Icons.group, size: 28, color: Colors.white)
-                                : null,
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            group.name,
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (group.description != null && group.description!.isNotEmpty)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 6),
-                              child: Text(
-                                group.description!,
-                                style: TextStyle(fontSize: 12, color: textColor),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 4),
+          child: Row(
+            children: [
+              Icon(Icons.explore_outlined, size: 20, color: colorScheme.primary),
+              const SizedBox(width: 8),
+              Flexible(
+                child: Text(
+                  "key_059d".tr(), // Groups You Can Join
+                  style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
                 ),
-              );
+              ),
+              const SizedBox(width: 8),
+              Badge(
+                label: Text('${allGroups.length}'),
+                backgroundColor: colorScheme.secondaryContainer,
+                textColor: colorScheme.onSecondaryContainer,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(left: 4, bottom: 12),
+          child: Text(
+            'groups_discover_subtitle'.tr(),
+            style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+          ),
+        ),
+        // Search only helps once the list gets long.
+        if (allGroups.length > 6 || _query.isNotEmpty) ...[
+          TextField(
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              prefixIcon: const Icon(Icons.search),
+              hintText: "key_063".tr(),
+              filled: true,
+              fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(26), borderSide: BorderSide.none),
+              contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            ),
+            onChanged: (val) {
+              _query = val;
+              _applyFilter();
             },
           ),
+          const SizedBox(height: 12),
+        ],
+        Card(
+          margin: EdgeInsets.zero,
+          clipBehavior: Clip.antiAlias,
+          child: filteredGroups.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Text("key_064".tr(), style: TextStyle(color: colorScheme.onSurfaceVariant)),
+                )
+              : Column(
+                  children: [
+                    for (var i = 0; i < filteredGroups.length; i++) ...[
+                      if (i > 0)
+                        Divider(height: 1, indent: 84, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                      _JoinableRow(group: filteredGroups[i], onTap: () => _open(filteredGroups[i])),
+                    ],
+                  ],
+                ),
+        ),
       ],
+    );
+  }
+}
+
+class _JoinableRow extends StatelessWidget {
+  const _JoinableRow({required this.group, required this.onTap});
+
+  final GroupModel group;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hasPhoto = group.photoUrl?.isNotEmpty ?? false;
+    final description = group.description?.trim() ?? '';
+
+    return InkWell(
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+        child: Row(
+          children: [
+            Hero(
+              tag: 'group-${group.id}',
+              child: CircleAvatar(
+                radius: 26,
+                backgroundColor: colorScheme.primaryContainer,
+                backgroundImage: hasPhoto ? NetworkImage(group.photoUrl!) : null,
+                child: hasPhoto ? null : Icon(Icons.groups_outlined, color: colorScheme.onPrimaryContainer),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    group.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+                  ),
+                  if (description.isNotEmpty) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.tonal(
+              onPressed: onTap,
+              style: FilledButton.styleFrom(
+                visualDensity: VisualDensity.compact,
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              child: Text('groups_join'.tr()),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

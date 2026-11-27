@@ -25,7 +25,7 @@ class ChurchEventDetailsPage extends StatefulWidget {
   State<ChurchEventDetailsPage> createState() => _ChurchEventDetailsPageState();
 }
 
-class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with SingleTickerProviderStateMixin {
+class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with TickerProviderStateMixin {
   late ChurchEventService _eventService;
   late TabController _tabController;
   bool _svcReady = false;
@@ -43,10 +43,32 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
   bool _loadingAttachments = true;
   bool _uploadingAttachment = false;
 
+  /// Event Setup can turn RSVP off for an event; older events keep it on.
+  bool _rsvpEnabled = true;
+
+  /// RSVPs and sign-ups close once the event is over.
+  bool get _hasEnded {
+    final e = widget.event;
+    final end = e.eventEnd ?? e.eventDate.add(const Duration(hours: 1));
+    return end.isBefore(DateTime.now().toUtc());
+  }
+
+  int get _tabCount => _rsvpEnabled ? 3 : 2;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: _tabCount, vsync: this);
+  }
+
+  Future<void> _loadRsvpEnabled() async {
+    final enabled = await _eventService.fetchRsvpEnabled(widget.event.id);
+    if (!mounted || enabled == _rsvpEnabled) return;
+    setState(() {
+      _rsvpEnabled = enabled;
+      _tabController.dispose();
+      _tabController = TabController(length: _tabCount, vsync: this);
+    });
   }
 
   @override
@@ -93,6 +115,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
 
   Future<void> _loadData() async {
     await Future.wait([
+      _loadRsvpEnabled(),
       _loadRSVPs(),
       _loadSlots(),
       _loadAttachments(),
@@ -536,9 +559,9 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
                   indicatorWeight: 3,
                   labelStyle: const TextStyle(fontWeight: FontWeight.bold),
                   tabs: [
-                    Tab(text: "key_031a".tr()), 
-                    const Tab(text: "Sign-ups"),
-                    const Tab(text: "Files"),
+                    if (_rsvpEnabled) Tab(text: "key_031a".tr()),
+                    Tab(text: "event_tab_signups".tr()),
+                    Tab(text: "event_tab_files".tr()),
                   ],
                 ),
               ),
@@ -548,7 +571,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
         body: TabBarView(
           controller: _tabController,
           children: [
-            _buildRsvpSection(hasRSVP, currentUserId),
+            if (_rsvpEnabled) _buildRsvpSection(hasRSVP, currentUserId),
             _buildSignUpSection(hasRSVP),
             _buildAttachmentsSection(),
           ],
@@ -572,6 +595,12 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
     return ListView(
       padding: EdgeInsets.zero,
       children: [
+        if (_hasEnded)
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _EndedNotice(text: "event_rsvp_closed".tr()),
+          )
+        else
         Padding(
           padding: const EdgeInsets.all(16.0),
           child: Container(
@@ -579,7 +608,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade200),
+              border: Border.all(color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.08)),
             ),
             child: Column(
               children: [
@@ -642,7 +671,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
   }
 
   Widget _buildSignUpSection(bool hasRSVP) {
-    if (!hasRSVP && widget.event.isGroupOnly) { 
+    if (_rsvpEnabled && !hasRSVP && widget.event.isGroupOnly && !_hasEnded) {
       // Force RSVPs for group events before they can see slots
       return Center(child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -657,11 +686,18 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
     if (_loadingSlots) return const Center(child: CircularProgressIndicator());
     if (_slots.isEmpty) return Center(child: Text("No items needed.", style: TextStyle(color: Colors.grey[600])));
 
+    final offset = _hasEnded ? 1 : 0;
     return ListView.builder(
-      itemCount: _slots.length,
+      itemCount: _slots.length + offset,
       padding: const EdgeInsets.all(16),
       itemBuilder: (context, index) {
-        final slot = _slots[index];
+        if (_hasEnded && index == 0) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: _EndedNotice(text: "event_signups_closed".tr()),
+          );
+        }
+        final slot = _slots[index - offset];
         final filled = slot.currentCount;
         final isFull = (slot.maxSlots - filled) <= 0;
     
@@ -725,6 +761,7 @@ class _ChurchEventDetailsPageState extends State<ChurchEventDetailsPage> with Si
   }
 
   Widget _buildSlotAction(ChurchEventSlot slot, bool isFull, bool iSignedUp, int myQty, bool canMulti) {
+    if (_hasEnded) return const SizedBox.shrink();
     if (canMulti) {
        return SizedBox(
          height: 36,
@@ -1000,7 +1037,34 @@ class _SliverAppBarDelegate extends SliverPersistentHeaderDelegate {
     );
   }
   @override
-  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => false;
+  bool shouldRebuild(_SliverAppBarDelegate oldDelegate) => oldDelegate._tabBar != _tabBar;
+}
+
+/// "RSVPs are closed. This event has ended."
+class _EndedNotice extends StatelessWidget {
+  const _EndedNotice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_busy_outlined, color: colorScheme.onSurfaceVariant),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+        ],
+      ),
+    );
+  }
 }
 
 // ✨ UNIFIED DEEP LINK WRAPPER

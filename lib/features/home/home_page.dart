@@ -9,6 +9,7 @@ import 'package:ccf_app/features/home/church_info_card.dart';
 import 'package:ccf_app/features/home/quick_links_footer.dart';
 import 'package:ccf_app/features/home/incident_report_button.dart';
 import 'package:ccf_app/features/home/latest_blog_quick_link.dart';
+import 'package:ccf_app/shared/widgets/app_surface.dart';
 
 class HomePage extends StatelessWidget {
   const HomePage({super.key});
@@ -30,28 +31,13 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool isAuthenticated = context.watch<AppState>().isAuthenticated;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       // We use a Stack to layer the background asset under the content
       body: Stack(
         children: [
-          // 1. The Pre-Blurred Asset (Performance efficient)
-          Positioned.fill(
-            child: Image.asset(
-              'assets/landing_v2_blurred_2.png',
-              fit: BoxFit.cover,
-            ),
-          ),
-          // 2. The Accessibility Tint Overlay
-          // Provides a readable surface for the cards and text
-          Positioned.fill(
-            child: Container(
-              color: isDark 
-                  ? Colors.black.withValues(alpha: 0.65) 
-                  : Colors.white.withValues(alpha: 0.70),
-            ),
-          ),
+          // Same softly tinted page as the group chat.
+          Positioned.fill(child: ColoredBox(color: appBackgroundColor(context))),
           // 3. Your Main App Content
           SafeArea(
             child: CustomScrollView(

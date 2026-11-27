@@ -1,308 +1,18 @@
 // File: lib/features/landing/landing_page.dart
-import 'dart:ui';
-
+//
+// Full-bleed church photo. Top corners: profile (when signed in) and an
+// EN | ES switch. Centre: the church mark. Bottom (thumb reach): a frosted
+// panel with a time-of-day greeting, one primary action, sign-in when signed
+// out, and two compact quick links. Content fades/slides in once on open.
 import 'package:material_ui/material_ui.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:easy_localization/easy_localization.dart';
+
 import '../../app_state.dart';
-import '../../shared/widgets/widgets.dart';
-import '../../features/auth/profile.dart';
-
-// --- Constants ---
-const double _kButtonSpacingFactor = 1.4;
-const double _kHomeButtonSpacingFactor = 3.3;
-
-// --- Refactored Widgets ---
-
-/// A reusable widget for the main background.
-class _LandingBackground extends StatelessWidget {
-  const _LandingBackground();
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Stack(
-      children: [
-        SizedBox.expand(
-          child: Image.asset(
-            'assets/landing_v2.png',
-            fit: BoxFit.cover,
-          ),
-        ),
-        // Dark overlay for contrast
-        Container(
-          color: isDark ? Colors.black.withAlpha(64) : Colors.black.withAlpha(32),
-        ),
-      ],
-    );
-  }
-}
-
-/// The logo and church title section.
-class _LandingTitleSection extends StatelessWidget {
-  final double screenHeight;
-
-  const _LandingTitleSection({required this.screenHeight});
-
-  @override
-  Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    final languageCode = appState.languageCode;
-    final churchName = languageCode == 'en'
-        ? 'Center Church Frederick'
-        : 'Centro Cristiano Frederick';
-    final fontSize = screenHeight * 0.022;
-
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Image.asset(
-          'assets/logo_light.png',
-          width: screenHeight * 0.1, 
-          height: screenHeight * 0.1,
-          fit: BoxFit.contain,
-          color: Colors.white.withValues(alpha: 0.9),
-          semanticLabel: 'Church Logo',
-        ),
-        SizedBox(height: screenHeight * 0.015),
-        Text(
-          churchName.toUpperCase(),
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: fontSize * 0.9,
-            fontWeight: FontWeight.w400,
-            letterSpacing: 4.0,
-            shadows: const [
-              Shadow(
-                blurRadius: 3,
-                color: Colors.black54,
-                offset: Offset(0, 1),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// The set of navigation buttons.
-class _LandingButtons extends StatelessWidget {
-  final double fontSize;
-  final double padding;
-  final VoidCallback onSelectLanguage;
-  final VoidCallback goToHome;
-
-  const _LandingButtons({
-    required this.fontSize,
-    required this.padding,
-    required this.onSelectLanguage,
-    required this.goToHome,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        SecondaryButton(
-          title: "landing_01".tr(),
-          onTap: () => context.push('/more/how_to'),
-          fontSize: fontSize,
-          padding: padding,
-        ),
-        SizedBox(height: padding * _kButtonSpacingFactor),
-        SecondaryButton(
-          title: "landing_02".tr(),
-          onTap: () => launchUrl(Uri.parse('https://www.centrocristianofrederick.com/')),
-          fontSize: fontSize,
-          padding: padding,
-        ),
-        SizedBox(height: padding * _kButtonSpacingFactor),
-        SecondaryButton(
-          title: "landing_03".tr(),
-          onTap: onSelectLanguage,
-          fontSize: fontSize,
-          padding: padding,
-        ),
-        SizedBox(height: padding * _kHomeButtonSpacingFactor),
-        PrimaryButton(
-          title: "landing_04".tr(),
-          onTap: goToHome,
-          fontSize: fontSize,
-          padding: padding,
-        ),
-      ],
-    );
-  }
-}
-
-/// The status indicator at the bottom (Login/Welcome).
-class _AuthStatusDisplay extends StatelessWidget {
-  final Profile? profile;
-
-  const _AuthStatusDisplay({this.profile});
-
-  @override
-  Widget build(BuildContext context) {
-    final isAuth = profile != null;
-    final statusText = isAuth
-        ? "landing_05".tr(args: [profile!.displayName])
-        : "landing_06".tr();
-
-    // Set the dynamic border color
-    final borderColor = isAuth 
-        ? Colors.green.withAlpha(180) 
-        : Colors.red.withAlpha(180);
-        
-    final bottomPadding = MediaQuery.of(context).padding.bottom;
-
-    return Positioned(
-      bottom: bottomPadding > 0 ? bottomPadding + 16 : 30,
-      left: 0,
-      right: 0,
-      child: Center(
-        child: GestureDetector(
-          onTap: isAuth ? null : () => context.push('/auth'),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.black.withAlpha(160),
-              borderRadius: BorderRadius.circular(8),
-              // Apply the dynamic border here
-              border: Border.all(color: borderColor, width: 1.5),
-            ),
-            child: Text(
-              statusText,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-                decoration: TextDecoration.none,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Language Selector Modal
-class _LanguageSelectorModal extends StatefulWidget {
-  final String initialLanguageCode;
-  final AppState appState;
-
-  const _LanguageSelectorModal({
-    required this.initialLanguageCode,
-    required this.appState,
-  });
-
-  @override
-  State<_LanguageSelectorModal> createState() => __LanguageSelectorModalState();
-}
-
-class __LanguageSelectorModalState extends State<_LanguageSelectorModal> {
-  late String _selectedLanguage;
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedLanguage = widget.initialLanguageCode;
-  }
-
-  void _handleLanguageChange(String? value) {
-    if (value != null) {
-      widget.appState.setLanguageCode(context, value);
-      setState(() => _selectedLanguage = value);
-      Navigator.pop(context);
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 15, sigmaY: 15), // Stronger blur for content readability
-        child: Container(
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.15), // Translucent white tint
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-          ),
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 40),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Small handle indicator at the top
-              Container(
-                width: 40,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              Text(
-                "landing_07".tr(),
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  letterSpacing: 0.5,
-                ),
-              ),
-              const SizedBox(height: 10),
-              RadioGroup<String>(
-                groupValue: _selectedLanguage,
-                onChanged: _handleLanguageChange,
-                child: Column(
-                  children: [
-                    _buildLanguageTile('en', "landing_08".tr()),
-                    _buildLanguageTile('es', "landing_09".tr()),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLanguageTile(String value, String label) {
-    final isSelected = _selectedLanguage == value;
-    return Container(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      decoration: BoxDecoration(
-        color: isSelected ? Colors.white.withValues(alpha: 0.1) : Colors.transparent,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: ListTile(
-        leading: Radio<String>(
-          value: value,
-          activeColor: Colors.white,
-          fillColor: WidgetStateProperty.all(Colors.white.withValues(alpha: 0.8)),
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: Colors.white.withValues(alpha: isSelected ? 1.0 : 0.7),
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-        onTap: () => _handleLanguageChange(value),
-      ),
-    );
-  }
-}
-
-// --- Main Refactored Widget ---
+import '../../core/theme.dart';
+import '../../shared/widgets/glass.dart';
 
 class LandingPage extends StatefulWidget {
   final VoidCallback? onContinue;
@@ -313,84 +23,440 @@ class LandingPage extends StatefulWidget {
 }
 
 class _LandingPageState extends State<LandingPage> {
-  // Use a constant for the home tab index
-  static const int _homeTabIndex = 2; 
+  static const int _homeTabIndex = 2;
+
+  // Same sites as the Home church-info card, picked by language.
+  static final Uri _englishSite = Uri.parse('https://www.tccf.church/');
+  static final Uri _spanishSite = Uri.parse('https://www.centrocristianofrederick.com/');
+
+  void _goToHome() {
+    if (widget.onContinue != null) {
+      widget.onContinue!();
+      return;
+    }
+    context.read<AppState>().updateTabIndex(_homeTabIndex);
+    context.go('/');
+  }
 
   @override
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
+    final isSpanish = appState.languageCode == 'es';
+    final site = isSpanish ? _spanishSite : _englishSite;
 
-    if (appState.isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    // The page sits on a photo, so it always uses the dark theme's colors.
+    return Theme(
+      data: ccfDarkTheme,
+      child: Builder(
+        builder: (context) {
+          if (appState.isLoading) {
+            return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          }
+          final profile = appState.profile;
 
-    // Calculate dimensions once
-    final screenHeight = MediaQuery.of(context).size.height;
-    final fontSize = screenHeight * 0.022;
-    final padding = screenHeight * 0.018;
+          return Scaffold(
+            body: PhotoBackdrop(
+              scrimStrength: 0.92,
+              // A touch darker through the middle so the mark and panel read cleanly.
+              midStrength: 0.22,
+              child: SafeArea(
+                child: LayoutBuilder(
+                  // Scrolls only when the window is too short to fit.
+                  builder: (context, constraints) => SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight - 36),
+                      child: IntrinsicHeight(
+                        child: Column(
+                          children: [
+                            // --- Top bar: full width, so the switch sits in the real corner.
+                            Row(
+                              children: [
+                                if (profile != null)
+                                  _ProfileButton(
+                                    name: profile.displayName,
+                                    onTap: () => context.push('/more/profile'),
+                                  ),
+                                const Spacer(),
+                                _LanguageToggle(
+                                  code: appState.languageCode,
+                                  onChanged: (code) => appState.setLanguageCode(context, code),
+                                ),
+                              ],
+                            ),
+                            const Spacer(flex: 2),
+                            const _Entrance(delayMs: 0, child: _Brand()),
+                            const Spacer(flex: 3),
+                            _Entrance(
+                              delayMs: 150,
+                              child: ConstrainedBox(
+                                constraints: const BoxConstraints(maxWidth: 460),
+                                child: _WelcomePanel(
+                                  name: profile?.displayName,
+                                  siteLabel: site.host.replaceFirst('www.', ''),
+                                  onEnter: _goToHome,
+                                  onSignIn: () => context.push('/auth'),
+                                  onHowTo: () => context.push('/more/how_to'),
+                                  onWebsite: () => launchUrl(site, mode: LaunchMode.externalApplication),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
 
-    return Scaffold(
-      body: Stack(
+/// Fades and slides its child up once when the page opens.
+class _Entrance extends StatelessWidget {
+  const _Entrance({required this.child, required this.delayMs});
+
+  final Widget child;
+  final int delayMs;
+
+  @override
+  Widget build(BuildContext context) {
+    final total = 600 + delayMs;
+    final start = delayMs / total;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: Duration(milliseconds: total),
+      curve: Interval(start, 1, curve: Curves.easeOutCubic),
+      child: child,
+      builder: (context, t, child) => Opacity(
+        opacity: t,
+        child: Transform.translate(offset: Offset(0, 24 * (1 - t)), child: child),
+      ),
+    );
+  }
+}
+
+class _Brand extends StatelessWidget {
+  const _Brand();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    // Soft shadow keeps the light text legible where it crosses bright parts
+    // of the photo.
+    final shadow = [Shadow(color: colorScheme.scrim.withValues(alpha: 0.55), blurRadius: 16)];
+    return Column(
+      children: [
+        Image.asset(
+          'assets/logo_light.png',
+          width: 88,
+          height: 88,
+          fit: BoxFit.contain,
+          color: colorScheme.onSurface,
+          semanticLabel: 'landing_church_name'.tr(),
+        ),
+        const SizedBox(height: 20),
+        Text(
+          'landing_church_name'.tr().toUpperCase(),
+          textAlign: TextAlign.center,
+          style: textTheme.titleMedium?.copyWith(
+            color: colorScheme.onSurface,
+            letterSpacing: 4,
+            fontWeight: FontWeight.w500,
+            shadows: shadow,
+          ),
+        ),
+        const SizedBox(height: 14),
+        // Thin gold rule: the brand accent from the app theme.
+        Container(width: 36, height: 2, decoration: BoxDecoration(color: kBrandAccent, borderRadius: BorderRadius.circular(1))),
+      ],
+    );
+  }
+}
+
+class _WelcomePanel extends StatelessWidget {
+  const _WelcomePanel({
+    required this.name,
+    required this.siteLabel,
+    required this.onEnter,
+    required this.onSignIn,
+    required this.onHowTo,
+    required this.onWebsite,
+  });
+
+  final String? name;
+  final String siteLabel;
+  final VoidCallback onEnter;
+  final VoidCallback onSignIn;
+  final VoidCallback onHowTo;
+  final VoidCallback onWebsite;
+
+  String get _timeGreetingKey {
+    final hour = DateTime.now().hour;
+    if (hour < 12) return 'landing_good_morning';
+    if (hour < 18) return 'landing_good_afternoon';
+    return 'landing_good_evening';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final firstName = name?.trim().split(RegExp(r'\s+')).first;
+    final signedIn = firstName != null && firstName.isNotEmpty;
+
+    return GlassPanel(
+      radius: 28,
+      // More solid and more blurred than the default, so the photo behind it
+      // becomes a soft wash instead of visible shapes.
+      opacity: 0.66,
+      blur: 32,
+      padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
         children: [
-          const _LandingBackground(),
-          _buildMainContent(appState, screenHeight, fontSize, padding),
-          _AuthStatusDisplay(profile: appState.profile),
+          Text(
+            _timeGreetingKey.tr().toUpperCase(),
+            style: textTheme.labelSmall?.copyWith(
+              color: kBrandAccent,
+              letterSpacing: 2,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            signedIn ? 'landing_welcome_back'.tr(namedArgs: {'name': firstName}) : 'landing_welcome'.tr(),
+            style: textTheme.headlineSmall?.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            (signedIn ? 'landing_welcome_back_sub' : 'landing_welcome_sub').tr(),
+            style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.78)),
+          ),
+          const SizedBox(height: 22),
+          SizedBox(
+            height: 52,
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                shape: const StadiumBorder(),
+                backgroundColor: colorScheme.primary,
+                foregroundColor: colorScheme.onPrimary,
+                textStyle: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              onPressed: onEnter,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('landing_enter'.tr()),
+                  const SizedBox(width: 8),
+                  const Icon(Icons.arrow_forward_rounded),
+                ],
+              ),
+            ),
+          ),
+          if (!signedIn) ...[
+            const SizedBox(height: 10),
+            SizedBox(
+              height: 52,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  shape: const StadiumBorder(),
+                  foregroundColor: colorScheme.onSurface,
+                  side: BorderSide(color: colorScheme.onSurface.withValues(alpha: 0.35)),
+                ),
+                onPressed: onSignIn,
+                icon: const Icon(Icons.login_rounded),
+                label: Text('landing_sign_in'.tr()),
+              ),
+            ),
+          ],
+          const SizedBox(height: 14),
+          _QuickLink(
+            icon: Icons.help_outline_rounded,
+            label: 'landing_01'.tr(),
+            caption: 'landing_how_to_sub'.tr(),
+            trailingIcon: Icons.chevron_right_rounded,
+            onTap: onHowTo,
+          ),
+          _QuickLink(
+            icon: Icons.public_rounded,
+            label: 'landing_02'.tr(),
+            caption: siteLabel,
+            trailingIcon: Icons.open_in_new_rounded,
+            onTap: onWebsite,
+          ),
         ],
       ),
     );
   }
+}
 
-  /// Builds the central content area.
-  Widget _buildMainContent(
-    AppState appState,
-    double screenHeight,
-    double fontSize,
-    double padding,
-  ) {
-    return Center(
-      child: SingleChildScrollView(
-        // Retain the physics setting
-        physics: const NeverScrollableScrollPhysics(), 
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
+/// Compact list row: icon bubble, label + caption, trailing hint icon.
+class _QuickLink extends StatelessWidget {
+  const _QuickLink({
+    required this.icon,
+    required this.label,
+    required this.caption,
+    required this.trailingIcon,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String caption;
+  final IconData trailingIcon;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Row(
           children: [
-            _LandingTitleSection(screenHeight: screenHeight),
-            SizedBox(height: screenHeight * 0.06),
-            _LandingButtons(
-              fontSize: fontSize,
-              padding: padding,
-              onSelectLanguage: _showLanguageSelector,
-              goToHome: _goToHome,
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colorScheme.onSurface.withValues(alpha: 0.07),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, size: 20, color: colorScheme.onSurface.withValues(alpha: 0.9)),
             ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: textTheme.titleSmall?.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 1),
+                  Text(
+                    caption,
+                    overflow: TextOverflow.ellipsis,
+                    style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withValues(alpha: 0.6)),
+                  ),
+                ],
+              ),
+            ),
+            Icon(trailingIcon, size: 18, color: colorScheme.onSurface.withValues(alpha: 0.45)),
           ],
         ),
       ),
     );
   }
+}
 
-  void _showLanguageSelector() {
-    final appState = Provider.of<AppState>(context, listen: false);
+/// Glass circle with the user's initial; opens the profile.
+class _ProfileButton extends StatelessWidget {
+  const _ProfileButton({required this.name, required this.onTap});
 
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent, // Required for the glass effect to show
-      barrierColor: Colors.black.withValues(alpha: 0.2), // Subtle dimming of the background
-      builder: (_) => _LanguageSelectorModal(
-        initialLanguageCode: appState.languageCode,
-        appState: appState,
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final trimmed = name.trim();
+    final initial = trimmed.isEmpty ? '?' : trimmed.characters.first.toUpperCase();
+    return Tooltip(
+      message: 'landing_profile'.tr(),
+      child: GlassPanel(
+        radius: 24,
+        padding: EdgeInsets.zero,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Center(
+              child: Text(
+                initial,
+                style: TextStyle(color: colorScheme.onSurface, fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
+}
 
-  void _goToHome() {
-    if (widget.onContinue != null) {
-      // Use the provided callback if available
-      widget.onContinue!();
-    } else {
-      // Fallback to default navigation logic
-      final appState = Provider.of<AppState>(context, listen: false);
-      appState.updateTabIndex(_homeTabIndex);
-      context.go('/');
-    }
+/// Inline EN | ES switch on a glass pill.
+class _LanguageToggle extends StatelessWidget {
+  const _LanguageToggle({required this.code, required this.onChanged});
+
+  final String code;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'landing_03'.tr(),
+      child: GlassPanel(
+        radius: 24,
+        padding: const EdgeInsets.all(4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _LangChip(label: 'landing_lang_en'.tr(), tooltip: 'landing_08'.tr(), selected: code == 'en', onTap: () => onChanged('en')),
+            _LangChip(label: 'landing_lang_es'.tr(), tooltip: 'landing_09'.tr(), selected: code == 'es', onTap: () => onChanged('es')),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LangChip extends StatelessWidget {
+  const _LangChip({required this.label, required this.tooltip, required this.selected, required this.onTap});
+
+  final String label;
+  final String tooltip;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: tooltip,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeOut,
+        decoration: ShapeDecoration(
+          color: selected ? colorScheme.primary : colorScheme.primary.withValues(alpha: 0),
+          shape: const StadiumBorder(),
+        ),
+        child: Material(
+          type: MaterialType.transparency,
+          shape: const StadiumBorder(),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: selected ? null : onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              child: Text(
+                label,
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                  color: selected ? colorScheme.onPrimary : colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

@@ -40,6 +40,20 @@ extension FileExtension on String {
   String get fileName => split('?').first.split('/').last;
 }
 
+// \p{...} needs unicode: true, which the valid_regexps lint doesn't account for.
+// ignore: valid_regexps
+final _emojiCharsOnly = RegExp(r'^(?:\p{Extended_Pictographic}|\p{Emoji_Component}|\u200D|\uFE0F)+$', unicode: true);
+// ignore: valid_regexps
+final _hasPictograph = RegExp(r'\p{Extended_Pictographic}', unicode: true);
+
+/// A text-only message of 1 to 3 emoji, shown large without a bubble.
+bool isEmojiOnlyMessage(GroupMessage m) {
+  if ((m.fileUrl ?? '').trim().isNotEmpty) return false;
+  final text = m.content.replaceAll(RegExp(r'\s'), '');
+  if (text.isEmpty || text.characters.length > 3) return false;
+  return _emojiCharsOnly.hasMatch(text) && _hasPictograph.hasMatch(text);
+}
+
 // --- Main Widget ---
 
 class MessageContentView extends StatefulWidget {
@@ -244,11 +258,8 @@ class _MessageContentViewState extends State<MessageContentView> {
 
   /// Mobile only: opens a generic file with OpenFilex.
   Widget _buildMobileFileCard(String fileUrl, dynamic file) {
-    final textColor =
-        widget.isMe ? Colors.white : Theme.of(context).colorScheme.onSurface;
-    final themeColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color.fromARGB(64, 255, 255, 255)
-        : const Color.fromARGB(64, 0, 0, 0);
+    final textColor = _resolvedTextColor;
+    final themeColor = textColor.withValues(alpha: 0.1);
 
     return InkWell(
       onTap: () async {
@@ -269,7 +280,7 @@ class _MessageContentViewState extends State<MessageContentView> {
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
               color: themeColor,
-              border: Border.all(color: Colors.white24),
+              border: Border.all(color: textColor.withValues(alpha: 0.16)),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -281,7 +292,7 @@ class _MessageContentViewState extends State<MessageContentView> {
                     fileUrl.fileName,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontWeight: FontWeight.w500, color: textColor),
+                        fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
                   ),
                 ),
               ],
@@ -311,11 +322,8 @@ class _MessageContentViewState extends State<MessageContentView> {
     required VoidCallback onTap,
     String? customText,
   }) {
-    final textColor =
-        widget.isMe ? Colors.white : Theme.of(context).colorScheme.onSurface;
-    final themeColor = Theme.of(context).brightness == Brightness.dark
-        ? const Color.fromARGB(64, 255, 255, 255)
-        : const Color.fromARGB(64, 0, 0, 0);
+    final textColor = _resolvedTextColor;
+    final themeColor = textColor.withValues(alpha: 0.1);
 
     final icon = fileUrl.isVideo
         ? Icons.play_circle_fill
@@ -333,7 +341,7 @@ class _MessageContentViewState extends State<MessageContentView> {
             padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
             decoration: BoxDecoration(
               color: themeColor,
-              border: Border.all(color: Colors.white24),
+              border: Border.all(color: textColor.withValues(alpha: 0.16)),
               borderRadius: BorderRadius.circular(16),
             ),
             child: Row(
@@ -346,7 +354,7 @@ class _MessageContentViewState extends State<MessageContentView> {
                         "key_download_file".tr(args: [fileUrl.fileName]),
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                        fontWeight: FontWeight.w500, color: textColor),
+                        fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
                   ),
                 ),
               ],
@@ -498,7 +506,11 @@ class _MessageContentViewState extends State<MessageContentView> {
     return Linkify(
       text: content,
       style: _getTextStyle(),
-      linkStyle: const TextStyle(color: Colors.blueAccent),
+      linkStyle: _getTextStyle().copyWith(
+        decoration: TextDecoration.underline,
+        decorationColor: _resolvedTextColor.withValues(alpha: 0.7),
+        fontWeight: FontWeight.w600,
+      ),
       onOpen: (link) async {
         final uri = Uri.parse(link.url);
         if (await canLaunchUrl(uri)) {
@@ -529,17 +541,24 @@ class _MessageContentViewState extends State<MessageContentView> {
     }
   }
 
+  /// Own messages sit on the primary color, others on a surface container.
   Color get _resolvedTextColor {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    return widget.isMe ? Colors.white : (isDark ? Colors.white : Colors.black87);
+    final colorScheme = Theme.of(context).colorScheme;
+    return widget.isMe ? colorScheme.onPrimary : colorScheme.onSurface;
   }
 
+  /// The Text widget already applies the user's text-size setting, so the
+  /// base size here is not scaled again.
   TextStyle _getTextStyle() {
-    final scaleFactor = MediaQuery.textScalerOf(context).scale(1.0);
-    final effectiveFontSize = (widget.fontSize ?? 15) * scaleFactor;
+    if (isEmojiOnlyMessage(widget.message)) {
+      return const TextStyle(fontSize: 40, height: 1.15);
+    }
     return TextStyle(
-        fontSize: effectiveFontSize,
-        fontWeight: FontWeight.w400,
-        color: _resolvedTextColor);
+      fontSize: widget.fontSize ?? 16.5,
+      height: 1.38,
+      letterSpacing: 0.1,
+      fontWeight: FontWeight.w400,
+      color: _resolvedTextColor,
+    );
   }
 }

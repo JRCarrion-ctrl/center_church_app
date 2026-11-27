@@ -66,8 +66,15 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
         .where((g) => !widget.excludeArchived || g.archived == false)
         .toList();
 
-    // Stable sort by name
-    visible.sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+    // Like a messaging app: most recent conversation first, then groups with
+    // no messages yet by name.
+    visible.sort((a, b) {
+      final at = a.lastMessageAt, bt = b.lastMessageAt;
+      if (at != null && bt != null) return bt.compareTo(at);
+      if (at != null) return -1;
+      if (bt != null) return 1;
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
 
     _allGroups = visible;
     _filteredGroups = _applySearch(_allGroups, _searchCtl.text);
@@ -113,160 +120,216 @@ class YourGroupsSectionState extends State<YourGroupsSection> {
 
   @override
   Widget build(BuildContext context) {
-    final appState = context.watch<AppState>();
-    final isLoggedIn = appState.profile != null;
+    final colorScheme = Theme.of(context).colorScheme;
+    final myId = context.select<AppState, String?>((s) => s.profile?.id);
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(
-          "key_065".tr(), // Your Groups
-          style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 8),
         TextField(
           controller: _searchCtl,
           textInputAction: TextInputAction.search,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search),
             hintText: "key_063".tr(), // Search groups...
-            border: const OutlineInputBorder(),
-            isDense: true,
+            filled: true,
+            fillColor: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(26), borderSide: BorderSide.none),
+            contentPadding: const EdgeInsets.symmetric(vertical: 14),
           ),
         ),
         const SizedBox(height: 12),
-
-        // If not logged in, show a soft message
-        if (!isLoggedIn)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 12.0),
-            child: Text(
-              "key_058a".tr(), // Please sign in to see and join groups.
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 14),
-            ),
-          ),
-
         FutureBuilder<List<GroupModel>>(
           future: _futureGroups,
           builder: (context, snapshot) {
             if (snapshot.connectionState != ConnectionState.done) {
-              return const SizedBox(
-                height: 120,
-                child: Center(child: CircularProgressIndicator()),
-              );
+              return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
             }
-
             if (snapshot.hasError) {
-              return Text('Error loading your groups: ${snapshot.error}');
+              return _EmptyCard(icon: Icons.cloud_off_outlined, text: 'groups_load_error'.tr());
             }
-
             if (_filteredGroups.isEmpty) {
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8.0),
-                child: Text("key_066".tr()), // You are not in any groups yet.
-              );
+              return _EmptyCard(icon: Icons.forum_outlined, text: "key_066".tr()); // not in any groups
             }
-
-            return GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: _filteredGroups.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 12,
-                mainAxisSpacing: 12,
-                childAspectRatio: 0.75,
+            return Card(
+              margin: EdgeInsets.zero,
+              clipBehavior: Clip.antiAlias,
+              child: Column(
+                children: [
+                  for (var i = 0; i < _filteredGroups.length; i++) ...[
+                    if (i > 0)
+                      Divider(height: 1, indent: 84, color: colorScheme.outlineVariant.withValues(alpha: 0.4)),
+                    _ChatRow(group: _filteredGroups[i], myId: myId, onTap: () => _openGroup(_filteredGroups[i])),
+                  ],
+                ],
               ),
-              itemBuilder: (context, index) {
-                final group = _filteredGroups[index];
-                final archived = group.archived;
-                
-                final unreadCount = group.unreadCount; 
-                final hasUnread = unreadCount > 0;
-
-                return InkWell(
-                  borderRadius: BorderRadius.circular(12),
-                  onTap: () => _openGroup(group),
-                  child: Column(
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.center,
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundImage: (group.photoUrl?.isNotEmpty ?? false)
-                                ? NetworkImage(group.photoUrl!)
-                                : null,
-                            child: (group.photoUrl?.isEmpty ?? true)
-                                ? const Icon(Icons.group, size: 30)
-                                : null,
-                          ),
-                          // Unread message badge
-                          if (hasUnread)
-                            Positioned(
-                              right: -4,
-                              top: -4,
-                              child: Container(
-                                padding: const EdgeInsets.all(4),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context).colorScheme.error, 
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Theme.of(context).colorScheme.surface,
-                                    width: 2,
-                                  ),
-                                ),
-                                child: Text(
-                                  unreadCount > 9 ? '9+' : unreadCount.toString(),
-                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: Theme.of(context).colorScheme.onError,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 10,
-                                    height: 1.0, 
-                                  ),
-                                ),
-                              ),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      SizedBox(
-                        width: 72,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                group.name,
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: hasUnread ? FontWeight.bold : FontWeight.normal,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                                maxLines: 2,
-                              ),
-                            ),
-                            if (archived) ...[
-                              const SizedBox(width: 4),
-                              const Tooltip(
-                                message: 'Archived',
-                                child: Icon(Icons.archive, size: 14),
-                              ),
-                            ]
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
             );
           },
         ),
       ],
+    );
+  }
+}
+
+/// One conversation: photo, name, last message preview, time, unread count.
+class _ChatRow extends StatelessWidget {
+  const _ChatRow({required this.group, required this.myId, required this.onTap});
+
+  final GroupModel group;
+  final String? myId;
+  final VoidCallback onTap;
+
+  String _preview() {
+    final text = group.lastMessageText;
+    if (text == null) return 'groups_no_messages'.tr();
+    final String body;
+    if (group.lastMessageType == 'gif' || text == '[GIF]') {
+      body = 'groups_preview_gif'.tr();
+    } else if (text == '[Image]') {
+      body = 'groups_preview_photo'.tr();
+    } else if (text == '[File]') {
+      body = 'groups_preview_file'.tr();
+    } else {
+      body = text.replaceAll('\n', ' ');
+    }
+    if (group.lastMessageSenderId != null && group.lastMessageSenderId == myId) {
+      return 'groups_preview_you'.tr(namedArgs: {'message': body});
+    }
+    final sender = group.lastMessageSender?.trim().split(RegExp(r'\s+')).first;
+    return (sender == null || sender.isEmpty) ? body : '$sender: $body';
+  }
+
+  String _time(BuildContext context) {
+    final at = group.lastMessageAt;
+    if (at == null) return '';
+    final locale = context.locale.toLanguageTag();
+    final now = DateTime.now();
+    if (DateUtils.isSameDay(at, now)) return DateFormat.jm(locale).format(at);
+    if (DateUtils.isSameDay(at, now.subtract(const Duration(days: 1)))) return 'groups_yesterday'.tr();
+    if (now.difference(at).inDays < 7) return DateFormat.E(locale).format(at);
+    return DateFormat.MMMd(locale).format(at);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final unread = group.unreadCount;
+    final hasUnread = unread > 0 && !group.isMuted;
+    final hasPhoto = group.photoUrl?.isNotEmpty ?? false;
+
+    return InkWell(
+      onTap: group.archived ? null : onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 26,
+              backgroundColor: colorScheme.surfaceContainerHighest,
+              backgroundImage: hasPhoto ? NetworkImage(group.photoUrl!) : null,
+              child: hasPhoto ? null : Icon(Icons.groups_outlined, color: colorScheme.onSurfaceVariant),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          group.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.titleSmall?.copyWith(
+                            fontWeight: hasUnread ? FontWeight.w800 : FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _time(context),
+                        style: textTheme.labelSmall?.copyWith(
+                          color: hasUnread ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+                          fontWeight: hasUnread ? FontWeight.w700 : FontWeight.w400,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      if (group.isMuted) ...[
+                        Icon(Icons.notifications_off_outlined, size: 14, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                      ],
+                      if (group.archived) ...[
+                        Icon(Icons.archive_outlined, size: 14, color: colorScheme.onSurfaceVariant),
+                        const SizedBox(width: 4),
+                      ],
+                      Expanded(
+                        child: Text(
+                          _preview(),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: hasUnread ? colorScheme.onSurface : colorScheme.onSurfaceVariant,
+                          ),
+                        ),
+                      ),
+                      if (unread > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          constraints: const BoxConstraints(minWidth: 22),
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: group.isMuted ? colorScheme.surfaceContainerHighest : colorScheme.primary,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            unread > 99 ? '99+' : '$unread',
+                            textAlign: TextAlign.center,
+                            style: textTheme.labelSmall?.copyWith(
+                              color: group.isMuted ? colorScheme.onSurfaceVariant : colorScheme.onPrimary,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptyCard extends StatelessWidget {
+  const _EmptyCard({required this.icon, required this.text});
+
+  final IconData icon;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Row(
+          children: [
+            Icon(icon, color: colorScheme.onSurfaceVariant),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text, style: TextStyle(color: colorScheme.onSurfaceVariant))),
+          ],
+        ),
+      ),
     );
   }
 }
