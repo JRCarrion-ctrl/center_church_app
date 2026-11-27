@@ -18,6 +18,9 @@ import 'features/auth/profile.dart';
 import 'features/groups/group_service.dart';
 import 'features/groups/models/group_model.dart';
 import 'shared/user_roles.dart';
+import 'features/event_setup/event_setup_access.dart';
+import 'features/event_setup/event_setup_service.dart';
+import 'features/event_setup/models/event_setup_models.dart';
 
 final bool isMobileDevice = !kIsWeb && 
     (defaultTargetPlatform == TargetPlatform.iOS || 
@@ -68,6 +71,11 @@ class AppState extends ChangeNotifier {
   bool _calendarGroupsInitialized = false;
   bool get calendarGroupsInitialized => _calendarGroupsInitialized;
 
+  // --- Event Setup access (see EventSetupAccess) ---
+  bool _isEventApprover = false;
+  List<MinistryOption> _ledMinistries = const [];
+  bool _eventSetupAccessLoaded = false;
+
   // --- Bilingual Service State ---
   ChurchService _selectedService = ChurchService.both;
   ChurchService get selectedService => _selectedService;
@@ -104,6 +112,24 @@ class AppState extends ChangeNotifier {
   List<GroupModel> get userGroups => _userGroups;
   List<String> get visibleCalendarGroupIds => _visibleCalendarGroupIds;
   ValueNotifier<int> get authChangeNotifier => _authChangeNotifier;
+
+  /// True once [loadEventSetupAccess] has finished for the current session.
+  bool get eventSetupAccessLoaded => _eventSetupAccessLoaded;
+
+  /// Ministries the user leads (group admin/leader).
+  List<MinistryOption> get ledMinistries => _ledMinistries;
+
+  /// Owners, supervisors and administrator/security/cleaning approvers:
+  /// they see every ministry's events and announcements.
+  bool get isEventSetupStaff =>
+      isAuthenticated && (EventSetupAccess.isAdmin(userRole) || _isEventApprover);
+
+  /// Shows the Event Setup tab.
+  bool get canOpenEventSetup => isEventSetupStaff || (isAuthenticated && _ledMinistries.isNotEmpty);
+
+  /// Owners/supervisors (any ministry) or ministry leaders (their ministries).
+  bool get canCreateInEventSetup =>
+      isAuthenticated && (EventSetupAccess.isAdmin(userRole) || _ledMinistries.isNotEmpty);
 
   AppState() {
     _init();
@@ -326,6 +352,7 @@ class AppState extends ChangeNotifier {
       await _setClient(authorizedClient);
 
       await loadUserGroups();
+      await loadEventSetupAccess();
       await updateOneSignalUser();
       
     } catch (e, st) {
@@ -349,6 +376,9 @@ class AppState extends ChangeNotifier {
     _setProfile(null);
     await _cacheProfile(null);
     await _setClient(null);
+    _isEventApprover = false;
+    _ledMinistries = const [];
+    _eventSetupAccessLoaded = false;
     await updateOneSignalUser();
   }
 
@@ -427,6 +457,35 @@ class AppState extends ChangeNotifier {
       _userGroups = [];
       notifyListeners();
     }
+  }
+
+  /// Loads approval permissions and led ministries, which decide whether the
+  /// Event Setup tab shows. Failures (e.g. permissions not yet applied in
+  /// Hasura) fall back to role-only access.
+  Future<void> loadEventSetupAccess() async {
+    final userId = _profile?.id;
+    if (userId == null || userId.isEmpty) {
+      _isEventApprover = false;
+      _ledMinistries = const [];
+      _eventSetupAccessLoaded = false;
+      notifyListeners();
+      return;
+    }
+    final service = EventSetupService(client);
+    final results = await Future.wait<Object?>([
+      service.fetchMyPermissions(userId).then<Object?>((v) => v).catchError((Object e) {
+        _logger.w('Event Setup: approval permissions unavailable: $e');
+        return null;
+      }),
+      service.fetchLedMinistries(userId).then<Object?>((v) => v).catchError((Object e) {
+        _logger.w('Event Setup: led ministries unavailable: $e');
+        return null;
+      }),
+    ]);
+    _isEventApprover = (results[0] as List<ApprovalPermission>?)?.isNotEmpty ?? false;
+    _ledMinistries = (results[1] as List<MinistryOption>?) ?? const [];
+    _eventSetupAccessLoaded = true;
+    notifyListeners();
   }
 
   void setVisibleCalendarGroupIds(List<String> groupIds) async {

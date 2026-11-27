@@ -8,6 +8,8 @@ import 'routes/main_shell_routes.dart';
 import 'routes/misc_routes.dart';
 import 'core/pages/not_found_page.dart';
 import 'routes/router_observer.dart';
+import 'shared/page_refresh.dart';
+import 'features/event_setup/event_setup_access.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -19,7 +21,8 @@ GoRouter createRouter(AppState appState) => GoRouter(
   // Start on Home; /landing stays as a normal, manual page (no auto-redirects)
   initialLocation: '/landing',
 
-  observers: [routeObserver],
+  // PageRefreshObserver: coming back to a screen reloads it (shared/page_refresh.dart).
+  observers: [routeObserver, PageRefreshObserver()],
   routes: [
     ...authRoutes,       // should include /auth
     ...miscRoutes,       // can still include /landing, just not auto-redirected
@@ -34,6 +37,26 @@ GoRouter createRouter(AppState appState) => GoRouter(
     // 1. Never redirect these public routes
     if (location.startsWith('/auth') || location == '/landing') return null;
     if (isDeepLink) return null;
+
+    // 1b. Event Setup: staff and ministry leaders; permissions page owner-only.
+    //     Uses uri.path so query strings can't bypass the match.
+    final path = state.uri.path;
+    if (path == EventSetupAccess.route || path.startsWith('${EventSetupAccess.route}/')) {
+      if (!appState.isAuthenticated) {
+        appState.setPendingDeepLink(location);
+        return '/auth';
+      }
+      // Access is still loading after sign-in; the page shows a spinner and
+      // the router re-runs on the next auth change.
+      if (!appState.eventSetupAccessLoaded) return null;
+      final role = appState.userRole;
+      if (!appState.canOpenEventSetup) return '/';
+      if (path.startsWith(EventSetupAccess.permissionsRoute) &&
+          !EventSetupAccess.canManagePermissions(role)) {
+        return EventSetupAccess.route;
+      }
+      return null;
+    }
 
     // 2. Define routes that STRICTLY require authentication
     final isInvite = location.startsWith('/invite/');

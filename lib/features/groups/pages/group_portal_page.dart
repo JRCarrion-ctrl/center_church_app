@@ -119,7 +119,12 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                   }
                 },
               ),
-              title: Text(pageData.group.name),
+              centerTitle: false,
+              titleSpacing: 0,
+              title: _GroupTitle(
+                name: pageData.group.name,
+                photoUrl: pageData.group.photoUrl,
+              ),
               // Sub-groups have no Home tab (that's where the Members button
               // normally lives), so give admins a direct way to manage members.
               actions: isSubGroup
@@ -175,21 +180,9 @@ class _GroupPortalPageState extends State<GroupPortalPage> {
                   : null,
               bottom: isSubGroup
                   ? null
-                  : TabBar(
-                      indicatorSize: TabBarIndicatorSize.tab,
-                      labelColor: Theme.of(context).colorScheme.primary,
-                      unselectedLabelColor: Colors.grey,
-                      indicatorWeight: 3,
-                      tabs: const [
-                        Tab(
-                          icon: Icon(Icons.chat_bubble_outline),
-                          text: "Chat",
-                        ),
-                        Tab(
-                          icon: Icon(Icons.space_dashboard_outlined),
-                          text: "Home",
-                        ),
-                      ],
+                  : const PreferredSize(
+                      preferredSize: Size.fromHeight(56),
+                      child: _PillTabBar(),
                     ),
             ),
             body: TabBarView(
@@ -311,6 +304,93 @@ class _GroupInviteProcessorScreenState extends State<GroupInviteProcessorScreen>
             CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
             const SizedBox(height: 16),
             const Text("Joining group...", style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Group photo + name in the app bar.
+class _GroupTitle extends StatelessWidget {
+  const _GroupTitle({required this.name, required this.photoUrl});
+
+  final String name;
+  final String? photoUrl;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final hasPhoto = photoUrl?.isNotEmpty ?? false;
+    return Row(
+      children: [
+        CircleAvatar(
+          radius: 20,
+          backgroundColor: colorScheme.surfaceContainerHighest,
+          backgroundImage: hasPhoto ? NetworkImage(photoUrl!) : null,
+          child: hasPhoto ? null : Icon(Icons.groups_outlined, size: 20, color: colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            name,
+            overflow: TextOverflow.ellipsis,
+            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, letterSpacing: 0),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Chat | Home as a rounded segmented control, matching the landing page.
+class _PillTabBar extends StatelessWidget {
+  const _PillTabBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Container(
+        height: 44,
+        padding: const EdgeInsets.all(4),
+        decoration: BoxDecoration(
+          color: colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(22),
+        ),
+        child: TabBar(
+          dividerColor: colorScheme.surface.withValues(alpha: 0),
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicator: BoxDecoration(
+            color: colorScheme.primary,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          labelColor: colorScheme.onPrimary,
+          unselectedLabelColor: colorScheme.onSurfaceVariant,
+          labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+          tabs: [
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.chat_bubble_outline, size: 18),
+                  const SizedBox(width: 8),
+                  Text('groups_tab_chat'.tr()),
+                ],
+              ),
+            ),
+            Tab(
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.space_dashboard_outlined, size: 18),
+                  const SizedBox(width: 8),
+                  Text('groups_tab_home'.tr()),
+                ],
+              ),
+            ),
           ],
         ),
       ),

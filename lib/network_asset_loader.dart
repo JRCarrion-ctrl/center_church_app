@@ -16,19 +16,26 @@ class NetworkAssetLoader extends AssetLoader {
     this.localFallbackPath = 'assets/translations',
   });
 
+  /// Bundled translations are the base; remote values override them. Keys
+  /// that only exist in the app bundle (e.g. a feature shipped before the
+  /// remote files were updated) still resolve instead of showing raw keys.
   @override
   Future<Map<String, dynamic>> load(String path, Locale locale) async {
     final fileName = '${locale.languageCode}.json';
-    
+    final results = await Future.wait([_loadLocal(fileName), _loadRemote(fileName)]);
+    return {...results[0], ...results[1]};
+  }
+
+  Future<Map<String, dynamic>> _loadRemote(String fileName) async {
     // Safely combine the URL to prevent double slashes
-    final cleanBaseUrl = remoteBaseUrl.endsWith('/') 
-        ? remoteBaseUrl.substring(0, remoteBaseUrl.length - 1) 
+    final cleanBaseUrl = remoteBaseUrl.endsWith('/')
+        ? remoteBaseUrl.substring(0, remoteBaseUrl.length - 1)
         : remoteBaseUrl;
     final url = '$cleanBaseUrl/$fileName';
 
     try {
       logger.i('🌐 [EasyLocalization] Attempting to fetch remote file: $url');
-      
+
       final response = await Dio().get(
         url,
         options: Options(
@@ -44,23 +51,25 @@ class NetworkAssetLoader extends AssetLoader {
       if (response.statusCode != null && response.statusCode! >= 200 && response.statusCode! < 300) {
         logger.i('✅ [EasyLocalization] Successfully fetched remote file: $url');
         if (response.data is Map<String, dynamic>) {
-          return response.data;
+          return response.data as Map<String, dynamic>;
         } else if (response.data is String) {
-          return json.decode(response.data);
+          return json.decode(response.data as String) as Map<String, dynamic>;
         }
       }
     } catch (e) {
       logger.e('⚠️ [EasyLocalization] Remote fetch failed for $fileName: $e');
     }
+    return const {};
+  }
 
-    // Fallback to local bundled files
+  Future<Map<String, dynamic>> _loadLocal(String fileName) async {
     try {
       final localJson = await rootBundle.loadString('$localFallbackPath/$fileName');
-      logger.i('📁 [EasyLocalization] Loaded local fallback for $fileName');
-      return json.decode(localJson);
+      logger.i('📁 [EasyLocalization] Loaded bundled translations for $fileName');
+      return json.decode(localJson) as Map<String, dynamic>;
     } catch (e) {
-      logger.e('❌ [EasyLocalization] Failed to load local fallback for $fileName: $e');
-      return {};
+      logger.e('❌ [EasyLocalization] Failed to load bundled translations for $fileName: $e');
+      return const {};
     }
   }
 }

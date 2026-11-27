@@ -1,17 +1,36 @@
 // File: lib/features/groups/widgets/group_message_bubble.dart
-import 'dart:ui';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
+import 'package:easy_localization/easy_localization.dart';
 import '../models/group_message.dart';
+import 'message_content_view.dart' show isEmojiOnlyMessage;
+
+/// A stable, readable accent color per sender, tuned for the current
+/// brightness so names stay legible in light and dark mode.
+Color senderAccent(BuildContext context, String key) {
+  final dark = Theme.of(context).brightness == Brightness.dark;
+  var hash = 0;
+  for (final c in key.codeUnits) {
+    hash = (hash * 31 + c) & 0x7fffffff;
+  }
+  final hue = (hash % 360).toDouble();
+  return HSLColor.fromAHSL(1, hue, dark ? 0.55 : 0.6, dark ? 0.72 : 0.36).toColor();
+}
 
 class GroupMessageBubble extends StatefulWidget {
   final GroupMessage message;
   final bool isMe;
-  final bool showSenderName; 
-  final String? senderName; 
+
+  /// First (oldest) message of a run from the same sender: shows the name.
+  final bool showSenderName;
+
+  /// Last (newest) message of a run: shows the avatar and the bubble tail,
+  /// and leaves a little more room below.
+  final bool isLastInRun;
+  final String? senderName;
   final Function(GroupMessage, Offset) onLongPress;
   final Function(GroupMessage, Offset) onDoubleTap;
-  final VoidCallback? onReactionsTap; // <--- 1. Add Callback
+  final VoidCallback? onReactionsTap;
   final Widget Function() contentBuilder;
   final String formattedTimestamp;
   final List<String> reactions;
@@ -21,10 +40,11 @@ class GroupMessageBubble extends StatefulWidget {
     required this.message,
     required this.isMe,
     this.showSenderName = false,
+    this.isLastInRun = true,
     this.senderName,
     required this.onLongPress,
     required this.onDoubleTap,
-    this.onReactionsTap, // <--- Add to constructor
+    this.onReactionsTap,
     required this.contentBuilder,
     required this.formattedTimestamp,
     required this.reactions,
@@ -35,7 +55,36 @@ class GroupMessageBubble extends StatefulWidget {
 }
 
 class _GroupMessageBubbleState extends State<GroupMessageBubble> {
+  static const double _avatarSize = 32;
+
   Offset? _tapPosition;
+  bool _hovering = false;
+
+  void _openMenuAt(Offset globalPosition) => widget.onLongPress(widget.message, globalPosition);
+
+  /// "⋯" next to the bubble on hover (mouse only), opening the same menu as
+  /// long-press / right-click: Copy, React, Delete, Report.
+  Widget _hoverMenuButton(ColorScheme colorScheme) {
+    return AnimatedOpacity(
+      opacity: _hovering ? 1 : 0,
+      duration: const Duration(milliseconds: 120),
+      child: IgnorePointer(
+        ignoring: !_hovering,
+        child: Builder(
+          builder: (ctx) => IconButton(
+            visualDensity: VisualDensity.compact,
+            iconSize: 18,
+            tooltip: 'chat_message_options'.tr(),
+            icon: Icon(Icons.more_horiz, color: colorScheme.onSurfaceVariant),
+            onPressed: () {
+              final box = ctx.findRenderObject() as RenderBox;
+              _openMenuAt(box.localToGlobal(box.size.center(Offset.zero)));
+            },
+          ),
+        ),
+      ),
+    );
+  }
 
   Map<String, int> _groupedReactions(List<String> reactions) {
     final Map<String, int> grouped = {};
@@ -45,152 +94,207 @@ class _GroupMessageBubbleState extends State<GroupMessageBubble> {
     return grouped;
   }
 
-  bool _isEmojiOnly(String? text) {
-    if (text == null) return false;
-    final stripped = text.replaceAll(RegExp(r'\s'), '');
-    final emojiRegex = RegExp(
-      r'^(?:[\u{1F600}-\u{1F64F}]|[\u{1F300}-\u{1F5FF}]|[\u{1F680}-\u{1F6FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F1E6}-\u{1F1FF}]){1,3}$',
-      unicode: true,
+  Widget _avatar(BuildContext context) {
+    if (!widget.isLastInRun) return const SizedBox(width: _avatarSize);
+    final name = (widget.senderName ?? '').trim();
+    final accent = senderAccent(context, widget.message.senderId);
+    return Semantics(
+      label: name,
+      excludeSemantics: true,
+      child: Container(
+        width: _avatarSize,
+        height: _avatarSize,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(color: accent.withValues(alpha: 0.18), shape: BoxShape.circle),
+        child: Text(
+          name.isEmpty ? '?' : name.characters.first.toUpperCase(),
+          style: TextStyle(color: accent, fontWeight: FontWeight.w700, fontSize: 14),
+        ),
+      ),
     );
-    return emojiRegex.hasMatch(stripped);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    
-    final messageText = widget.message.content; 
-    final showLargeEmoji = _isEmojiOnly(messageText);
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final dark = theme.brightness == Brightness.dark;
+    final isMe = widget.isMe;
 
-    final backgroundColor = widget.isMe
-        ? const Color.fromARGB(255, 0, 122, 255)
-        : (isDark
-            ? const Color.fromARGB(255, 44, 44, 48)
-            : const Color.fromARGB(255, 230, 230, 235));
+    final emojiOnly = isEmojiOnlyMessage(widget.message);
 
-    final borderColor = widget.isMe
-        ? const Color.fromARGB(255, 0, 112, 230)
-        : (isDark
-            ? const Color.fromARGB(255, 70, 70, 75)
-            : const Color.fromARGB(255, 210, 210, 215));
+    // Own messages: solid primary. Others: a clean card that stands off the
+    // chat background (white with a hairline in light mode, a raised surface
+    // in dark mode).
+    final Color backgroundColor;
+    final Color textColor;
+    final Border? border;
+    if (isMe) {
+      backgroundColor = colorScheme.primary;
+      textColor = colorScheme.onPrimary;
+      border = null;
+    } else {
+      backgroundColor = dark ? colorScheme.surfaceContainerHigh : colorScheme.surfaceContainerLowest;
+      textColor = colorScheme.onSurface;
+      border = Border.all(color: colorScheme.onSurface.withValues(alpha: dark ? 0.06 : 0.09));
+    }
 
-    final textColor = widget.isMe
-        ? Colors.white
-        : (isDark ? Colors.white : Colors.black);
+    // Rounded everywhere; only the last bubble of a run gets the small "tail"
+    // corner toward the sender, so a run reads as one block.
+    const r = Radius.circular(20);
+    const joined = Radius.circular(8);
+    final tail = widget.isLastInRun ? const Radius.circular(6) : joined;
+    final top = widget.showSenderName || isMe ? r : joined;
+    final bubbleRadius = isMe
+        ? BorderRadius.only(topLeft: r, topRight: widget.showSenderName ? r : joined, bottomLeft: r, bottomRight: tail)
+        : BorderRadius.only(topLeft: top, topRight: r, bottomLeft: tail, bottomRight: r);
 
-    return GestureDetector(
-      onLongPressStart: (details) {
-        HapticFeedback.mediumImpact();
-        widget.onLongPress(widget.message, details.globalPosition);
-      },
-      onDoubleTapDown: (details) {
-        _tapPosition = details.globalPosition;
-      },
-      onDoubleTap: () {
-        if (_tapPosition != null) {
-          HapticFeedback.mediumImpact();
-          widget.onDoubleTap(widget.message, _tapPosition!);
-        }
-      },
-      child: Align(
-        alignment: widget.isMe ? Alignment.centerRight : Alignment.centerLeft,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 6.0),
-          child: Column(
-            crossAxisAlignment:
-                widget.isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
-            children: [
-              if (widget.showSenderName && !widget.isMe && widget.senderName != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 4.0, bottom: 4.0),
-                  child: Text(
-                    widget.senderName!, 
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: isDark ? Colors.grey[400] : Colors.grey[700],
-                    ),
-                  ),
-                ),
+    final maxBubbleWidth = (MediaQuery.of(context).size.width * 0.78).clamp(0.0, 560.0);
+    final timeStyle = TextStyle(
+      fontSize: 11.5,
+      height: 1.1,
+      color: textColor.withValues(alpha: isMe ? 0.75 : 0.6),
+      fontFeatures: const [FontFeature.tabularFigures()],
+    );
 
-              Stack(
-                clipBehavior: Clip.none,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(20),
-                    child: BackdropFilter(
-                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: backgroundColor,
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: borderColor),
-                        ),
-                        padding: const EdgeInsets.all(10),
-                        constraints: BoxConstraints(
-                          maxWidth: MediaQuery.of(context).size.width * 0.75,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            DefaultTextStyle(
-                              style: TextStyle(
-                                fontSize: showLargeEmoji ? 32 : 16,
-                                height: 1.4,
-                                color: textColor,
-                              ),
-                              child: widget.contentBuilder(), 
-                            ),
-                            const SizedBox(height: 4),
-                            Semantics(
-                              label: 'Sent at ${widget.formattedTimestamp}', 
-                              child: Text(
-                                widget.formattedTimestamp, 
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: widget.isMe
-                                    ? const Color.fromARGB(160, 255, 255, 255)
-                                    : isDark
-                                      ? const Color.fromARGB(160, 255, 255, 255)
-                                      : const Color.fromARGB(160, 0, 0, 0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+    final Widget bubble = emojiOnly
+        // Big emoji float on their own, no bubble behind them.
+        ? Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Column(
+              crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                widget.contentBuilder(),
+                Text(widget.formattedTimestamp, style: timeStyle.copyWith(color: colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          )
+        : Container(
+            constraints: BoxConstraints(maxWidth: maxBubbleWidth),
+            decoration: BoxDecoration(
+              color: backgroundColor,
+              borderRadius: bubbleRadius,
+              border: border,
+              boxShadow: (!isMe && !dark)
+                  ? [
+                      BoxShadow(
+                        color: colorScheme.shadow.withValues(alpha: 0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 1),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-              if (widget.reactions.isNotEmpty)
-                Transform.translate(
-                  offset: widget.isMe ? const Offset(-12, -4) : const Offset(12, -4),
-                  // 2. Wrap in GestureDetector
-                  child: GestureDetector(
-                    onTap: widget.onReactionsTap, 
-                    child: Wrap(
-                      spacing: 6,
-                      children: _groupedReactions(widget.reactions).entries.map((entry) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: backgroundColor,
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: borderColor),
-                          ),
-                          child: Text(
-                            '${entry.key} ${entry.value}',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: textColor,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                    ]
+                  : null,
+            ),
+            padding: const EdgeInsets.fromLTRB(14, 9, 14, 7),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  widthFactor: 1,
+                  child: DefaultTextStyle.merge(
+                    style: TextStyle(color: textColor),
+                    child: widget.contentBuilder(),
                   ),
                 ),
+                const SizedBox(height: 3),
+                Semantics(
+                  label: 'chat_sent_at'.tr(namedArgs: {'time': widget.formattedTimestamp}),
+                  excludeSemantics: true,
+                  child: Text(widget.formattedTimestamp, style: timeStyle),
+                ),
+              ],
+            ),
+          );
+
+    final reactions = widget.reactions.isEmpty
+        ? null
+        : Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: GestureDetector(
+              onTap: widget.onReactionsTap,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                children: _groupedReactions(widget.reactions).entries.map((entry) {
+                  return Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: dark ? colorScheme.surfaceContainerHighest : colorScheme.surfaceContainerLowest,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: colorScheme.onSurface.withValues(alpha: 0.1)),
+                    ),
+                    child: Text(
+                      '${entry.key} ${entry.value}',
+                      style: TextStyle(fontSize: 13.5, color: colorScheme.onSurface, fontWeight: FontWeight.w600),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          );
+
+    final senderLabel = (widget.showSenderName && !isMe && widget.senderName != null)
+        ? Padding(
+            padding: const EdgeInsets.only(left: 12, bottom: 3),
+            child: Text(
+              widget.senderName!,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: senderAccent(context, widget.message.senderId),
+              ),
+            ),
+          )
+        : null;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        onLongPressStart: (details) {
+          HapticFeedback.mediumImpact();
+          widget.onLongPress(widget.message, details.globalPosition);
+        },
+        // Right-click on desktop / web opens the same menu.
+        onSecondaryTapDown: (details) => _openMenuAt(details.globalPosition),
+        onDoubleTapDown: (details) => _tapPosition = details.globalPosition,
+        onDoubleTap: () {
+          if (_tapPosition != null) {
+            HapticFeedback.mediumImpact();
+            widget.onDoubleTap(widget.message, _tapPosition!);
+          }
+        },
+        child: Padding(
+          // Tight inside a run, more room between people.
+          padding: EdgeInsets.only(
+            left: 10,
+            right: 10,
+            top: widget.showSenderName || (isMe && widget.isLastInRun) ? 8 : 1.5,
+            bottom: widget.isLastInRun ? 6 : 1.5,
+          ),
+          child: Row(
+            mainAxisAlignment: isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!isMe) ...[_avatar(context), const SizedBox(width: 8)],
+              if (isMe) _hoverMenuButton(colorScheme),
+              Flexible(
+                child: Column(
+                  crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ?senderLabel,
+                    bubble,
+                    ?reactions,
+                  ],
+                ),
+              ),
+              if (!isMe) _hoverMenuButton(colorScheme),
             ],
           ),
         ),

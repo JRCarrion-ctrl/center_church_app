@@ -10,6 +10,13 @@ class GroupModel {
   final int unreadCount;
   final bool isMuted;
 
+  // Newest message, for the chat-list preview (only set by getUserGroups).
+  final String? lastMessageText;
+  final String? lastMessageType;
+  final String? lastMessageSenderId;
+  final String? lastMessageSender;
+  final DateTime? lastMessageAt;
+
   GroupModel({
     required this.id,
     required this.name,
@@ -21,6 +28,11 @@ class GroupModel {
     this.temporary = false,
     this.unreadCount = 0,
     this.isMuted = false,
+    this.lastMessageText,
+    this.lastMessageType,
+    this.lastMessageSenderId,
+    this.lastMessageSender,
+    this.lastMessageAt,
   });
 
   factory GroupModel.fromMap(Map<String, dynamic> m) {
@@ -38,6 +50,11 @@ class GroupModel {
       temporary: (m['temporary'] as bool?) ?? false,
       unreadCount: (m['unreadCount'] as int?) ?? 0,
       isMuted: muted,
+      lastMessageText: m['last_message_text'] as String?,
+      lastMessageType: m['last_message_type'] as String?,
+      lastMessageSenderId: m['last_message_sender_id'] as String?,
+      lastMessageSender: m['last_message_sender'] as String?,
+      lastMessageAt: DateTime.tryParse(m['last_message_at'] as String? ?? '')?.toLocal(),
     );
   }
 

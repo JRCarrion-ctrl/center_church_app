@@ -6,6 +6,8 @@ import 'package:graphql_flutter/graphql_flutter.dart';
 import 'package:easy_localization/easy_localization.dart';
 
 import '../../app_state.dart';
+import '../../shared/widgets/app_surface.dart';
+import '../../shared/widgets/glass.dart';
 
 class MorePage extends StatefulWidget {
   const MorePage({super.key});
@@ -60,9 +62,7 @@ class _MorePageState extends State<MorePage> {
   Widget build(BuildContext context) {
     final appState = context.watch<AppState>();
     final role = appState.userRole.name; // Fixed to use userRole.name
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     final isAdmin = ['supervisor', 'owner'].contains(role);
     final isNurseryStaff = ['nursery_staff', 'owner', 'supervisor'].contains(role);
@@ -87,35 +87,25 @@ class _MorePageState extends State<MorePage> {
     return Scaffold(
       body: Stack(
         children: [
-          // 1. The Global Atmospheric Background
-          Positioned.fill(
-            child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
-          ),
-          // 2. Tint Overlay
-          Positioned.fill(
-            child: Container(
-              color: isDark ? Colors.black.withValues(alpha: 0.65) : Colors.white.withValues(alpha: 0.75),
-            ),
-          ),
+          // Same softly tinted page as the group chat.
+          Positioned.fill(child: ColoredBox(color: appBackgroundColor(context))),
           // 3. Main Menu Content
           SafeArea(
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 600),
                 child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
                   child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Header title to match the "sleek" spacing
-                      Text(
-                        "main_5".tr().toUpperCase(), // Or use a static "MORE"
-                        style: textTheme.headlineSmall?.copyWith( // ✨ Increased from labelSmall
-                          fontWeight: FontWeight.w900, // ✨ Extra bold for better definition
-                          letterSpacing: 3.0,          // ✨ Increased spacing for a premium feel
-                          color: colorScheme.primary,
-                        ),
+                      // Same photo header as the Groups and Calendar tabs.
+                      PhotoHeader(
+                        title: "main_5".tr(),
+                        subtitle: 'more_subtitle'.tr(),
+                        height: 120,
                       ),
-                      const SizedBox(height: 24),
+                      const SizedBox(height: 16),
                       
                       // Unified Glass Menu Container
                       _SleekMenuWrapper(
@@ -123,19 +113,27 @@ class _MorePageState extends State<MorePage> {
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: moreItems.length,
-                          separatorBuilder: (_, _) => Divider(
-                            height: 1, 
-                            color: isDark ? Colors.white10 : Colors.black.withValues(alpha: 0.05),
-                          ),
+                          separatorBuilder: (_, _) => const Divider(indent: 64),
                           itemBuilder: (context, index) {
                             final item = moreItems[index];
                             return ListTile(
-                              leading: Icon(item['icon'] as IconData, color: colorScheme.primary),
-                              title: Text(
-                                item['title'] as String,
-                                style: const TextStyle(fontWeight: FontWeight.w500),
+                              shape: const RoundedRectangleBorder(),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                              leading: Container(
+                                width: 36,
+                                height: 36,
+                                decoration: BoxDecoration(
+                                  color: colorScheme.onSurface.withValues(alpha: 0.06),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Icon(item['icon'] as IconData, size: 20, color: colorScheme.onSurface),
                               ),
-                              trailing: const Icon(Icons.chevron_right, size: 20),
+                              title: Text(item['title'] as String),
+                              trailing: Icon(
+                                Icons.chevron_right_rounded,
+                                size: 20,
+                                color: colorScheme.onSurfaceVariant,
+                              ),
                               onTap: item['onTap'] as VoidCallback,
                             );
                           },
@@ -159,24 +157,5 @@ class _SleekMenuWrapper extends StatelessWidget {
   const _SleekMenuWrapper({required this.child});
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: isDark ? Colors.black.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.85),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      clipBehavior: Clip.antiAlias, // Ensures the list items don't bleed over rounded corners
-      child: child,
-    );
-  }
+  Widget build(BuildContext context) => AppCard(child: child);
 }

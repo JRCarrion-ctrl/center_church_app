@@ -94,6 +94,7 @@ dependencies:
   permission_handler: ^13.0.2
   share_plus: ^12.0.1
   skills: ^0.1.0
+  media_kit_libs_windows_video: ^1.0.11
   
 dev_dependencies:
   flutter_test:

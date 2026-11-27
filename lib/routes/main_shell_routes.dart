@@ -9,6 +9,8 @@ import '../transitions/slide.dart';
 import '../app_state.dart';
 import '../features/home/blog/blog_list_page.dart';
 import '../features/home/blog/blog_details_page.dart';
+import '../features/event_setup/event_setup_access.dart';
+import '../features/event_setup/pages/event_setup_page.dart';
 
 final ShellRoute mainShellRoute = ShellRoute(
   builder: (context, state, child) => MainApp(child: child),
@@ -59,6 +61,19 @@ final ShellRoute mainShellRoute = ShellRoute(
             : SlideDirection.left;
 
         return buildSlidePage(const PrayerPage(), direction: direction);
+      },
+    ),
+    // Staff / ministry-leader tab; role guard lives in app_router.dart redirect.
+    GoRoute(
+      path: EventSetupAccess.route,
+      name: 'event_setup',
+      pageBuilder: (context, state) {
+        final appState = context.read<AppState>();
+        final direction = appState.currentTabIndex > appState.previousTabIndex
+            ? SlideDirection.right
+            : SlideDirection.left;
+
+        return buildSlidePage(const EventSetupPage(), direction: direction);
       },
     ),
     GoRoute(

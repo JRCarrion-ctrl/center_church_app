@@ -13,6 +13,8 @@ import 'group_service.dart';
 import 'package:ccf_app/app_state.dart';
 import 'package:ccf_app/core/graph_provider.dart';
 import 'package:ccf_app/shared/user_roles.dart';
+import 'package:ccf_app/shared/widgets/glass.dart';
+import 'package:ccf_app/shared/page_refresh.dart';
 
 class GroupsPage extends StatefulWidget {
   const GroupsPage({super.key});
@@ -21,13 +23,13 @@ class GroupsPage extends StatefulWidget {
   State<GroupsPage> createState() => _GroupsPageState();
 }
 
-class _GroupsPageState extends State<GroupsPage> {
+class _GroupsPageState extends State<GroupsPage> with AutoRefresh<GroupsPage> {
   final _yourGroupsKey = GlobalKey<YourGroupsSectionState>();
   final _joinableGroupsKey = GlobalKey<JoinableGroupsSectionState>();
   final _invitationsKey = GlobalKey<InvitationsSectionState>();
   late Future<List<GroupModel>> _invitesFuture;
-  late Future<List<GroupModel>> _joinableFuture;
   bool _futuresInitialized = false;
+  List<String>? _lastServiceFilter;
 
   @override
   void didChangeDependencies() {
@@ -45,12 +47,22 @@ class _GroupsPageState extends State<GroupsPage> {
       _futuresInitialized = true;
     }
 
-    // 2. Always refresh Joinable Groups if the language changes
-    // This ensures the UI stays in sync with their preference!
-    _joinableFuture = service.getJoinableGroups(app.databaseServiceFilter);
+    // 2. Refresh Joinable Groups when the TCCF / Centro choice changes.
+    final filter = app.databaseServiceFilter;
+    if (_lastServiceFilter != null && _lastServiceFilter!.join(',') != filter.join(',')) {
+      _joinableGroupsKey.currentState?.refresh();
+    }
+    _lastServiceFilter = List.of(filter);
   }
 
+  @override
+  Future<void> onAutoRefresh() => _refreshAllSections();
+
   Future<void> _refreshAllSections() async {
+    final userId = context.read<AppState>().profile?.id;
+    if (userId != null) {
+      setState(() => _invitesFuture = context.read<GroupService>().getGroupInvitations(userId));
+    }
     _yourGroupsKey.currentState?.refresh();
     _joinableGroupsKey.currentState?.refresh();
     _invitationsKey.currentState?.refresh();
@@ -249,7 +261,6 @@ class _GroupsPageState extends State<GroupsPage> {
     final app = context.watch<AppState>();
     final isAuthed = app.isAuthenticated;
     final isOwner = app.userRole == UserRole.owner;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -274,7 +285,7 @@ class _GroupsPageState extends State<GroupsPage> {
                 Text(
                   "key_058b".tr(),
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: Colors.grey),
+                  style: TextStyle(color: colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 24),
                 FilledButton.icon(
@@ -295,93 +306,58 @@ class _GroupsPageState extends State<GroupsPage> {
 
     return Scaffold(
       floatingActionButton: isOwner ? _buildSleekFAB() : null,
-      body: Stack(
-        children: [
-          _buildAtmosphericBackground(isDark), // Helper for background
-          SafeArea(
-            child: RefreshIndicator(
-              onRefresh: _refreshAllSections,
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 600),
-                    child: Column(
-                      children: [
-                        // 1. CONDITIONAL INVITATIONS
-                        FutureBuilder<List<GroupModel>>(
-                          future: _invitesFuture,
-                          builder: (context, snapshot) {
-                            if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-                              return Padding(
-                                padding: const EdgeInsets.only(bottom: 24.0),
-                                child: _SleekSectionWrapper(
-                                  padding: 16.0,
-                                  child: InvitationsSection(key: _invitationsKey, onInviteHandled: _refreshAllSections),
-                                ),
-                              );
-                            }
-                            return const SizedBox.shrink(); // No data = no ghost box
-                          },
-                        ),
-
-                        // 2. YOUR GROUPS (Always visible as the core section)
-                        _SleekSectionWrapper(
-                          padding: 16.0,
-                          child: YourGroupsSection(key: _yourGroupsKey),
-                        ),
-
-                        // 3. CONDITIONAL JOINABLE
-                        FutureBuilder<List<GroupModel>>(
-                          future: _joinableFuture,
-                          builder: (context, snapshot) {
-                            // Only show if the future is done, has data, and that data is NOT empty
-                            if (snapshot.connectionState == ConnectionState.done && 
-                                snapshot.hasData && 
-                                snapshot.data!.isNotEmpty) {
-                              return Column(
-                                children: [
-                                  const SizedBox(height: 24),
-                                  _SleekSectionWrapper(
-                                    padding: 16.0,
-                                    child: JoinableGroupsSection(
-                                      key: _joinableGroupsKey, 
-                                      onGroupJoined: _refreshAllSections
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }
-                            // Return an empty widget that takes zero space if no data exists
-                            return const SizedBox.shrink();
-                          },
-                        ),
-                      ],
+      body: RefreshIndicator(
+        onRefresh: _refreshAllSections,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 96),
+          children: [
+            Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 600),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Same photo + glass look as the landing page and Events tab.
+                    PhotoHeader(
+                      title: "key_065".tr(), // Your Groups
+                      subtitle: 'groups_subtitle'.tr(),
+                      height: 140,
                     ),
-                  ),
+                    const SizedBox(height: 16),
+
+                    // 1. INVITATIONS (only when there are some)
+                    FutureBuilder<List<GroupModel>>(
+                      future: _invitesFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.hasData && snapshot.data!.isNotEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 20),
+                            child: _SectionCard(
+                              child: InvitationsSection(key: _invitationsKey, onInviteHandled: _refreshAllSections),
+                            ),
+                          );
+                        }
+                        return const SizedBox.shrink();
+                      },
+                    ),
+
+                    // 2. YOUR GROUPS (chat list)
+                    YourGroupsSection(key: _yourGroupsKey),
+
+                    // 3. GROUPS YOU CAN JOIN (hides itself when there are none)
+                    const SizedBox(height: 28),
+                    JoinableGroupsSection(
+                      key: _joinableGroupsKey,
+                      onGroupJoined: _refreshAllSections,
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
-    );
-  }
-
-  Widget _buildAtmosphericBackground(bool isDark) {
-    return Stack(
-      children: [
-        Positioned.fill(
-          child: Image.asset('assets/landing_v2_blurred_2.png', fit: BoxFit.cover),
-        ),
-        Positioned.fill(
-          child: Container(
-            color: isDark 
-                ? Colors.black.withValues(alpha: 0.65) 
-                : Colors.white.withValues(alpha: 0.75),
-          ),
-        ),
-      ],
     );
   }
 
@@ -399,41 +375,16 @@ class _GroupsPageState extends State<GroupsPage> {
   }
 }
 
-class _SleekSectionWrapper extends StatelessWidget {
+class _SectionCard extends StatelessWidget {
   final Widget child;
-  final double padding;
 
-  const _SleekSectionWrapper({required this.child, required this.padding});
+  const _SectionCard({required this.child});
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(padding),
-      decoration: BoxDecoration(
-        // 1. Semi-translucent "Glass" fill
-        color: isDark 
-            ? Colors.black.withValues(alpha: 0.2) 
-            : Colors.white.withValues(alpha: 0.85),
-        // 2. Consistent Pill-inspired geometry
-        borderRadius: BorderRadius.circular(28),
-        // 3. Subtle edge highlight for a premium feel
-        border: Border.all(
-          color: isDark ? Colors.white10 : Colors.white.withValues(alpha: 0.2),
-          width: 1.5,
-        ),
-        // 4. Soft depth shadow
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 20,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: child,
+    return Card(
+      margin: EdgeInsets.zero,
+      child: Padding(padding: const EdgeInsets.all(16), child: child),
     );
   }
 }

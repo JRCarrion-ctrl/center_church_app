@@ -233,12 +233,14 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
     await _chatService.updateLastTyped(widget.groupId, isTyping: false);
 
     await _chatService.sendMessage(widget.groupId, content);
-    _messageController.clear();
+    // InputRow clears the box as soon as sending starts, so whatever the user
+    // has typed since then is left alone.
     _scrollToBottom();
   }
 
   void _showMessageOptions(GroupMessage message, Offset tapPosition) {
     final isSender = message.senderId == _userId;
+    final colorScheme = Theme.of(context).colorScheme;
   
     final position = RelativeRect.fromLTRB(
       tapPosition.dx,
@@ -257,7 +259,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
           value: 'copy',
           child: Row(
             children: [
-              const Icon(Icons.copy, color: Colors.grey),
+              Icon(Icons.copy, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 12),
               Text("key_165a".tr()),
             ],
@@ -267,7 +269,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
           value: 'react',
           child: Row(
             children: [
-              const Icon(Icons.emoji_emotions, color: Colors.grey),
+              Icon(Icons.emoji_emotions, color: colorScheme.onSurfaceVariant),
               const SizedBox(width: 12),
               Text("key_165".tr()), 
             ],
@@ -279,9 +281,9 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
             value: 'delete',
             child: Row(
               children: [
-                const Icon(Icons.delete, color: Colors.red),
+                Icon(Icons.delete, color: colorScheme.error),
                 const SizedBox(width: 12),
-                Text("key_162".tr(), style: const TextStyle(color: Colors.red)), 
+                Text("key_162".tr(), style: TextStyle(color: colorScheme.error)),
               ],
             ),
           ),
@@ -291,7 +293,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
             value: 'report',
             child: Row(
               children: [
-                const Icon(Icons.report, color: Colors.orange),
+                Icon(Icons.report, color: colorScheme.tertiary),
                 const SizedBox(width: 12),
                 Text("key_164".tr()), 
               ],
@@ -312,7 +314,7 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
           await Clipboard.setData(ClipboardData(text: textToCopy));
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Copied to clipboard"), duration: Duration(seconds: 1)),
+              SnackBar(content: Text('chat_copied'.tr()), duration: const Duration(seconds: 1)),
             );
           }
         }
@@ -326,18 +328,15 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
           await _chatService.reportMessage(message.id);
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Successfully Reported"),
-                backgroundColor: Colors.green,
-              ),
+              SnackBar(content: Text('chat_reported'.tr())),
             );
           }
         } catch (e) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text("Failed to report message."),
-                backgroundColor: Colors.red,
+              SnackBar(
+                content: Text('chat_report_failed'.tr()),
+                backgroundColor: colorScheme.error,
               ),
             );
           }
@@ -420,13 +419,13 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
       return const SizedBox(height: 18);
     }
     
-    String text;
+    final String text;
     if (_typingMembers.length == 1) {
-      text = "${_typingMembers.first} is typing...";
+      text = 'chat_typing_one'.tr(namedArgs: {'name': _typingMembers.first});
     } else if (_typingMembers.length == 2) {
-      text = "${_typingMembers.first} and ${_typingMembers.last} are typing...";
+      text = 'chat_typing_two'.tr(namedArgs: {'a': _typingMembers.first, 'b': _typingMembers.last});
     } else {
-      text = "Several members are typing...";
+      text = 'chat_typing_many'.tr();
     }
     
     return Padding(
@@ -436,9 +435,9 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         child: Text(
           text,
           style: TextStyle(
-            color: Theme.of(context).colorScheme.primary,
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
             fontStyle: FontStyle.italic,
-            fontSize: 12,
+            fontSize: 13,
           ),
         ),
       ),
@@ -447,7 +446,6 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final userId = _userId ?? '';
     if (!_isInitialized) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
@@ -470,7 +468,11 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
         child: Stack(
           children: [
             Container(
-              color: Theme.of(context).colorScheme.surface,
+              // A slightly tinted backdrop in light mode so the white bubbles
+              // of other people stand out from it.
+              color: Theme.of(context).brightness == Brightness.dark
+                  ? Theme.of(context).colorScheme.surface
+                  : Theme.of(context).colorScheme.surfaceContainerLow,
               child: Column(
                 children: [
                   // Message List
@@ -498,8 +500,9 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
 
                   // Input Row - FIX: Removed curly braces from else block
                   if (canSendMessage)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 16),
+                    SafeArea(
+                      top: false,
+                      minimum: const EdgeInsets.only(bottom: 8),
                       child: InputRow(
                         controller: _messageController,
                         onSend: _sendMessage,
@@ -538,16 +541,28 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                     )
                   else
                     // ✅ Fixed syntax here
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(16),
-                      color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-                      alignment: Alignment.center,
-                      child: Text(
-                        "Only admins can send messages.",
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                          fontStyle: FontStyle.italic,
+                    SafeArea(
+                      top: false,
+                      minimum: const EdgeInsets.fromLTRB(12, 6, 12, 8),
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceContainerHighest.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(26),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.lock_outline, size: 16, color: Theme.of(context).colorScheme.onSurfaceVariant),
+                            const SizedBox(width: 8),
+                            Flexible(
+                              child: Text(
+                                "chat_admins_only".tr(),
+                                style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ),
@@ -559,12 +574,13 @@ class _GroupChatTabState extends State<GroupChatTab> with RouteAware {
                 bottom: 80 + (_typingMembers.isNotEmpty ? 18 : 0), 
                 right: 16,
                 child: FloatingActionButton.small(
+                  heroTag: null,
+                  tooltip: 'chat_jump_latest'.tr(),
                   onPressed: _scrollToBottom,
-                  backgroundColor: isDark
-                      ? const Color.fromARGB(255, 60, 60, 65)
-                      : const Color.fromARGB(255, 230, 230, 240),
-                  foregroundColor: isDark ? Colors.white : Colors.black,
-                  child: const Icon(Icons.arrow_downward),
+                  shape: const CircleBorder(),
+                  backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
+                  child: const Icon(Icons.keyboard_arrow_down_rounded),
                 ),
               ),
           ],

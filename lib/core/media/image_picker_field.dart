@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
+import 'package:easy_localization/easy_localization.dart';
 import 'dart:io' as io show Platform;
 
 class ImagePickerField extends StatefulWidget {
@@ -52,12 +53,12 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
         compressQuality: 90,
         uiSettings: [
           AndroidUiSettings(
-            toolbarTitle: 'Crop Image',
+            toolbarTitle: 'image_picker_crop'.tr(),
             initAspectRatio: CropAspectRatioPreset.ratio16x9,
             lockAspectRatio: false,
           ),
           IOSUiSettings(
-            title: 'Crop Image',
+            title: 'image_picker_crop'.tr(),
             aspectRatioPresets: const [
               CropAspectRatioPreset.original,
               CropAspectRatioPreset.square,
@@ -128,14 +129,14 @@ class _ImagePickerFieldState extends State<ImagePickerField> {
             ElevatedButton.icon(
               onPressed: _pick,
               icon: const Icon(Icons.upload),
-              label: const Text('Choose Image'),
+              label: Text('image_picker_choose'.tr()),
             ),
             const SizedBox(width: 8),
             if (_bytes != null || hasRemote)
               TextButton.icon(
                 onPressed: _remove,
                 icon: const Icon(Icons.delete),
-                label: const Text('Remove'),
+                label: Text('image_picker_remove'.tr()),
               ),
           ],
         ),

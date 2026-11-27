@@ -1,5 +1,6 @@
 // File: lib/features/home/announcements_section.dart
 import 'package:material_ui/material_ui.dart';
+import 'package:ccf_app/shared/page_refresh.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -17,7 +18,8 @@ class AnnouncementsSection extends StatefulWidget {
   State<AnnouncementsSection> createState() => _AnnouncementsSectionState();
 }
 
-class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteAware {
+class _AnnouncementsSectionState extends State<AnnouncementsSection>
+    with RouteAware, AutoRefresh<AnnouncementsSection> {
   // ... (State variables remain unchanged)
   GraphQLClient? _gql;
   String? _userId;
@@ -27,11 +29,6 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   bool loading = true;
   bool isAdmin = false;
   // ...
-
-  @override
-  void initState() {
-    super.initState();
-  }
 
   @override
   void didChangeDependencies() {
@@ -57,6 +54,9 @@ class _AnnouncementsSectionState extends State<AnnouncementsSection> with RouteA
   void didPopNext() {
     _loadData();
   }
+
+  @override
+  Future<void> onAutoRefresh() => _loadData();
 
   Future<void> _loadData() async {
     final client = _gql;
